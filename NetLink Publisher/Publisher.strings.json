@@ -19,10 +19,12 @@
     "saveSettings": "حفظ الإعدادات",
     "statusCardTitle": "حالة المشروع الحالية",
     "statusCardHint": "يعرض هذا القسم الجذور الفعلية التي اكتشفها الناشر، مع آخر إصدار محمّل من النسخة الحالية.",
+    "projectName": "اسم المشروع",
     "repoRoot": "جذر المستودع",
     "appRoot": "مجلد الواجهة",
     "loadedVersion": "الإصدار المحمّل",
     "loadedDate": "تاريخ البناء",
+    "remoteVersion": "الإصدار الموجود على GitHub",
     "releaseCardTitle": "بيانات الإصدار",
     "releaseCardHint": "يمكنك تحميل version.json تلقائيًا ثم تعديل الإصدار وسجل التغييرات قبل النشر إلى GitHub.",
     "version": "رقم الإصدار",
@@ -42,6 +44,7 @@
     "publishErrorTitle": "خطأ في النشر",
     "genericErrorTitle": "خطأ",
     "valueNotLoaded": "غير محمل",
+    "remoteUnavailable": "غير متاح",
     "logReady": "الناشر جاهز للاستخدام.",
     "logSelectProject": "اختر مجلد المشروع ثم اضغط تحميل من version.json.",
     "logSettingsSaved": "تم حفظ إعدادات الناشر محليًا.",
@@ -59,10 +62,12 @@
     "errVersionRequired": "ضع رقم الإصدار.",
     "errBuildDateRequired": "ضع تاريخ البناء.",
     "errChangelogRequired": "ضع سجل التغييرات.",
+    "errVersionMustChange": "رقم الإصدار الحالي مطابق لما هو موجود على GitHub. غيّر رقم الإصدار أولاً.",
     "errGitPullFailed": "فشل سحب آخر نسخة من GitHub.",
     "errGitCommandFailed": "فشل تنفيذ أحد أوامر Git.",
     "errGitCommitFailed": "فشل إنشاء commit.",
-    "errGitPushFailed": "فشل دفع التحديث إلى GitHub."
+    "errGitPushFailed": "فشل دفع التحديث إلى GitHub.",
+    "errRemoteVersionMissing": "تعذر قراءة الإصدار الحالي من GitHub."
   },
   "en": {
     "windowTitle": "NetLink Publisher",
@@ -84,10 +89,12 @@
     "saveSettings": "Save Settings",
     "statusCardTitle": "Current Project Status",
     "statusCardHint": "This section shows the detected repo paths and the last loaded version from the current working copy.",
+    "projectName": "Project Name",
     "repoRoot": "Repo Root",
     "appRoot": "Interface Root",
     "loadedVersion": "Loaded Version",
     "loadedDate": "Build Date",
+    "remoteVersion": "GitHub Version",
     "releaseCardTitle": "Release Metadata",
     "releaseCardHint": "Load version.json automatically, then edit the version and changelog before publishing to GitHub.",
     "version": "Version Number",
@@ -107,6 +114,7 @@
     "publishErrorTitle": "Publish Error",
     "genericErrorTitle": "Error",
     "valueNotLoaded": "Not Loaded",
+    "remoteUnavailable": "Unavailable",
     "logReady": "Publisher is ready.",
     "logSelectProject": "Choose the project folder, then click Load version.json.",
     "logSettingsSaved": "Publisher settings were saved locally.",
@@ -124,9 +132,11 @@
     "errVersionRequired": "Enter the version number.",
     "errBuildDateRequired": "Enter the build date.",
     "errChangelogRequired": "Enter the changelog.",
+    "errVersionMustChange": "The version number is still the same as GitHub. Change the version before publishing.",
     "errGitPullFailed": "Git pull failed.",
     "errGitCommandFailed": "A Git command failed.",
     "errGitCommitFailed": "Git commit failed.",
-    "errGitPushFailed": "Git push failed."
+    "errGitPushFailed": "Git push failed.",
+    "errRemoteVersionMissing": "Could not read the current GitHub version."
   }
 }

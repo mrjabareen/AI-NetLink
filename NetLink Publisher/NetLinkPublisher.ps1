@@ -55,7 +55,7 @@ function Load-Strings {
     if (-not (Test-Path $StringsPath)) {
         throw 'Publisher.strings.json was not found.'
     }
-    return Get-Content -Path $StringsPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    return Read-JsonFile $StringsPath
 }
 
 function Quote-GitArgument([string]$value) {
@@ -108,10 +108,19 @@ function Resolve-ProjectContext([string]$selectedPath) {
         }
     }
 
+    $packagePath = Join-Path $appRoot 'package.json'
+    $fallbackProjectName = Split-Path $repoRoot -Leaf
+    if ([string]::IsNullOrWhiteSpace($fallbackProjectName)) {
+        $fallbackProjectName = 'AI NetLink'
+    }
+    $projectMeta = Load-ProjectMetadata $packagePath $fallbackProjectName
+
     return @{
         RepoRoot = $repoRoot
         AppRoot = $appRoot
         VersionPath = Join-Path $appRoot 'public\version.json'
+        PackagePath = $packagePath
+        ProjectName = $projectMeta.ProjectName
     }
 }
 
@@ -120,7 +129,7 @@ function Load-VersionData([string]$versionPath) {
         throw (Get-Text 'errVersionMissing')
     }
 
-    $data = Get-Content -Path $versionPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    $data = Read-JsonFile $versionPath
     return @{
         Version = [string]$data.version
         BuildDate = [string]$data.buildDate
@@ -154,6 +163,71 @@ function Build-AuthenticatedUrl([string]$repoUrl, [string]$token) {
 function Write-Utf8NoBomFile([string]$path, [string]$content) {
     $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
     [System.IO.File]::WriteAllText($path, $content, $utf8NoBom)
+}
+
+function Remove-Bom([string]$text) {
+    return [string]$text -replace "^\uFEFF", ''
+}
+
+function Read-JsonFile([string]$path) {
+    $raw = Get-Content -Path $path -Raw -Encoding UTF8
+    return (Remove-Bom $raw) | ConvertFrom-Json
+}
+
+function Load-ProjectMetadata([string]$packagePath, [string]$fallbackName = 'AI NetLink') {
+    if (-not (Test-Path $packagePath)) {
+        return @{ ProjectName = $fallbackName }
+    }
+
+    try {
+        $package = Read-JsonFile $packagePath
+        $name = [string]$package.name
+        if ([string]::IsNullOrWhiteSpace($name) -or $name -match '^(react-example|app|vite-project)$') {
+            $name = $fallbackName
+        }
+        return @{ ProjectName = $name }
+    } catch {
+        return @{ ProjectName = $fallbackName }
+    }
+}
+
+function Get-GitHubRepoInfo([string]$repoUrl) {
+    $cleanRepo = $repoUrl.Trim().TrimEnd('/')
+    if ($cleanRepo.EndsWith('.git')) {
+        $cleanRepo = $cleanRepo.Substring(0, $cleanRepo.Length - 4)
+    }
+
+    $parts = $cleanRepo.Split('/')
+    if ($parts.Length -lt 2) {
+        throw (Get-Text 'errRepoUrlInvalid')
+    }
+
+    return @{
+        Owner = $parts[$parts.Length - 2]
+        Name = $parts[$parts.Length - 1]
+    }
+}
+
+function Get-RemoteVersionData([string]$repoUrl, [string]$token) {
+    $repo = Get-GitHubRepoInfo $repoUrl
+    $remotePath = 'AI NetLink Interface/ai-net-link/public/version.json'
+    $apiUrl = "https://api.github.com/repos/$($repo.Owner)/$($repo.Name)/contents/$([uri]::EscapeDataString($remotePath))?ref=main"
+
+    $headers = @{
+        'Accept' = 'application/vnd.github+json'
+        'User-Agent' = 'NetLinkPublisher'
+    }
+    if (-not [string]::IsNullOrWhiteSpace($token)) {
+        $headers['Authorization'] = "token $($token.Trim())"
+    }
+
+    $response = Invoke-RestMethod -Uri $apiUrl -Headers $headers -Method Get
+    if (-not $response.content) {
+        throw (Get-Text 'errRemoteVersionMissing')
+    }
+
+    $content = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String(([string]$response.content).Replace("`n", '').Replace("`r", '')))
+    return (Remove-Bom $content) | ConvertFrom-Json
 }
 
 function Write-Log([string]$message) {
@@ -348,14 +422,21 @@ function Get-Text([string]$key) {
                 <Grid.ColumnDefinitions>
                   <ColumnDefinition Width="*"/>
                   <ColumnDefinition Width="*"/>
+                  <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
-                <Border Grid.Column="0" Background="#091121" BorderBrush="#233047" BorderThickness="1" CornerRadius="20" Padding="18" Margin="0,0,12,0">
+                <Border Grid.Column="0" Background="#111827" BorderBrush="#364152" BorderThickness="1" CornerRadius="20" Padding="18" Margin="0,0,12,0">
+                  <StackPanel>
+                    <TextBlock x:Name="LblProjectName" Foreground="#94A3B8" FontSize="12" FontWeight="SemiBold"/>
+                    <TextBlock x:Name="ValProjectName" Foreground="White" Margin="0,10,0,0" TextWrapping="Wrap" FontSize="18" FontWeight="Bold"/>
+                  </StackPanel>
+                </Border>
+                <Border Grid.Column="1" Background="#091121" BorderBrush="#233047" BorderThickness="1" CornerRadius="20" Padding="18" Margin="0,0,12,0">
                   <StackPanel>
                     <TextBlock x:Name="LblRepoRoot" Foreground="#94A3B8" FontSize="12" FontWeight="SemiBold"/>
                     <TextBlock x:Name="ValRepoRoot" Foreground="White" Margin="0,10,0,0" TextWrapping="Wrap"/>
                   </StackPanel>
                 </Border>
-                <Border Grid.Column="1" Background="#091121" BorderBrush="#233047" BorderThickness="1" CornerRadius="20" Padding="18">
+                <Border Grid.Column="2" Background="#091121" BorderBrush="#233047" BorderThickness="1" CornerRadius="20" Padding="18">
                   <StackPanel>
                     <TextBlock x:Name="LblAppRoot" Foreground="#94A3B8" FontSize="12" FontWeight="SemiBold"/>
                     <TextBlock x:Name="ValAppRoot" Foreground="White" Margin="0,10,0,0" TextWrapping="Wrap"/>
@@ -367,6 +448,7 @@ function Get-Text([string]$key) {
                 <Grid.ColumnDefinitions>
                   <ColumnDefinition Width="*"/>
                   <ColumnDefinition Width="*"/>
+                  <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
                 <Border Grid.Column="0" Background="#0D1B18" BorderBrush="#1D4F45" BorderThickness="1" CornerRadius="20" Padding="18" Margin="0,0,12,0">
                   <StackPanel>
@@ -374,10 +456,16 @@ function Get-Text([string]$key) {
                     <TextBlock x:Name="ValLoadedVersion" Foreground="White" Margin="0,10,0,0" FontSize="28" FontWeight="Bold"/>
                   </StackPanel>
                 </Border>
-                <Border Grid.Column="1" Background="#161226" BorderBrush="#3B2E67" BorderThickness="1" CornerRadius="20" Padding="18">
+                <Border Grid.Column="1" Background="#161226" BorderBrush="#3B2E67" BorderThickness="1" CornerRadius="20" Padding="18" Margin="0,0,12,0">
                   <StackPanel>
                     <TextBlock x:Name="LblLoadedDate" Foreground="#C4B5FD" FontSize="12" FontWeight="SemiBold"/>
                     <TextBlock x:Name="ValLoadedDate" Foreground="White" Margin="0,10,0,0" FontSize="18" FontWeight="Bold"/>
+                  </StackPanel>
+                </Border>
+                <Border Grid.Column="2" Background="#111827" BorderBrush="#334155" BorderThickness="1" CornerRadius="20" Padding="18">
+                  <StackPanel>
+                    <TextBlock x:Name="LblRemoteVersion" Foreground="#93C5FD" FontSize="12" FontWeight="SemiBold"/>
+                    <TextBlock x:Name="ValRemoteVersion" Foreground="White" Margin="0,10,0,0" FontSize="22" FontWeight="Bold"/>
                   </StackPanel>
                 </Border>
               </Grid>
@@ -472,6 +560,8 @@ $BtnToggleToken = Find-Control 'BtnToggleToken'
 $BtnSaveSettings = Find-Control 'BtnSaveSettings'
 $StatusCardTitle = Find-Control 'StatusCardTitle'
 $StatusCardHint = Find-Control 'StatusCardHint'
+$LblProjectName = Find-Control 'LblProjectName'
+$ValProjectName = Find-Control 'ValProjectName'
 $LblRepoRoot = Find-Control 'LblRepoRoot'
 $ValRepoRoot = Find-Control 'ValRepoRoot'
 $LblAppRoot = Find-Control 'LblAppRoot'
@@ -480,6 +570,8 @@ $LblLoadedVersion = Find-Control 'LblLoadedVersion'
 $ValLoadedVersion = Find-Control 'ValLoadedVersion'
 $LblLoadedDate = Find-Control 'LblLoadedDate'
 $ValLoadedDate = Find-Control 'ValLoadedDate'
+$LblRemoteVersion = Find-Control 'LblRemoteVersion'
+$ValRemoteVersion = Find-Control 'ValRemoteVersion'
 $ReleaseCardTitle = Find-Control 'ReleaseCardTitle'
 $ReleaseCardHint = Find-Control 'ReleaseCardHint'
 $LblVersion = Find-Control 'LblVersion'
@@ -516,6 +608,7 @@ function Set-TokenValue([string]$value) {
 
 function Set-CurrentContext([hashtable]$context, [hashtable]$versionData = $null) {
     $script:CurrentContext = $context
+    $ValProjectName.Text = if ($context -and $context.ProjectName) { $context.ProjectName } else { Get-Text 'valueNotLoaded' }
     $ValRepoRoot.Text = if ($context) { $context.RepoRoot } else { Get-Text 'valueNotLoaded' }
     $ValAppRoot.Text = if ($context) { $context.AppRoot } else { Get-Text 'valueNotLoaded' }
     if ($versionData) {
@@ -525,6 +618,7 @@ function Set-CurrentContext([hashtable]$context, [hashtable]$versionData = $null
         $ValLoadedVersion.Text = Get-Text 'valueNotLoaded'
         $ValLoadedDate.Text = Get-Text 'valueNotLoaded'
     }
+    $ValRemoteVersion.Text = Get-Text 'valueNotLoaded'
 }
 
 function Set-BusyState([bool]$busy, [string]$statusKey) {
@@ -555,10 +649,12 @@ function Apply-Language {
     $BtnSaveSettings.Content = Get-Text 'saveSettings'
     $StatusCardTitle.Text = Get-Text 'statusCardTitle'
     $StatusCardHint.Text = Get-Text 'statusCardHint'
+    $LblProjectName.Text = Get-Text 'projectName'
     $LblRepoRoot.Text = Get-Text 'repoRoot'
     $LblAppRoot.Text = Get-Text 'appRoot'
     $LblLoadedVersion.Text = Get-Text 'loadedVersion'
     $LblLoadedDate.Text = Get-Text 'loadedDate'
+    $LblRemoteVersion.Text = Get-Text 'remoteVersion'
     $ReleaseCardTitle.Text = Get-Text 'releaseCardTitle'
     $ReleaseCardHint.Text = Get-Text 'releaseCardHint'
     $LblVersion.Text = Get-Text 'version'
@@ -594,6 +690,12 @@ function Load-VersionIntoUi {
     $TxtBuildDate.Text = if ($versionData.BuildDate) { $versionData.BuildDate } else { Get-Date -Format 'yyyy-MM-dd' }
     $TxtChangelog.Text = ($versionData.Changelog -join [Environment]::NewLine)
     Set-CurrentContext $context $versionData
+    try {
+        $remoteVersion = Get-RemoteVersionData $TxtRepoUrl.Text (Get-TokenValue)
+        $ValRemoteVersion.Text = if ($remoteVersion.version) { "v$($remoteVersion.version)" } else { Get-Text 'valueNotLoaded' }
+    } catch {
+        $ValRemoteVersion.Text = Get-Text 'remoteUnavailable'
+    }
     Write-Log (Get-Text 'logVersionLoaded')
 }
 
@@ -625,6 +727,22 @@ $BtnToggleToken.Add_Click({
 $BtnBrowse.Add_Click({
     if ($folderDialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
         $TxtProjectPath.Text = $folderDialog.SelectedPath
+        try {
+            Load-VersionIntoUi
+        } catch {
+            Set-CurrentContext $null $null
+            Write-Log $_.Exception.Message
+        }
+    }
+})
+
+$TxtProjectPath.Add_LostFocus({
+    try {
+        if ($TxtProjectPath.Text.Trim()) {
+            Load-VersionIntoUi
+        }
+    } catch {
+        Set-CurrentContext $null $null
     }
 })
 
@@ -665,6 +783,11 @@ $BtnPublish.Add_Click({
 
         $context = Resolve-ProjectContext $TxtProjectPath.Text
         $authenticatedUrl = Build-AuthenticatedUrl $TxtRepoUrl.Text (Get-TokenValue)
+        $remoteVersion = Get-RemoteVersionData $TxtRepoUrl.Text (Get-TokenValue)
+
+        if ($remoteVersion.version -eq $version) {
+            throw (Get-Text 'errVersionMustChange')
+        }
 
         Write-Log (Get-Text 'logPulling')
         $pull = Invoke-Git ("pull --rebase --autostash {0} main" -f (Quote-GitArgument $authenticatedUrl)) $context.RepoRoot
@@ -709,6 +832,7 @@ $BtnPublish.Add_Click({
             BuildDate = $buildDate
             Changelog = $changelog
         }
+        $ValRemoteVersion.Text = "v$version"
 
         Write-Log (Get-Text 'logPublished')
         Set-BusyState $false 'statusReady'
