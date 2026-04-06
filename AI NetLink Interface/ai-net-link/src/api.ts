@@ -565,7 +565,7 @@ export const startSystemUpdate = async () => {
     return await res.json();
 };
 
-export const publishSystemToGithub = async (payload: { version: string; changelog: string[]; commitMessage?: string; pin: string }) => {
+export const publishSystemToGithub = async (payload: { pin: string }) => {
     const res = await fetch(`${BASE_URL}/system/publish`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

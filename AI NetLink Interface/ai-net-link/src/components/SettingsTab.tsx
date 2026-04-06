@@ -35,8 +35,6 @@ export default function SettingsTab({ state, setState }: SettingsTabProps) {
   const [gateways, setGateways] = useState<any>(null);
   const [waStatus, setWaStatus] = useState<any>(null);
   const [isPublishing, setIsPublishing] = useState(false);
-  const [releaseVersion, setReleaseVersion] = useState(() => state.versionInfo.version || '');
-  const [releaseNotes, setReleaseNotes] = useState(() => (state.versionInfo.changelog || []).join('\n'));
   const [publishPin, setPublishPin] = useState('');
 
   React.useEffect(() => {
@@ -46,11 +44,6 @@ export default function SettingsTab({ state, setState }: SettingsTabProps) {
       return () => clearInterval(interval);
     }
   }, [activeCategory]);
-
-  React.useEffect(() => {
-    setReleaseVersion(state.versionInfo.version || '');
-    setReleaseNotes((state.versionInfo.changelog || []).join('\n'));
-  }, [state.versionInfo.version, state.versionInfo.changelog]);
 
   const loadGatewaysOnce = async () => {
     const g = await getGatewaysConfig();
@@ -109,11 +102,6 @@ export default function SettingsTab({ state, setState }: SettingsTabProps) {
   };
 
   const handlePublishToGithub = async () => {
-    const changelog = releaseNotes.split('\n').map(line => line.trim()).filter(Boolean);
-    if (!releaseVersion.trim() || changelog.length === 0) {
-      alert(t.settings.update.releaseRequired);
-      return;
-    }
     if (!publishPin.trim()) {
       alert(t.settings.update.invalidPin);
       return;
@@ -122,16 +110,13 @@ export default function SettingsTab({ state, setState }: SettingsTabProps) {
     setIsPublishing(true);
     try {
       const result = await publishSystemToGithub({
-        version: releaseVersion.trim(),
-        changelog,
-        commitMessage: `release: v${releaseVersion.trim()}`,
         pin: publishPin
       });
 
       const published = result.data || {
-        version: releaseVersion.trim(),
-        buildDate: new Date().toISOString().split('T')[0],
-        changelog
+        version: state.versionInfo.version,
+        buildDate: state.versionInfo.buildDate,
+        changelog: state.versionInfo.changelog
       };
 
       setState(prev => ({
@@ -146,8 +131,6 @@ export default function SettingsTab({ state, setState }: SettingsTabProps) {
         }
       }));
 
-      setReleaseVersion(published.version || '');
-      setReleaseNotes((published.changelog || []).join('\n'));
       setPublishPin('');
       alert(`${t.settings.update.publishSuccess} v${published.version}`);
     } catch (err: any) {
@@ -1210,28 +1193,6 @@ export default function SettingsTab({ state, setState }: SettingsTabProps) {
                   </div>
 
                   <div className="space-y-3 p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/40">
-                    <div className="space-y-1">
-                      <label className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">{t.settings.update.releaseVersion}</label>
-                      <input
-                        type="text"
-                        value={releaseVersion}
-                        onChange={(e) => setReleaseVersion(e.target.value)}
-                        disabled={state.updateStatus.checking || isPublishing}
-                        placeholder="1.0.5"
-                        className="w-full bg-white dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2.5 text-sm text-slate-800 dark:text-slate-200 focus:outline-none focus:border-teal-500 font-mono disabled:opacity-60"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">{t.settings.update.releaseNotes}</label>
-                      <textarea
-                        rows={4}
-                        value={releaseNotes}
-                        onChange={(e) => setReleaseNotes(e.target.value)}
-                        disabled={state.updateStatus.checking || isPublishing}
-                        placeholder={t.settings.update.releasePlaceholder}
-                        className="w-full bg-white dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-800 dark:text-slate-200 focus:outline-none focus:border-teal-500 resize-none disabled:opacity-60"
-                      />
-                    </div>
                     <div className="space-y-1">
                       <label className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">{t.settings.update.publishPin}</label>
                       <input

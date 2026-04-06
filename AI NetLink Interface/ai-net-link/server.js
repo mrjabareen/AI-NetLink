@@ -2313,12 +2313,14 @@ app.post('/api/system/publish', async (req, res) => {
     if (!fs.existsSync(versionPath)) return res.status(500).json({ error: 'Version file missing.' });
 
     const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+    const versionData = JSON.parse(fs.readFileSync(versionPath, 'utf-8'));
     const body = req.body || {};
-    const version = String(body.version || '').trim();
-    const changelog = Array.isArray(body.changelog)
-      ? body.changelog.map(item => String(item || '').trim()).filter(Boolean)
-      : [];
     const pin = String(body.pin || '').trim();
+    const version = String(versionData.version || '').trim();
+    const buildDate = String(versionData.buildDate || new Date().toISOString().split('T')[0]).trim();
+    const changelog = Array.isArray(versionData.changelog)
+      ? versionData.changelog.map(item => String(item || '').trim()).filter(Boolean)
+      : [];
 
     if (pin !== GITHUB_PUBLISH_PIN) {
       return res.status(403).json({ error: 'Invalid publish PIN.' });
@@ -2334,15 +2336,12 @@ app.post('/api/system/publish', async (req, res) => {
     
     // Project Root (where .git is)
     const projectRoot = path.resolve(__dirname, '../../');
-    const buildDate = new Date().toISOString().split('T')[0];
     const commitMessage = String(body.commitMessage || `release: v${version}`).trim();
 
     if (!config.repo_url || !config.pat || config.pat.includes('your_personal_access_token_here')) {
       return res.status(500).json({ error: 'GitHub token is missing in git_config.json on the server.' });
     }
 
-    fs.writeFileSync(versionPath, JSON.stringify({ version, buildDate, changelog }, null, 2));
-    
     // Commands to run in sequence
     // Using simple auth in URL from config
     const remoteUrl = config.repo_url.replace('https://', `https://${config.pat}@`);
