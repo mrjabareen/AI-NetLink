@@ -55,6 +55,36 @@ export default function SettingsTab({ state, setState }: SettingsTabProps) {
     if (w) setWaStatus(w);
   };
 
+  const waitForUpdatedVersionAndReload = (targetVersion?: string | null) => {
+    const currentVersion = state.versionInfo.version;
+    let attempts = 0;
+
+    const poll = async () => {
+      attempts += 1;
+      try {
+        const res = await fetch(`/version.json?ts=${Date.now()}`, { cache: 'no-store' });
+        if (res.ok) {
+          const data = await res.json();
+          if ((targetVersion && data.version === targetVersion) || (!targetVersion && data.version !== currentVersion)) {
+            window.location.reload();
+            return;
+          }
+        }
+      } catch {
+        // Ignore transient downtime while the service restarts.
+      }
+
+      if (attempts >= 36) {
+        window.location.reload();
+        return;
+      }
+
+      window.setTimeout(poll, 5000);
+    };
+
+    window.setTimeout(poll, 6000);
+  };
+
   const handleCheckUpdate = async () => {
     setState(prev => ({ ...prev, updateStatus: { ...prev.updateStatus, checking: true, error: undefined } }));
     try {
@@ -81,6 +111,10 @@ export default function SettingsTab({ state, setState }: SettingsTabProps) {
           error: undefined
         }
       }));
+
+      if (!hasUpdate) {
+        alert(t.settings.update.upToDate);
+      }
     } catch (err: any) {
       setState(prev => ({ 
         ...prev, 
@@ -91,12 +125,14 @@ export default function SettingsTab({ state, setState }: SettingsTabProps) {
 
   const handleUpdateSystem = async () => {
     if (!state.updateStatus.hasUpdate) return;
+    const targetVersion = state.updateStatus.latestVersion;
     setState(prev => ({ ...prev, updateStatus: { ...prev.updateStatus, checking: true } }));
     
     try {
       const result = await startSystemUpdate();
       setState(prev => ({ ...prev, updateStatus: { ...prev.updateStatus, checking: false } }));
-      alert(result.message || (isRTL ? 'بدأ التحديث! سيقوم النظام بإعادة التشغيل تلقائياً.' : 'Update started! The system will restart automatically.'));
+      alert(result.message || (isRTL ? 'بدأ التحديث! سيتم تحديث الصفحة تلقائياً بعد اكتمال التثبيت.' : 'Update started! The page will refresh automatically after installation.'));
+      waitForUpdatedVersionAndReload(targetVersion);
     } catch (err: any) {
       setState(prev => ({ ...prev, updateStatus: { ...prev.updateStatus, checking: false, error: err?.message || 'Update failed' } }));
     }

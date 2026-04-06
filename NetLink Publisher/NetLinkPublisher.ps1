@@ -703,6 +703,25 @@ function Load-VersionIntoUi {
     Write-Log (Get-Text 'logVersionLoaded')
 }
 
+function Save-VersionDraftFromInputs {
+    $context = Resolve-ProjectContext $TxtProjectPath.Text
+    $version = $TxtVersion.Text.Trim()
+    $buildDate = $TxtBuildDate.Text.Trim()
+    $changelog = @($TxtChangelog.Text -split "(\r?\n)+" | Where-Object { $_ -and $_.Trim() -ne '' } | ForEach-Object { $_.Trim() })
+
+    if (-not $version -or -not $buildDate -or $changelog.Count -eq 0) {
+        return
+    }
+
+    Save-VersionData $context.VersionPath $version $buildDate $changelog
+    Set-CurrentContext $context @{
+        Version = $version
+        BuildDate = $buildDate
+        Changelog = $changelog
+    }
+    Write-Log (Get-Text 'logDraftSaved')
+}
+
 $BtnArabic.Add_Click({
     $script:CurrentLanguage = 'ar'
     Apply-Language
@@ -779,6 +798,30 @@ $BtnRefreshProject.Add_Click({
         Write-Log (Get-Text 'logProjectRefreshed')
     } catch {
         [System.Windows.MessageBox]::Show($_.Exception.Message, (Get-Text 'genericErrorTitle'))
+    }
+})
+
+$TxtVersion.Add_LostFocus({
+    try {
+        Save-VersionDraftFromInputs
+    } catch {
+        Write-Log $_.Exception.Message
+    }
+})
+
+$TxtBuildDate.Add_LostFocus({
+    try {
+        Save-VersionDraftFromInputs
+    } catch {
+        Write-Log $_.Exception.Message
+    }
+})
+
+$TxtChangelog.Add_LostFocus({
+    try {
+        Save-VersionDraftFromInputs
+    } catch {
+        Write-Log $_.Exception.Message
     }
 })
 
