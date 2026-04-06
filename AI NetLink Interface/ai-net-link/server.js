@@ -5,7 +5,6 @@ import { fileURLToPath } from 'url';
 import multer from 'multer';
 import axios from 'axios';
 import nodemailer from 'nodemailer';
-import { spawn } from 'child_process';
 import pkg from 'whatsapp-web.js';
 const { Client, LocalAuth } = pkg;
 import qrcode from 'qrcode-terminal';
@@ -2304,19 +2303,16 @@ app.post('/api/system/update', async (req, res) => {
   if (!fs.existsSync(updateScript)) return res.status(500).json({ error: 'Update script not found' });
 
   try {
-    const child = spawn('bash', [updateScript], {
-      cwd: projectRoot,
-      detached: true,
-      stdio: 'ignore'
+    const updateLogPath = path.join(projectRoot, 'update-run.log');
+    const command = `nohup /bin/bash "${updateScript}" >> "${updateLogPath}" 2>&1 &`;
+
+    exec(command, { cwd: projectRoot }, (err, stdout, stderr) => {
+      if (err) {
+        console.error('Update script start failed:', stderr || stdout || err.message);
+        return res.status(500).json({ error: (stderr || stdout || err.message || 'Update execution failed.').trim() });
+      }
+      return res.json({ message: 'Update started successfully! System will reboot.' });
     });
-
-    child.on('error', (error) => {
-      console.error('Update script process error:', error);
-    });
-
-    child.unref();
-
-    return res.json({ message: 'Update started successfully! System will reboot.' });
   } catch (err) {
     console.error('Update script start failed:', err);
     return res.status(500).json({ error: err?.message || 'Update execution failed.' });
