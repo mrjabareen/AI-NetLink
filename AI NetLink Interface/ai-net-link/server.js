@@ -33,10 +33,21 @@ app.use(express.json());
 // Path to the database files
 const DB_PATH = process.env.DB_PATH || path.resolve(__dirname, 'NetLink Enterprise DB/[01_DATABASE]');
 
+// Helper to safely join paths and ensure directory exists (Docker/Linux friendly)
+const getSafePath = (...parts) => {
+  const normalizedParts = parts.flatMap(p => p.split(/[\\/]/));
+  const fullPath = path.join(...normalizedParts);
+  const dir = path.extname(fullPath) ? path.dirname(fullPath) : fullPath;
+  if (!fs.existsSync(dir)) {
+    try { fs.mkdirSync(dir, { recursive: true }); } catch (e) { console.error('Failed to create directory:', dir); }
+  }
+  return fullPath;
+};
+
 // Utility to read JSON
 const readJson = (filePath) => {
   try {
-    const fullPath = path.join(DB_PATH, filePath);
+    const fullPath = getSafePath(DB_PATH, filePath);
     if (!fs.existsSync(fullPath)) return null;
     const content = fs.readFileSync(fullPath, 'utf-8');
     return JSON.parse(content);
@@ -51,13 +62,10 @@ const sanitizeFileName = (value) => String(value || '').replace(/[\\/:*?"<>|]/g,
 // ==========================================
 // Gateways Config Manager
 // ==========================================
-const GATEWAYS_CONFIG_PATH = path.join(DB_PATH, 'System', 'gateways_config.json');
+const GATEWAYS_CONFIG_PATH = getSafePath(DB_PATH, 'System', 'gateways_config.json');
 
 const getGatewaysConfig = () => {
   try {
-    if (!fs.existsSync(path.dirname(GATEWAYS_CONFIG_PATH))) {
-      fs.mkdirSync(path.dirname(GATEWAYS_CONFIG_PATH), { recursive: true });
-    }
     if (fs.existsSync(GATEWAYS_CONFIG_PATH)) {
       return JSON.parse(fs.readFileSync(GATEWAYS_CONFIG_PATH, 'utf-8'));
     }
@@ -85,7 +93,7 @@ const saveGatewaysConfig = (config) => {
 // ==========================================
 // Message Data Manager (Templates & Groups)
 // ==========================================
-const MESSAGE_DATA_PATH = path.join(DB_PATH, 'System', 'message_data.json');
+const MESSAGE_DATA_PATH = getSafePath(DB_PATH, 'System', 'message_data.json');
 
 const getMessageDataConfig = () => {
   try {
@@ -130,7 +138,7 @@ app.post('/api/gateways', (req, res) => {
 // ==========================================
 // Network Infrastructure Config Manager
 // ==========================================
-const NETWORK_CONFIG_PATH = path.join(DB_PATH, 'System', 'network_config.json');
+const NETWORK_CONFIG_PATH = getSafePath(DB_PATH, 'System', 'network_config.json');
 
 const getNetworkConfig = () => {
   try {
@@ -349,7 +357,7 @@ app.get('/api/network/status-batch', async (req, res) => {
 
     // Save audit log for debugging
     try {
-        const auditPath = path.join(DB_PATH, 'System', 'mikrotik_status_audit.json');
+        const auditPath = getSafePath(DB_PATH, 'System', 'mikrotik_status_audit.json');
         fs.writeFileSync(auditPath, JSON.stringify({ timestamp: new Date().toISOString(), results: fullRawData }, null, 2));
     } catch (e) {
         console.error('Failed to write audit log:', e);
@@ -592,7 +600,7 @@ app.post('/api/network/secrets/enable/:username', async (req, res) => {
 // ==========================================
 // Network Profiles Manager
 // ==========================================
-const PROFILES_PATH = path.join(DB_PATH, 'CRM', 'profiles.json');
+const PROFILES_PATH = getSafePath(DB_PATH, 'CRM', 'profiles.json');
 
 const getProfiles = () => {
     try {
@@ -853,13 +861,13 @@ app.post('/api/subscribers/:id/extend', async (req, res) => {
     const targetId = targetIdStr.replace('SUB-', '');
 
     try {
-        const subDir = path.join(DB_PATH, 'Subscribers');
+        const subDir = getSafePath(DB_PATH, 'Subscribers');
         const files = fs.readdirSync(subDir).filter(f => f.endsWith('.json'));
         let subscriberData = null;
         let foundFile = null;
 
         for (const file of files) {
-            const content = JSON.parse(fs.readFileSync(path.join(subDir, file), 'utf-8'));
+            const content = JSON.parse(fs.readFileSync(getSafePath(subDir, file), 'utf-8'));
             if (String(content.id) === String(targetId) || `SUB-${content.id}` === targetIdStr) {
                 subscriberData = content;
                 foundFile = file;
@@ -899,7 +907,7 @@ app.post('/api/subscribers/:id/extend', async (req, res) => {
         // Track deduction
         subscriberData.pending_deduction_hours = (parseFloat(subscriberData.pending_deduction_hours) || 0) + hoursToAdd;
 
-        fs.writeFileSync(path.join(subDir, foundFile), JSON.stringify(subscriberData, null, 2));
+        fs.writeFileSync(getSafePath(subDir, foundFile), JSON.stringify(subscriberData, null, 2));
 
         // Sync to MikroTik
         let syncResults = [];
@@ -922,7 +930,7 @@ app.post('/api/subscribers/:id/activate', async (req, res) => {
     const targetId = targetIdStr.replace('SUB-', '');
 
     try {
-        const subDir = path.join(DB_PATH, 'Subscribers');
+        const subDir = getSafePath(DB_PATH, 'Subscribers');
         if (!fs.existsSync(subDir)) return res.status(404).json({ error: 'Subscribers directory not found' });
 
         const files = fs.readdirSync(subDir).filter(f => f.endsWith('.json'));
@@ -931,7 +939,7 @@ app.post('/api/subscribers/:id/activate', async (req, res) => {
 
         for (const file of files) {
             try {
-                const content = JSON.parse(fs.readFileSync(path.join(subDir, file), 'utf-8'));
+                const content = JSON.parse(fs.readFileSync(getSafePath(subDir, file), 'utf-8'));
                 const numericMatch = file.match(/^(\d+)_/);
                 const fileNum = numericMatch ? numericMatch[1] : null;
 
@@ -1014,7 +1022,7 @@ app.post('/api/subscribers/:id/activate', async (req, res) => {
             if (matchedProfile.type === 'both') subscriberData['نوع الاشتراك'] = 'PPPoE + Hotspot';
         }
 
-        fs.writeFileSync(path.join(subDir, foundFile), JSON.stringify(subscriberData, null, 2));
+        fs.writeFileSync(getSafePath(subDir, foundFile), JSON.stringify(subscriberData, null, 2));
 
         console.log(`[Activate] Subscriber ${targetIdStr} activated until ${expiryStr} | Display: ${displayExpiry}`);
 
@@ -1053,7 +1061,7 @@ app.post('/api/subscribers/:id/sync-mikrotik', async (req, res) => {
     console.log(`[Sync] Starting sync for subscriber ID: ${targetIdStr} | cleanId: ${targetId} | target: ${target}`);
 
     // Load subscriber file
-    const subDir = path.join(DB_PATH, 'Subscribers');
+    const subDir = getSafePath(DB_PATH, 'Subscribers');
     if (!fs.existsSync(subDir)) return res.status(404).json({ error: 'Subscribers directory not found' });
 
     const files = fs.readdirSync(subDir).filter(f => f.endsWith('.json'));
@@ -1062,7 +1070,7 @@ app.post('/api/subscribers/:id/sync-mikrotik', async (req, res) => {
 
     for (const file of files) {
         try {
-            const content = JSON.parse(fs.readFileSync(path.join(subDir, file), 'utf-8'));
+            const content = JSON.parse(fs.readFileSync(getSafePath(subDir, file), 'utf-8'));
             const numericMatch = file.match(/^(\d+)_/);
             const fileNum = numericMatch ? numericMatch[1] : null;
 
@@ -1121,7 +1129,7 @@ const startWhatsAppEngine = () => {
     waQr = null;
     
     waClient = new Client({
-        authStrategy: new LocalAuth({ dataPath: path.join(DB_PATH, 'System', 'whatsapp-auth') }),
+        authStrategy: new LocalAuth({ dataPath: getSafePath(DB_PATH, 'System', 'whatsapp-auth') }),
         puppeteer: { 
             executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium',
             args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-accelerated-2d-canvas', '--disable-gpu'] 
@@ -1226,14 +1234,14 @@ app.post('/api/whatsapp/send', async (req, res) => {
 // GET Managers
 app.get('/api/managers', (req, res) => {
   try {
-    const dirPath = path.join(DB_PATH, 'Financial/System_Managers');
+    const dirPath = getSafePath(DB_PATH, 'Financial', 'System_Managers');
     if (!fs.existsSync(dirPath)) {
       return res.status(404).json({ error: 'Managers directory not found' });
     }
     
     const files = fs.readdirSync(dirPath).filter(f => f.endsWith('.json'));
     const users = files.map((file, index) => {
-      const content = fs.readFileSync(path.join(dirPath, file), 'utf-8');
+      const content = fs.readFileSync(getSafePath(dirPath, file), 'utf-8');
       const m = JSON.parse(content);
       
       const roleStr = m['الصلاحية'] || '';
@@ -1262,14 +1270,14 @@ app.get('/api/managers', (req, res) => {
 
 app.get('/api/managers/raw', (req, res) => {
   try {
-    const dirPath = path.join(DB_PATH, 'Financial/System_Managers');
+    const dirPath = getSafePath(DB_PATH, 'Financial', 'System_Managers');
     if (!fs.existsSync(dirPath)) {
       return res.status(404).json({ error: 'Managers directory not found' });
     }
 
     const files = fs.readdirSync(dirPath).filter(f => f.endsWith('.json'));
     const users = files.map((file) => {
-      const content = fs.readFileSync(path.join(dirPath, file), 'utf-8');
+      const content = fs.readFileSync(getSafePath(dirPath, file), 'utf-8');
       const m = JSON.parse(content);
       return { id: file.replace('.json', ''), ...m };
     });
@@ -1283,7 +1291,7 @@ app.get('/api/managers/raw', (req, res) => {
 
 app.post('/api/managers/raw', (req, res) => {
   try {
-    const dirPath = path.join(DB_PATH, 'Financial/System_Managers');
+    const dirPath = getSafePath(DB_PATH, 'Financial', 'System_Managers');
     if (!fs.existsSync(dirPath)) fs.mkdirSync(dirPath, { recursive: true });
 
     const body = req.body || {};
@@ -1303,7 +1311,7 @@ app.post('/api/managers/raw', (req, res) => {
 
     const newId = maxId + 1;
     const fileName = `${newId}_${safeName}.json`;
-    const filePath = path.join(dirPath, fileName);
+    const filePath = getSafePath(dirPath, fileName);
     
     const payload = { ...body };
     delete payload.id;
@@ -1318,7 +1326,7 @@ app.post('/api/managers/raw', (req, res) => {
 
 app.put('/api/managers/raw/:id', (req, res) => {
   try {
-    const dirPath = path.join(DB_PATH, 'Financial/System_Managers');
+    const dirPath = getSafePath(DB_PATH, 'Financial', 'System_Managers');
     if (!fs.existsSync(dirPath)) return res.status(404).json({ error: 'DB not found' });
 
     const targetId = req.params.id;
@@ -1327,7 +1335,7 @@ app.put('/api/managers/raw/:id', (req, res) => {
     
     if (!targetFile) return res.status(404).json({ error: 'Manager not found' });
 
-    const filePath = path.join(dirPath, targetFile);
+    const filePath = getSafePath(dirPath, targetFile);
     const existingContent = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
     const body = req.body || {};
     
@@ -1345,7 +1353,7 @@ app.put('/api/managers/raw/:id', (req, res) => {
 
     fs.writeFileSync(filePath, JSON.stringify(updatedContent, null, 2), 'utf-8');
     if (newFileName !== targetFile) {
-      fs.renameSync(filePath, path.join(dirPath, newFileName));
+      fs.renameSync(filePath, getSafePath(dirPath, newFileName));
     }
 
     res.json({ data: { message: 'Updated successfully' } });
@@ -1357,7 +1365,7 @@ app.put('/api/managers/raw/:id', (req, res) => {
 
 app.delete('/api/managers/raw/:id', (req, res) => {
   try {
-    const dirPath = path.join(DB_PATH, 'Financial/System_Managers');
+    const dirPath = getSafePath(DB_PATH, 'Financial', 'System_Managers');
     if (!fs.existsSync(dirPath)) return res.status(404).json({ error: 'DB not found' });
 
     const targetId = req.params.id;
@@ -1366,7 +1374,7 @@ app.delete('/api/managers/raw/:id', (req, res) => {
 
     if (!targetFile) return res.status(404).json({ error: 'Manager not found' });
 
-    fs.unlinkSync(path.join(dirPath, targetFile));
+    fs.unlinkSync(getSafePath(dirPath, targetFile));
     res.json({ data: { message: 'Deleted successfully' } });
   } catch (error) {
     console.error('Error deleting manager:', error);
@@ -1378,14 +1386,14 @@ app.delete('/api/managers/raw/:id', (req, res) => {
 // GET Subscribers
 app.get('/api/subscribers', (req, res) => {
   try {
-    const dirPath = path.join(DB_PATH, 'Subscribers');
+    const dirPath = getSafePath(DB_PATH, 'Subscribers');
     if (!fs.existsSync(dirPath)) {
       return res.status(404).json({ error: 'Subscribers directory not found' });
     }
     
     const files = fs.readdirSync(dirPath).filter(f => f.endsWith('.json'));
     const subscribers = files.map(file => {
-      const content = fs.readFileSync(path.join(dirPath, file), 'utf-8');
+      const content = fs.readFileSync(getSafePath(dirPath, file), 'utf-8');
       const s = JSON.parse(content);
       
       let statusKey = 'active';
@@ -1418,7 +1426,7 @@ app.get('/api/subscribers', (req, res) => {
 // POST Subscriber
 app.post('/api/subscribers', (req, res) => {
   try {
-    const dirPath = path.join(DB_PATH, 'Subscribers');
+    const dirPath = getSafePath(DB_PATH, 'Subscribers');
     if (!fs.existsSync(dirPath)) fs.mkdirSync(dirPath, { recursive: true });
     
     const files = fs.readdirSync(dirPath).filter(f => f.endsWith('.json'));
@@ -1440,7 +1448,7 @@ app.post('/api/subscribers', (req, res) => {
     
     const s = { ...body, id: newId };
     
-    fs.writeFileSync(path.join(dirPath, fileName), JSON.stringify(s, null, 2), 'utf-8');
+    fs.writeFileSync(getSafePath(dirPath, fileName), JSON.stringify(s, null, 2), 'utf-8');
     res.status(201).json({ data: { message: 'Created successfully', id: `SUB-${newId}` } });
   } catch (error) {
     console.error('Error creating subscriber:', error);
@@ -1451,7 +1459,7 @@ app.post('/api/subscribers', (req, res) => {
 // PUT Subscriber
 app.put('/api/subscribers/:id', (req, res) => {
   try {
-    const dirPath = path.join(DB_PATH, 'Subscribers');
+    const dirPath = getSafePath(DB_PATH, 'Subscribers');
     if (!fs.existsSync(dirPath)) return res.status(404).json({ error: 'DB not found' });
     
     const targetIdStr = req.params.id;
@@ -1462,7 +1470,7 @@ app.put('/api/subscribers/:id', (req, res) => {
       const match = f.match(/^(\d+)_/);
       if (match && match[1] === targetId) return true;
       try {
-        const content = JSON.parse(fs.readFileSync(path.join(dirPath, f), 'utf-8'));
+        const content = JSON.parse(fs.readFileSync(getSafePath(dirPath, f), 'utf-8'));
         if (String(content.id) === targetId || `SUB-${content.id}` === targetIdStr) return true;
       } catch (e) {}
       return false;
@@ -1470,7 +1478,7 @@ app.put('/api/subscribers/:id', (req, res) => {
     
     if (!targetFile) return res.status(404).json({ error: 'Subscriber not found' });
     
-    const filePath = path.join(dirPath, targetFile);
+    const filePath = getSafePath(dirPath, targetFile);
     const existingContent = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
     const body = req.body || {};
     
@@ -1493,7 +1501,7 @@ app.put('/api/subscribers/:id', (req, res) => {
         const fileId = fileIdMatch ? fileIdMatch[1] : updatedContent.id;
         const newFileName = `${fileId}_${newFullName}.json`;
         if (newFileName !== targetFile) {
-            fs.renameSync(filePath, path.join(dirPath, newFileName));
+            fs.renameSync(filePath, getSafePath(dirPath, newFileName));
         }
     }
     
@@ -1507,7 +1515,7 @@ app.put('/api/subscribers/:id', (req, res) => {
 // DELETE Subscriber
 app.delete('/api/subscribers/:id', (req, res) => {
   try {
-    const dirPath = path.join(DB_PATH, 'Subscribers');
+    const dirPath = getSafePath(DB_PATH, 'Subscribers');
     if (!fs.existsSync(dirPath)) return res.status(404).json({ error: 'DB not found' });
     
     const targetIdStr = req.params.id;
@@ -1518,7 +1526,7 @@ app.delete('/api/subscribers/:id', (req, res) => {
       const match = f.match(/^(\d+)_/);
       if (match && match[1] === targetId) return true;
       try {
-        const content = JSON.parse(fs.readFileSync(path.join(dirPath, f), 'utf-8'));
+        const content = JSON.parse(fs.readFileSync(getSafePath(dirPath, f), 'utf-8'));
         if (String(content.id) === targetId || `SUB-${content.id}` === targetIdStr) return true;
       } catch (e) {}
       return false;
@@ -1526,7 +1534,7 @@ app.delete('/api/subscribers/:id', (req, res) => {
     
     if (!targetFile) return res.status(404).json({ error: 'Subscriber not found' });
     
-    fs.unlinkSync(path.join(dirPath, targetFile));
+    fs.unlinkSync(getSafePath(dirPath, targetFile));
     res.json({ data: { message: 'Deleted successfully' } });
   } catch (error) {
     console.error('Error deleting subscriber:', error);
@@ -1537,13 +1545,13 @@ app.delete('/api/subscribers/:id', (req, res) => {
 // GET Suppliers
 app.get('/api/suppliers', (req, res) => {
   try {
-    const dirPath = path.join(DB_PATH, 'Financial/Suppliers');
+    const dirPath = getSafePath(DB_PATH, 'Financial', 'Suppliers');
     if (!fs.existsSync(dirPath)) {
       return res.status(404).json({ error: 'Suppliers directory not found' });
     }
     const files = fs.readdirSync(dirPath).filter(f => f.endsWith('.json'));
     const suppliers = files.map((file) => {
-      const content = fs.readFileSync(path.join(dirPath, file), 'utf-8');
+      const content = fs.readFileSync(getSafePath(dirPath, file), 'utf-8');
       const s = JSON.parse(content);
       return {
         id: file.replace('.json', ''),
@@ -1559,7 +1567,7 @@ app.get('/api/suppliers', (req, res) => {
 
 app.post('/api/suppliers', (req, res) => {
   try {
-    const dirPath = path.join(DB_PATH, 'Financial/Suppliers');
+    const dirPath = getSafePath(DB_PATH, 'Financial', 'Suppliers');
     if (!fs.existsSync(dirPath)) fs.mkdirSync(dirPath, { recursive: true });
 
     const body = req.body || {};
@@ -1576,7 +1584,7 @@ app.post('/api/suppliers', (req, res) => {
     }
 
     const fileName = `${safeCode}_${safeName}.json`;
-    const filePath = path.join(dirPath, fileName);
+    const filePath = getSafePath(dirPath, fileName);
     if (fs.existsSync(filePath)) {
       return res.status(409).json({ error: 'Supplier already exists' });
     }
@@ -1594,7 +1602,7 @@ app.post('/api/suppliers', (req, res) => {
 
 app.put('/api/suppliers/:id', (req, res) => {
   try {
-    const dirPath = path.join(DB_PATH, 'Financial/Suppliers');
+    const dirPath = getSafePath(DB_PATH, 'Financial', 'Suppliers');
     if (!fs.existsSync(dirPath)) return res.status(404).json({ error: 'DB not found' });
 
     const targetId = req.params.id;
@@ -1602,7 +1610,7 @@ app.put('/api/suppliers/:id', (req, res) => {
     const targetFile = files.find(f => f.replace('.json', '') === targetId);
     if (!targetFile) return res.status(404).json({ error: 'Supplier not found' });
 
-    const filePath = path.join(dirPath, targetFile);
+    const filePath = getSafePath(dirPath, targetFile);
     const existingContent = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
     const body = req.body || {};
     const updatedContent = { ...existingContent, ...body };
@@ -1618,7 +1626,7 @@ app.put('/api/suppliers/:id', (req, res) => {
 
     fs.writeFileSync(filePath, JSON.stringify(updatedContent, null, 2), 'utf-8');
     if (newFileName !== targetFile) {
-      fs.renameSync(filePath, path.join(dirPath, newFileName));
+      fs.renameSync(filePath, getSafePath(dirPath, newFileName));
     }
 
     res.json({ data: { message: 'Updated successfully' } });
@@ -1630,7 +1638,7 @@ app.put('/api/suppliers/:id', (req, res) => {
 
 app.delete('/api/suppliers/:id', (req, res) => {
   try {
-    const dirPath = path.join(DB_PATH, 'Financial/Suppliers');
+    const dirPath = getSafePath(DB_PATH, 'Financial', 'Suppliers');
     if (!fs.existsSync(dirPath)) return res.status(404).json({ error: 'DB not found' });
 
     const targetId = req.params.id;
@@ -1638,7 +1646,7 @@ app.delete('/api/suppliers/:id', (req, res) => {
     const targetFile = files.find(f => f.replace('.json', '') === targetId);
     if (!targetFile) return res.status(404).json({ error: 'Supplier not found' });
 
-    fs.unlinkSync(path.join(dirPath, targetFile));
+    fs.unlinkSync(getSafePath(dirPath, targetFile));
     res.json({ data: { message: 'Deleted successfully' } });
   } catch (error) {
     console.error('Error deleting supplier:', error);
@@ -1649,13 +1657,13 @@ app.delete('/api/suppliers/:id', (req, res) => {
 // GET Investors / Shareholders
 app.get('/api/investors', (req, res) => {
   try {
-    const dirPath = path.join(DB_PATH, 'Financial/Investors');
+    const dirPath = getSafePath(DB_PATH, 'Financial', 'Investors');
     if (!fs.existsSync(dirPath)) {
       return res.status(404).json({ error: 'Investors directory not found' });
     }
     const files = fs.readdirSync(dirPath).filter(f => f.endsWith('.json'));
     const investors = files.map((file, index) => {
-      const content = fs.readFileSync(path.join(dirPath, file), 'utf-8');
+      const content = fs.readFileSync(getSafePath(dirPath, file), 'utf-8');
       const inv = JSON.parse(content);
       const totalShares = inv['كمية الأسهم الكاملة'] || 0;
       const ownedShares = inv['رصيد الأسهم'] || 0;
@@ -1685,7 +1693,7 @@ app.get('/api/investors', (req, res) => {
 
 app.post('/api/investors', (req, res) => {
   try {
-    const dirPath = path.join(DB_PATH, 'Financial/Investors');
+    const dirPath = getSafePath(DB_PATH, 'Financial', 'Investors');
     if (!fs.existsSync(dirPath)) fs.mkdirSync(dirPath, { recursive: true });
 
     const body = req.body || {};
@@ -1707,7 +1715,7 @@ app.post('/api/investors', (req, res) => {
     
     const newId = maxId + 1;
     const fileName = `${newId}_${safeName}.json`;
-    const filePath = path.join(dirPath, fileName);
+    const filePath = getSafePath(dirPath, fileName);
     
     const payload = { ...body };
     delete payload.id;
@@ -1725,7 +1733,7 @@ app.post('/api/investors', (req, res) => {
 
 app.put('/api/investors/:id', (req, res) => {
   try {
-    const dirPath = path.join(DB_PATH, 'Financial/Investors');
+    const dirPath = getSafePath(DB_PATH, 'Financial', 'Investors');
     if (!fs.existsSync(dirPath)) return res.status(404).json({ error: 'DB not found' });
 
     const targetIdStr = req.params.id;
@@ -1741,7 +1749,7 @@ app.put('/api/investors/:id', (req, res) => {
     
     if (!targetFile) return res.status(404).json({ error: 'Investor not found' });
 
-    const filePath = path.join(dirPath, targetFile);
+    const filePath = getSafePath(dirPath, targetFile);
     const existingContent = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
     const body = req.body || {};
     
@@ -1763,7 +1771,7 @@ app.put('/api/investors/:id', (req, res) => {
 
     fs.writeFileSync(filePath, JSON.stringify(updatedContent, null, 2), 'utf-8');
     if (newFileName !== targetFile) {
-      fs.renameSync(filePath, path.join(dirPath, newFileName));
+      fs.renameSync(filePath, getSafePath(dirPath, newFileName));
     }
 
     res.json({ data: { message: 'Updated successfully' } });
@@ -1775,7 +1783,7 @@ app.put('/api/investors/:id', (req, res) => {
 
 app.delete('/api/investors/:id', (req, res) => {
   try {
-    const dirPath = path.join(DB_PATH, 'Financial/Investors');
+    const dirPath = getSafePath(DB_PATH, 'Financial', 'Investors');
     if (!fs.existsSync(dirPath)) return res.status(404).json({ error: 'DB not found' });
 
     const targetIdStr = req.params.id;
@@ -1791,7 +1799,7 @@ app.delete('/api/investors/:id', (req, res) => {
 
     if (!targetFile) return res.status(404).json({ error: 'Investor not found' });
 
-    fs.unlinkSync(path.join(dirPath, targetFile));
+    fs.unlinkSync(getSafePath(dirPath, targetFile));
     res.json({ data: { message: 'Deleted successfully' } });
   } catch (error) {
     console.error('Error deleting investor:', error);
@@ -1803,11 +1811,11 @@ app.delete('/api/investors/:id', (req, res) => {
 const setupCrudRoutes = (resourceName, subDir, nameKey) => {
   app.get(`/api/${resourceName}`, (req, res) => {
     try {
-      const dirPath = path.join(DB_PATH, subDir);
+      const dirPath = getSafePath(DB_PATH, subDir);
       if (!fs.existsSync(dirPath)) return res.json({ data: [] });
       const files = fs.readdirSync(dirPath).filter(f => f.endsWith('.json'));
       const data = files.map((file, index) => {
-        const content = fs.readFileSync(path.join(dirPath, file), 'utf-8');
+        const content = fs.readFileSync(getSafePath(dirPath, file), 'utf-8');
         return { id: file.replace('.json', ''), ...JSON.parse(content) };
       });
       res.json({ data });
@@ -1816,7 +1824,7 @@ const setupCrudRoutes = (resourceName, subDir, nameKey) => {
 
   app.post(`/api/${resourceName}`, (req, res) => {
     try {
-      const dirPath = path.join(DB_PATH, subDir);
+      const dirPath = getSafePath(DB_PATH, subDir);
       if (!fs.existsSync(dirPath)) fs.mkdirSync(dirPath, { recursive: true });
       const body = req.body || {};
       const safeName = sanitizeFileName(body[nameKey] || body.name || `new_${resourceName}`);
@@ -1833,20 +1841,20 @@ const setupCrudRoutes = (resourceName, subDir, nameKey) => {
       const fileName = `${newId}_${safeName}.json`;
       const payload = { ...body };
       delete payload.id;
-      fs.writeFileSync(path.join(dirPath, fileName), JSON.stringify(payload, null, 2), 'utf-8');
+      fs.writeFileSync(getSafePath(dirPath, fileName), JSON.stringify(payload, null, 2), 'utf-8');
       res.status(201).json({ data: { message: 'Created', id: `${newId}_${safeName}` } });
     } catch (error) { res.status(500).json({ error: `Failed to create ${resourceName}` }); }
   });
 
   app.put(`/api/${resourceName}/:id`, (req, res) => {
     try {
-      const dirPath = path.join(DB_PATH, subDir);
+      const dirPath = getSafePath(DB_PATH, subDir);
       if (!fs.existsSync(dirPath)) return res.status(404).json({ error: 'DB not found' });
       const targetId = req.params.id;
       const files = fs.readdirSync(dirPath).filter(f => f.endsWith('.json'));
       const targetFile = files.find(f => f.replace('.json', '') === targetId || f.startsWith(`${targetId.split('_')[0]}_`));
       if (!targetFile) return res.status(404).json({ error: 'Not found' });
-      const filePath = path.join(dirPath, targetFile);
+      const filePath = getSafePath(dirPath, targetFile);
       const existing = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
       const updated = { ...existing, ...(req.body || {}) };
       delete updated.id;
@@ -1857,20 +1865,20 @@ const setupCrudRoutes = (resourceName, subDir, nameKey) => {
          newFileName = `${fileId}_${sanitizeFileName(newName)}.json`;
       }
       fs.writeFileSync(filePath, JSON.stringify(updated, null, 2), 'utf-8');
-      if (newFileName !== targetFile) fs.renameSync(filePath, path.join(dirPath, newFileName));
+      if (newFileName !== targetFile) fs.renameSync(filePath, getSafePath(dirPath, newFileName));
       res.json({ data: { message: 'Updated' } });
     } catch (error) { res.status(500).json({ error: `Failed to update ${resourceName}` }); }
   });
 
   app.delete(`/api/${resourceName}/:id`, (req, res) => {
     try {
-      const dirPath = path.join(DB_PATH, subDir);
+      const dirPath = getSafePath(DB_PATH, subDir);
       if (!fs.existsSync(dirPath)) return res.status(404).json({ error: 'DB not found' });
       const targetId = req.params.id;
       const files = fs.readdirSync(dirPath).filter(f => f.endsWith('.json'));
       const targetFile = files.find(f => f.replace('.json', '') === targetId || f.startsWith(`${targetId.split('_')[0]}_`));
       if (!targetFile) return res.status(404).json({ error: 'Not found' });
-      fs.unlinkSync(path.join(dirPath, targetFile));
+      fs.unlinkSync(getSafePath(dirPath, targetFile));
       res.json({ data: { message: 'Deleted' } });
     } catch (error) { res.status(500).json({ error: `Failed to delete ${resourceName}` }); }
   });
@@ -1893,7 +1901,7 @@ app.get('/api/files/tree', (req, res) => {
       return res.status(403).json({ error: 'Path traversal is not allowed.' });
     }
     
-    const fullPath = path.join(DB_PATH, targetFolder);
+    const fullPath = getSafePath(DB_PATH, targetFolder);
     if (!fs.existsSync(fullPath)) {
       return res.json({ data: [] });
     }
@@ -1921,7 +1929,7 @@ app.get('/api/files/content', (req, res) => {
     const targetPath = req.query.path || '';
     if (targetPath.includes('..')) return res.status(403).json({ error: 'Path traversal is not allowed.' });
     
-    const fullPath = path.join(DB_PATH, targetPath);
+    const fullPath = getSafePath(DB_PATH, targetPath);
     if (!fs.existsSync(fullPath) || fs.statSync(fullPath).isDirectory()) {
       return res.status(404).json({ error: 'File not found.' });
     }
@@ -1938,7 +1946,7 @@ app.post('/api/files/save', (req, res) => {
     const { targetPath, content } = req.body;
     if (!targetPath || targetPath.includes('..')) return res.status(403).json({ error: 'Invalid path.' });
     
-    const fullPath = path.join(DB_PATH, targetPath);
+    const fullPath = getSafePath(DB_PATH, targetPath);
     fs.writeFileSync(fullPath, content, 'utf8');
     res.json({ data: { message: 'File saved successfully.' } });
   } catch (err) {
@@ -1953,7 +1961,7 @@ app.post('/api/files/upload', upload.single('file'), (req, res) => {
     
     if (!req.file) return res.status(400).json({ error: 'No file uploaded.' });
     
-    const finalDir = path.join(DB_PATH, targetFolder);
+    const finalDir = getSafePath(DB_PATH, targetFolder);
     if (!fs.existsSync(finalDir)) fs.mkdirSync(finalDir, { recursive: true });
     
     const finalPath = path.join(finalDir, req.file.originalname);
@@ -1973,7 +1981,7 @@ app.get('/api/files/download', (req, res) => {
     const targetPath = req.query.path || '';
     if (targetPath.includes('..')) return res.status(403).json({ error: 'Invalid path.' });
     
-    const fullPath = path.join(DB_PATH, targetPath);
+    const fullPath = getSafePath(DB_PATH, targetPath);
     if (!fs.existsSync(fullPath) || fs.statSync(fullPath).isDirectory()) return res.status(404).json({ error: 'File not found' });
     
     res.download(fullPath);
@@ -2101,7 +2109,7 @@ app.post('/api/email/send', async (req, res) => {
 // BACKGROUND SERVICE: Automated Expiry Monitor
 // ==========================================
 async function checkSubscriberExpiries() {
-    const subDir = path.join(DB_PATH, 'Subscribers');
+    const subDir = getSafePath(DB_PATH, 'Subscribers');
     if (!fs.existsSync(subDir)) return;
 
     // Use current time from the local system (ADDITIONAL_METADATA context)
@@ -2118,7 +2126,7 @@ async function checkSubscriberExpiries() {
     try {
         const files = fs.readdirSync(subDir).filter(f => f.endsWith('.json'));
         for (const file of files) {
-            const filePath = path.join(subDir, file);
+            const filePath = getSafePath(subDir, file);
             let subData;
             try {
                 subData = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
