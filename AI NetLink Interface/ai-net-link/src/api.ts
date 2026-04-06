@@ -6,11 +6,8 @@
  */
 const getDefaultBaseUrl = () => {
   if (typeof window === 'undefined') return 'http://localhost:3001/api';
-  const { hostname } = window.location;
-  if (hostname === 'localhost' || hostname === '127.0.0.1') {
-    return `http://${hostname}:3001/api`;
-  }
-  return '/api';
+  const { protocol, hostname } = window.location;
+  return `${protocol}//${hostname}:3001/api`;
 };
 
 const ENV_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '').trim();
