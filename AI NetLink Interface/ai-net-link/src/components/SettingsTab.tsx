@@ -10,7 +10,7 @@ import { Settings, User, Network, Cpu, CreditCard, Users, Shield, Save, Key, Dat
 import { AppState } from '../types';
 import { dict } from '../dict';
 import { formatNumber, normalizeDigits, parseNumericInput } from '../utils/format';
-import { getGatewaysConfig, saveGatewaysConfig, getWhatsappStatus, restartWhatsappEngine, getNetworkConfig, saveNetworkConfig, testMikrotikConnection, BASE_URL, publishSystemToGithub } from '../api';
+import { getGatewaysConfig, saveGatewaysConfig, getWhatsappStatus, restartWhatsappEngine, getNetworkConfig, saveNetworkConfig, testMikrotikConnection, checkSystemUpdate, startSystemUpdate, publishSystemToGithub } from '../api';
 import NumericInput from './NumericInput';
 import DateInput from './DateInput';
 
@@ -59,20 +59,20 @@ export default function SettingsTab({ state, setState }: SettingsTabProps) {
   const handleCheckUpdate = async () => {
     setState(prev => ({ ...prev, updateStatus: { ...prev.updateStatus, checking: true, error: undefined } }));
     try {
-      // Fetch latest version from "remote" (simulated by fetching version.json + delay)
-      const res = await fetch('/version.json');
-      const data = await res.json();
-      
-      // Simulate checking delay
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      const result = await checkSystemUpdate();
+      const payload = result?.data;
+      if (!payload) throw new Error('Missing update payload');
 
-      const currentVersion = state.versionInfo.version;
-      const latestVersion = data.version;
-
-      const hasUpdate = latestVersion !== currentVersion;
+      const currentVersion = payload.current || state.versionInfo.version;
+      const latestVersion = payload.latest || null;
+      const hasUpdate = Boolean(payload.hasUpdate);
 
       setState(prev => ({
         ...prev,
+        versionInfo: {
+          ...prev.versionInfo,
+          version: currentVersion
+        },
         updateStatus: {
           hasUpdate,
           latestVersion: hasUpdate ? latestVersion : null,
@@ -89,27 +89,12 @@ export default function SettingsTab({ state, setState }: SettingsTabProps) {
 
   const handleUpdateSystem = async () => {
     if (!state.updateStatus.hasUpdate) return;
-    
-    // In a real scenario, this would call the /api/trigger-update endpoint
     setState(prev => ({ ...prev, updateStatus: { ...prev.updateStatus, checking: true } }));
     
     try {
-      // Simulate update process
-      await new Promise(resolve => setTimeout(resolve, 3000));
-      
-      // After update build on server, we reset status
-      setState(prev => ({
-        ...prev,
-        updateStatus: {
-          hasUpdate: false,
-          latestVersion: null,
-          checking: false
-        }
-      }));
-      
-      // In real life, the server would restart and the browser would need to reload
-      // For this demo, we just show success
-      alert(isRTL ? 'بدأ التحديث! سيقوم النظام بإعادة التشغيل تلقائياً.' : 'Update started! The system will restart automatically.');
+      const result = await startSystemUpdate();
+      setState(prev => ({ ...prev, updateStatus: { ...prev.updateStatus, checking: false } }));
+      alert(result.message || (isRTL ? 'بدأ التحديث! سيقوم النظام بإعادة التشغيل تلقائياً.' : 'Update started! The system will restart automatically.'));
     } catch (err) {
       setState(prev => ({ ...prev, updateStatus: { ...prev.updateStatus, checking: false, error: 'Update failed' } }));
     }

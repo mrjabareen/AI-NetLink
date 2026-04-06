@@ -1,0 +1,41 @@
+# NetLink Enterprise Database - DO NOT COMMIT
+NetLink Enterprise DB/
+
+# WhatsApp session data
+*.session
+*.session-journal
+
+# Environment variables and secrets
+.env
+.env.local
+.env.production
+
+# Log files
+*.log
+logs/
+
+# Runtime data
+pids/
+*.pid
+*.seed
+
+# Dependency directories
+node_modules/
+
+# Build outputs
+dist/
+build/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Temporary files
+.tmp/
+temp/
