@@ -499,9 +499,11 @@ function Get-Text([string]$key) {
                 <Grid.ColumnDefinitions>
                   <ColumnDefinition Width="*"/>
                   <ColumnDefinition Width="*"/>
+                  <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
-                <Button x:Name="BtnLoadVersion" Grid.Column="0" Style="{StaticResource SecondaryButtonStyle}" Margin="0,0,12,0" Height="50"/>
-                <Button x:Name="BtnPublish" Grid.Column="1" Style="{StaticResource PrimaryButtonStyle}" Height="50"/>
+                <Button x:Name="BtnRefreshProject" Grid.Column="0" Style="{StaticResource SecondaryButtonStyle}" Margin="0,0,12,0" Height="50"/>
+                <Button x:Name="BtnLoadVersion" Grid.Column="1" Style="{StaticResource SecondaryButtonStyle}" Margin="0,0,12,0" Height="50"/>
+                <Button x:Name="BtnPublish" Grid.Column="2" Style="{StaticResource PrimaryButtonStyle}" Height="50"/>
               </Grid>
             </StackPanel>
           </Border>
@@ -580,6 +582,7 @@ $LblBuildDate = Find-Control 'LblBuildDate'
 $TxtBuildDate = Find-Control 'TxtBuildDate'
 $LblChangelog = Find-Control 'LblChangelog'
 $TxtChangelog = Find-Control 'TxtChangelog'
+$BtnRefreshProject = Find-Control 'BtnRefreshProject'
 $BtnLoadVersion = Find-Control 'BtnLoadVersion'
 $BtnPublish = Find-Control 'BtnPublish'
 $LogTitle = Find-Control 'LogTitle'
@@ -622,7 +625,7 @@ function Set-CurrentContext([hashtable]$context, [hashtable]$versionData = $null
 }
 
 function Set-BusyState([bool]$busy, [string]$statusKey) {
-    foreach ($control in @($BtnBrowse, $BtnSaveSettings, $BtnLoadVersion, $BtnPublish, $BtnToggleToken, $BtnArabic, $BtnEnglish)) {
+    foreach ($control in @($BtnBrowse, $BtnSaveSettings, $BtnRefreshProject, $BtnLoadVersion, $BtnPublish, $BtnToggleToken, $BtnArabic, $BtnEnglish)) {
         $control.IsEnabled = -not $busy
     }
     $StatusChip.Text = Get-Text $statusKey
@@ -660,6 +663,7 @@ function Apply-Language {
     $LblVersion.Text = Get-Text 'version'
     $LblBuildDate.Text = Get-Text 'buildDate'
     $LblChangelog.Text = Get-Text 'changelog'
+    $BtnRefreshProject.Content = Get-Text 'refreshProject'
     $BtnLoadVersion.Content = Get-Text 'loadVersion'
     $BtnPublish.Content = Get-Text 'publish'
     $LogTitle.Text = Get-Text 'logTitle'
@@ -764,6 +768,15 @@ $BtnSaveSettings.Add_Click({
 $BtnLoadVersion.Add_Click({
     try {
         Load-VersionIntoUi
+    } catch {
+        [System.Windows.MessageBox]::Show($_.Exception.Message, (Get-Text 'genericErrorTitle'))
+    }
+})
+
+$BtnRefreshProject.Add_Click({
+    try {
+        Load-VersionIntoUi
+        Write-Log (Get-Text 'logProjectRefreshed')
     } catch {
         [System.Windows.MessageBox]::Show($_.Exception.Message, (Get-Text 'genericErrorTitle'))
     }
