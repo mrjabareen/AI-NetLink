@@ -244,7 +244,10 @@ export const dict = {
         releasePlaceholder: "Add one change per line",
         publishHelp: "This button updates version.json and pushes the latest code to GitHub main.",
         latestVersion: "Latest Available",
-        releaseRequired: "Version and release notes are required."
+        releaseRequired: "Version and release notes are required.",
+        publishPin: "Publish PIN",
+        publishPinPlaceholder: "Enter secure PIN",
+        invalidPin: "Publish PIN is required."
       },
       profile: {
         language: "Language",
@@ -704,7 +707,10 @@ export const dict = {
         releasePlaceholder: "ضع كل تغيير في سطر مستقل",
         publishHelp: "هذا الزر يحدث version.json ويدفع آخر نسخة إلى GitHub على فرع main.",
         latestVersion: "أحدث إصدار متاح",
-        releaseRequired: "رقم الإصدار وسجل التغييرات مطلوبان."
+        releaseRequired: "رقم الإصدار وسجل التغييرات مطلوبان.",
+        publishPin: "الرقم السري للنشر",
+        publishPinPlaceholder: "أدخل الرقم السري",
+        invalidPin: "الرقم السري للنشر مطلوب."
       },
       profile: {
         language: "اللغة",

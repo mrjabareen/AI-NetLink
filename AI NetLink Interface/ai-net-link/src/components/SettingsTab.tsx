@@ -43,6 +43,7 @@ export default function SettingsTab({ state, setState }: SettingsTabProps) {
   const [isPublishing, setIsPublishing] = useState(false);
   const [releaseVersion, setReleaseVersion] = useState(() => getNextPatchVersion(state.versionInfo.version));
   const [releaseNotes, setReleaseNotes] = useState(() => (state.versionInfo.changelog || []).join('\n'));
+  const [publishPin, setPublishPin] = useState('');
 
   React.useEffect(() => {
     if (activeCategory === 'gateways') {
@@ -118,13 +119,18 @@ export default function SettingsTab({ state, setState }: SettingsTabProps) {
       alert(t.settings.update.releaseRequired);
       return;
     }
+    if (!publishPin.trim()) {
+      alert(t.settings.update.invalidPin);
+      return;
+    }
 
     setIsPublishing(true);
     try {
       const result = await publishSystemToGithub({
         version: releaseVersion.trim(),
         changelog,
-        commitMessage: `release: v${releaseVersion.trim()}`
+        commitMessage: `release: v${releaseVersion.trim()}`,
+        pin: publishPin
       });
 
       const published = result.data || {
@@ -147,6 +153,7 @@ export default function SettingsTab({ state, setState }: SettingsTabProps) {
 
       setReleaseVersion(getNextPatchVersion(published.version));
       setReleaseNotes('');
+      setPublishPin('');
       alert(`${t.settings.update.publishSuccess} v${published.version}`);
     } catch (err: any) {
       alert(err.message || 'Publish failed');
@@ -1228,6 +1235,17 @@ export default function SettingsTab({ state, setState }: SettingsTabProps) {
                         disabled={state.updateStatus.checking || isPublishing}
                         placeholder={t.settings.update.releasePlaceholder}
                         className="w-full bg-white dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-800 dark:text-slate-200 focus:outline-none focus:border-teal-500 resize-none disabled:opacity-60"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">{t.settings.update.publishPin}</label>
+                      <input
+                        type="password"
+                        value={publishPin}
+                        onChange={(e) => setPublishPin(e.target.value)}
+                        disabled={state.updateStatus.checking || isPublishing}
+                        placeholder={t.settings.update.publishPinPlaceholder}
+                        className="w-full bg-white dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2.5 text-sm text-slate-800 dark:text-slate-200 focus:outline-none focus:border-teal-500 font-mono disabled:opacity-60"
                       />
                     </div>
                     <p className="text-[10px] text-slate-500 dark:text-slate-400">{t.settings.update.publishHelp}</p>
