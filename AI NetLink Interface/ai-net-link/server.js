@@ -31,7 +31,7 @@ app.use((req, res, next) => {
 app.use(express.json());
 
 // Path to the database files
-const DB_PATH = path.resolve(__dirname, '../../NetLink Enterprise DB/[01_DATABASE]');
+const DB_PATH = process.env.DB_PATH || path.resolve(__dirname, 'NetLink Enterprise DB/[01_DATABASE]');
 
 // Utility to read JSON
 const readJson = (filePath) => {
