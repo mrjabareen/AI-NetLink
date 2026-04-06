@@ -45,6 +45,18 @@ app.whenReady().then(() => {
     return { ok: true };
   });
 
+  ipcMain.handle('publisher:save-current-project', async (_event, payload) => {
+    return core.saveCurrentProject(app.getPath('userData'), payload);
+  });
+
+  ipcMain.handle('publisher:select-saved-project', async (_event, projectId) => {
+    return core.selectSavedProject(app.getPath('userData'), projectId);
+  });
+
+  ipcMain.handle('publisher:delete-saved-project', async (_event, projectId) => {
+    return core.deleteSavedProject(app.getPath('userData'), projectId);
+  });
+
   ipcMain.handle('publisher:refresh-project', async (_event, payload) => {
     return core.getProjectState(payload);
   });

@@ -27,6 +27,55 @@ function getDefaultConfig() {
     repoUrl: '',
     githubUser: '',
     githubToken: '',
+    selectedProjectId: '',
+    savedProjects: [],
+  };
+}
+
+function normalizeSavedProject(profile = {}) {
+  const projectPath = String(profile.projectPath || '').trim();
+  const repoUrl = String(profile.repoUrl || '').trim();
+  const githubUser = String(profile.githubUser || '').trim();
+  const githubToken = String(profile.githubToken || '').trim();
+  const name = String(
+    profile.name
+    || path.basename(projectPath)
+    || repoUrl.replace(/^https?:\/\//i, '').replace(/\.git$/i, '')
+    || 'Saved Project',
+  ).trim();
+
+  return {
+    id: String(profile.id || `${Date.now()}-${Math.random().toString(16).slice(2, 8)}`),
+    name,
+    projectPath,
+    repoUrl,
+    githubUser,
+    githubToken,
+  };
+}
+
+function normalizeConfig(config = {}) {
+  const defaults = getDefaultConfig();
+  const savedProjects = Array.isArray(config.savedProjects)
+    ? config.savedProjects.map((item) => normalizeSavedProject(item))
+    : [];
+
+  return {
+    projectPath: String(config.projectPath || defaults.projectPath),
+    repoUrl: String(config.repoUrl || defaults.repoUrl),
+    githubUser: String(config.githubUser || defaults.githubUser),
+    githubToken: String(config.githubToken || defaults.githubToken),
+    selectedProjectId: String(config.selectedProjectId || defaults.selectedProjectId),
+    savedProjects,
+  };
+}
+
+function getSettingsFromProfile(profile) {
+  return {
+    projectPath: String(profile?.projectPath || ''),
+    repoUrl: String(profile?.repoUrl || ''),
+    githubUser: String(profile?.githubUser || ''),
+    githubToken: String(profile?.githubToken || ''),
   };
 }
 
@@ -36,13 +85,7 @@ function loadConfig(userDataDir) {
   if (!fs.existsSync(configPath)) return defaults;
 
   try {
-    const parsed = readJsonFile(configPath);
-    return {
-      projectPath: String(parsed.projectPath || defaults.projectPath),
-      repoUrl: String(parsed.repoUrl || defaults.repoUrl),
-      githubUser: String(parsed.githubUser || defaults.githubUser),
-      githubToken: String(parsed.githubToken || defaults.githubToken),
-    };
+    return normalizeConfig(readJsonFile(configPath));
   } catch {
     return defaults;
   }
@@ -51,12 +94,70 @@ function loadConfig(userDataDir) {
 function saveConfig(userDataDir, config) {
   const configPath = getConfigPath(userDataDir);
   fs.mkdirSync(path.dirname(configPath), { recursive: true });
-  writeUtf8NoBomFile(configPath, JSON.stringify({
-    projectPath: config.projectPath || '',
-    repoUrl: config.repoUrl || '',
-    githubUser: config.githubUser || '',
-    githubToken: config.githubToken || '',
-  }, null, 2));
+  writeUtf8NoBomFile(configPath, JSON.stringify(normalizeConfig(config), null, 2));
+}
+
+function getConfigResponse(config) {
+  return {
+    settings: {
+      projectPath: config.projectPath,
+      repoUrl: config.repoUrl,
+      githubUser: config.githubUser,
+      githubToken: config.githubToken,
+    },
+    savedProjects: config.savedProjects || [],
+    selectedProjectId: config.selectedProjectId || '',
+  };
+}
+
+function saveCurrentProject(userDataDir, payload) {
+  const config = loadConfig(userDataDir);
+  const normalized = normalizeSavedProject({
+    ...payload,
+    id: payload.projectId || payload.selectedProjectId || '',
+  });
+  const existingIndex = config.savedProjects.findIndex((item) => item.id === normalized.id);
+  if (existingIndex >= 0) {
+    config.savedProjects[existingIndex] = normalized;
+  } else {
+    config.savedProjects.unshift(normalized);
+  }
+
+  Object.assign(config, getSettingsFromProfile(normalized), {
+    selectedProjectId: normalized.id,
+  });
+  saveConfig(userDataDir, config);
+  return getConfigResponse(config);
+}
+
+function selectSavedProject(userDataDir, projectId) {
+  const config = loadConfig(userDataDir);
+  const selected = (config.savedProjects || []).find((item) => item.id === projectId);
+  if (!selected) {
+    throw new Error('Saved project was not found.');
+  }
+
+  Object.assign(config, getSettingsFromProfile(selected), {
+    selectedProjectId: selected.id,
+  });
+  saveConfig(userDataDir, config);
+  return getConfigResponse(config);
+}
+
+function deleteSavedProject(userDataDir, projectId) {
+  const config = loadConfig(userDataDir);
+  const remaining = (config.savedProjects || []).filter((item) => item.id !== projectId);
+  config.savedProjects = remaining;
+
+  if (config.selectedProjectId === projectId) {
+    const next = remaining[0] || null;
+    config.selectedProjectId = next?.id || '';
+    Object.assign(config, next ? getSettingsFromProfile(next) : getDefaultConfig());
+    config.savedProjects = remaining;
+  }
+
+  saveConfig(userDataDir, config);
+  return getConfigResponse(config);
 }
 
 async function runGit(args, cwd) {
@@ -70,6 +171,125 @@ async function runGit(args, cwd) {
   } catch (error) {
     const details = [error.stdout, error.stderr, error.message].filter(Boolean).join('\n').trim();
     throw new Error(details || `git ${args.join(' ')} failed`);
+  }
+}
+
+function escapeRegex(text) {
+  return String(text).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function sanitizeSecrets(text, secrets = []) {
+  let output = String(text || '');
+  for (const secret of secrets) {
+    const value = String(secret || '').trim();
+    if (!value) continue;
+    output = output.replace(new RegExp(escapeRegex(value), 'g'), '***');
+  }
+  return output;
+}
+
+function chunkArray(items, chunkSize = 80) {
+  const chunks = [];
+  for (let index = 0; index < items.length; index += chunkSize) {
+    chunks.push(items.slice(index, index + chunkSize));
+  }
+  return chunks;
+}
+
+const GENERATED_DIR_NAMES = new Set([
+  '.git',
+  'node_modules',
+  'dist',
+  'build',
+  'out',
+  'release',
+  'release-portable',
+  'win-unpacked',
+  '.next',
+  '.nuxt',
+  'coverage',
+  'tmp',
+  'temp',
+  'logs',
+]);
+
+const BLOCKED_EXTENSIONS = new Set([
+  '.exe',
+  '.dll',
+  '.asar',
+  '.bin',
+  '.pak',
+  '.msi',
+  '.iso',
+  '.dmg',
+  '.zip',
+  '.7z',
+  '.rar',
+  '.gz',
+  '.tar',
+  '.db',
+  '.sqlite',
+  '.sqlite3',
+  '.mdb',
+  '.accdb',
+  '.log',
+]);
+
+function toGitRelativePath(filePath) {
+  return String(filePath || '').replace(/\\/g, '/').replace(/^\.\/+/, '').trim();
+}
+
+function shouldIgnoreProjectPath(filePath) {
+  const relativePath = toGitRelativePath(filePath);
+  if (!relativePath) return true;
+
+  if (
+    relativePath === 'NetLink Enterprise DB'
+    || relativePath.startsWith('NetLink Enterprise DB/')
+    || relativePath === 'AI NetLink Interface/ai-net-link/.wwebjs_cache'
+    || relativePath.startsWith('AI NetLink Interface/ai-net-link/.wwebjs_cache/')
+    || relativePath === 'AI NetLink Interface/ai-net-link/git_config.json'
+  ) {
+    return true;
+  }
+
+  const segments = relativePath.split('/');
+  if (segments.some((segment) => GENERATED_DIR_NAMES.has(segment))) {
+    return true;
+  }
+
+  const extension = path.extname(relativePath).toLowerCase();
+  return BLOCKED_EXTENSIONS.has(extension);
+}
+
+async function getTrackedFiles(repoRoot) {
+  const { stdout } = await runGit(['ls-files', '-z'], repoRoot);
+  return stdout ? stdout.split('\u0000').map((item) => item.trim()).filter(Boolean) : [];
+}
+
+async function getUntrackedFiles(repoRoot) {
+  const { stdout } = await runGit(['ls-files', '--others', '--exclude-standard', '-z'], repoRoot);
+  return stdout ? stdout.split('\u0000').map((item) => item.trim()).filter(Boolean) : [];
+}
+
+async function stagePublishableChanges(repoRoot) {
+  const trackedFiles = await getTrackedFiles(repoRoot);
+  const trackedIgnored = trackedFiles.filter((filePath) => shouldIgnoreProjectPath(filePath));
+
+  for (const chunk of chunkArray(trackedIgnored)) {
+    if (chunk.length > 0) {
+      await runGit(['rm', '-r', '--cached', '--ignore-unmatch', '--', ...chunk], repoRoot);
+    }
+  }
+
+  await runGit(['add', '-u', '--', '.'], repoRoot);
+
+  const untrackedFiles = await getUntrackedFiles(repoRoot);
+  const allowedUntracked = untrackedFiles.filter((filePath) => !shouldIgnoreProjectPath(filePath));
+  for (const chunk of chunkArray(allowedUntracked)) {
+    if (chunk.length > 0) {
+      await runGit(['add', '--', ...chunk], repoRoot);
+    }
   }
 }
 
@@ -261,32 +481,31 @@ async function publishRelease(input) {
   }
 
   const authenticatedUrl = buildAuthenticatedUrl(repoUrl, token);
-
-  await runGit(['pull', '--rebase', '--autostash', authenticatedUrl, 'main'], context.repoRoot);
-  saveVersionData(context.versionPath, version, buildDate, changelog);
-
-  await runGit(['config', 'user.email', 'admin@aljabareen.com'], context.repoRoot);
-  await runGit(['config', 'user.name', 'NetLink Windows Publisher'], context.repoRoot);
-  await runGit(['config', 'core.longpaths', 'true'], context.repoRoot);
-  await runGit(['add', '-A', '.'], context.repoRoot);
+  const secrets = [authenticatedUrl, token];
 
   try {
-    await runGit(['reset', '-q', '--', 'NetLink Enterprise DB', 'AI NetLink Interface/ai-net-link/git_config.json', 'AI NetLink Interface/ai-net-link/.wwebjs_cache'], context.repoRoot);
-  } catch {
-    // Ignore optional reset failures.
-  }
+    await runGit(['pull', '--rebase', '--autostash', authenticatedUrl, 'main'], context.repoRoot);
+    saveVersionData(context.versionPath, version, buildDate, changelog);
 
-  try {
-    await runGit(['commit', '-m', `release: v${version}`], context.repoRoot);
-  } catch (error) {
-    const message = String(error.message || '');
-    if (!/nothing to commit|no changes added/i.test(message)) {
-      throw error;
+    await runGit(['config', 'user.email', 'admin@aljabareen.com'], context.repoRoot);
+    await runGit(['config', 'user.name', 'NetLink Windows Publisher'], context.repoRoot);
+    await runGit(['config', 'core.longpaths', 'true'], context.repoRoot);
+    await stagePublishableChanges(context.repoRoot);
+
+    try {
+      await runGit(['commit', '-m', `release: v${version}`], context.repoRoot);
+    } catch (error) {
+      const message = sanitizeSecrets(error.message, secrets);
+      if (!/nothing to commit|no changes added/i.test(message)) {
+        throw new Error(message);
+      }
     }
-  }
 
-  await runGit(['push', authenticatedUrl, 'HEAD:main'], context.repoRoot);
-  return getProjectState(input);
+    await runGit(['push', authenticatedUrl, 'HEAD:main'], context.repoRoot);
+    return getProjectState(input);
+  } catch (error) {
+    throw new Error(sanitizeSecrets(error.message, secrets));
+  }
 }
 
 async function getInitialState(userDataDir) {
@@ -299,12 +518,15 @@ async function getInitialState(userDataDir) {
       project = null;
     }
   }
-  return { settings, project };
+  return { ...getConfigResponse(settings), project };
 }
 
 module.exports = {
   loadConfig,
   saveConfig,
+  saveCurrentProject,
+  selectSavedProject,
+  deleteSavedProject,
   getInitialState,
   getProjectState,
   saveVersionDraft,

@@ -29,7 +29,13 @@ const translations = {
     githubUser: 'اسم المستخدم GitHub',
     githubToken: 'GitHub Token',
     saveSettings: 'حفظ الإعدادات',
+    saveProject: 'حفظ المشروع الحالي',
+    savedProjects: 'المشاريع المحفوظة',
+    selectSavedProject: 'اختر مشروعًا محفوظًا',
+    deleteProject: 'حذف المشروع',
     settingsSaved: 'تم حفظ الإعدادات محليًا.',
+    projectSaved: 'تم حفظ المشروع الحالي ضمن المشاريع المحفوظة.',
+    projectDeleted: 'تم حذف المشروع المحفوظ.',
     section2: 'حالة المشروع الحالية',
     projectName: 'اسم المشروع',
     repoRoot: 'جذر المستودع',
@@ -82,7 +88,13 @@ const translations = {
     githubUser: 'GitHub Username',
     githubToken: 'GitHub Token',
     saveSettings: 'Save Settings',
+    saveProject: 'Save Current Project',
+    savedProjects: 'Saved Projects',
+    selectSavedProject: 'Choose a saved project',
+    deleteProject: 'Delete Project',
     settingsSaved: 'Settings were saved locally.',
+    projectSaved: 'The current project was saved to your saved projects list.',
+    projectDeleted: 'The saved project was deleted.',
     section2: 'Current Project Status',
     projectName: 'Project Name',
     repoRoot: 'Repository Root',
@@ -165,10 +177,13 @@ export default function App() {
   const [isPublishing, setIsPublishing] = useState(false);
 
   const [settings, setSettings] = useState<PublisherSettings>(DEFAULT_SETTINGS);
+  const [savedProjects, setSavedProjects] = useState<PublisherSavedProject[]>([]);
+  const [selectedProjectId, setSelectedProjectId] = useState('');
   const [project, setProject] = useState<PublisherProjectState | null>(null);
   const [version, setVersion] = useState('');
   const [buildParts, setBuildParts] = useState<ReleaseDateParts>(splitBuildDate());
   const [changelogText, setChangelogText] = useState('');
+  const [saveNotice, setSaveNotice] = useState('');
 
   useEffect(() => {
     document.body.style.backgroundColor = theme === 'dark' ? '#111111' : '#F3F4F6';
@@ -177,6 +192,21 @@ export default function App() {
   const addLog = (msg: string, type: 'info' | 'success' | 'error' = 'info') => {
     const time = new Date().toLocaleTimeString('en-US', { hour12: false });
     setLogs((prev) => [...prev, { id: logCounter.current++, time, msg, type }]);
+  };
+
+  const showSaveNotice = (message: string) => {
+    setSaveNotice(message);
+    window.setTimeout(() => setSaveNotice(''), 2600);
+  };
+
+  const applyConfigBundle = (bundle: {
+    settings: PublisherSettings;
+    savedProjects: PublisherSavedProject[];
+    selectedProjectId: string;
+  }) => {
+    setSettings(bundle.settings || DEFAULT_SETTINGS);
+    setSavedProjects(bundle.savedProjects || []);
+    setSelectedProjectId(bundle.selectedProjectId || '');
   };
 
   const applyProjectState = (data: PublisherProjectState | null) => {
@@ -236,7 +266,11 @@ export default function App() {
     const loadInitialState = async () => {
       try {
         const initial = await window.netlinkPublisher.getInitialState();
-        setSettings(initial.settings || DEFAULT_SETTINGS);
+        applyConfigBundle({
+          settings: initial.settings || DEFAULT_SETTINGS,
+          savedProjects: initial.savedProjects || [],
+          selectedProjectId: initial.selectedProjectId || '',
+        });
         applyProjectState(initial.project);
         addLog(initial.project ? t.logLoaded : t.logSettingsMissing, initial.project ? 'info' : 'error');
       } catch (error) {
@@ -267,6 +301,54 @@ export default function App() {
     try {
       await window.netlinkPublisher.saveSettings(settings);
       addLog(t.settingsSaved, 'success');
+      showSaveNotice(t.settingsSaved);
+      setStatus('ready');
+    } catch (error) {
+      setStatus('error');
+      addLog(error instanceof Error ? error.message : String(error), 'error');
+    }
+  };
+
+  const handleSaveCurrentProject = async () => {
+    try {
+      const bundle = await window.netlinkPublisher.saveCurrentProject({
+        ...settings,
+        projectId: selectedProjectId || undefined,
+        name: project?.projectName || '',
+      });
+      applyConfigBundle(bundle);
+      addLog(t.projectSaved, 'success');
+      showSaveNotice(t.projectSaved);
+      setStatus('ready');
+    } catch (error) {
+      setStatus('error');
+      addLog(error instanceof Error ? error.message : String(error), 'error');
+    }
+  };
+
+  const handleSelectSavedProject = async (projectId: string) => {
+    setSelectedProjectId(projectId);
+    if (!projectId) return;
+
+    try {
+      const bundle = await window.netlinkPublisher.selectSavedProject(projectId);
+      applyConfigBundle(bundle);
+      await refreshProject('refresh', bundle.settings);
+      setStatus('ready');
+    } catch (error) {
+      setStatus('error');
+      addLog(error instanceof Error ? error.message : String(error), 'error');
+    }
+  };
+
+  const handleDeleteSavedProject = async () => {
+    if (!selectedProjectId) return;
+    try {
+      const bundle = await window.netlinkPublisher.deleteSavedProject(selectedProjectId);
+      applyConfigBundle(bundle);
+      applyProjectState(null);
+      addLog(t.projectDeleted, 'success');
+      showSaveNotice(t.projectDeleted);
       setStatus('ready');
     } catch (error) {
       setStatus('error');
@@ -456,10 +538,40 @@ export default function App() {
                   </div>
 
                   <div className="pt-2">
-                    <button onClick={handleSaveSettings} className="bg-teal-600 hover:bg-teal-700 text-white px-6 py-2.5 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 shadow-sm">
-                      <Save size={16} />
-                      {t.saveSettings}
-                    </button>
+                    <div className="flex flex-col gap-3">
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <button onClick={handleSaveSettings} className="bg-teal-600 hover:bg-teal-700 text-white px-6 py-2.5 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2 shadow-sm">
+                          <Save size={16} />
+                          {t.saveSettings}
+                        </button>
+                        <button onClick={handleSaveCurrentProject} className="bg-neutral-900 dark:bg-teal-800 hover:bg-black dark:hover:bg-teal-700 text-white px-6 py-2.5 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2 shadow-sm">
+                          <CheckCircle2 size={16} />
+                          {t.saveProject}
+                        </button>
+                        <button onClick={handleDeleteSavedProject} disabled={!selectedProjectId} className="bg-red-600 hover:bg-red-700 disabled:bg-neutral-300 dark:disabled:bg-[#333] text-white px-6 py-2.5 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2 shadow-sm disabled:cursor-not-allowed">
+                          <Trash2 size={16} />
+                          {t.deleteProject}
+                        </button>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1.5">{t.savedProjects}</label>
+                        <select
+                          value={selectedProjectId}
+                          onChange={(e) => handleSelectSavedProject(e.target.value)}
+                          className="w-full bg-neutral-50 dark:bg-[#111111] border border-neutral-300 dark:border-[#333] rounded-lg px-3 py-2 text-sm text-neutral-900 dark:text-neutral-100 focus:outline-none focus:border-teal-500 dark:focus:border-teal-500 transition-colors"
+                        >
+                          <option value="">{t.selectSavedProject}</option>
+                          {savedProjects.map((item) => (
+                            <option key={item.id} value={item.id}>{item.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                      {saveNotice && (
+                        <div className="rounded-lg border border-emerald-200 dark:border-emerald-900/40 bg-emerald-50 dark:bg-emerald-500/10 px-3 py-2 text-sm font-medium text-emerald-700 dark:text-emerald-400">
+                          {saveNotice}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               </section>
@@ -471,11 +583,11 @@ export default function App() {
                   {t.section2}
                 </h2>
                 
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
                   {projectCards.map((item, i) => (
                     <div key={i} className="bg-neutral-50 dark:bg-[#111111] border border-neutral-200 dark:border-[#333] rounded-lg p-3">
                       <p className="text-neutral-500 dark:text-neutral-400 text-xs mb-1">{item.label}</p>
-                      <p dir="ltr" className={`text-sm font-semibold text-left ${item.highlight ? 'text-teal-600 dark:text-teal-400' : 'text-neutral-900 dark:text-neutral-100'} font-mono`}>{item.value}</p>
+                      <p dir="ltr" className={`text-sm font-semibold text-left break-all whitespace-pre-wrap leading-6 min-h-[3rem] ${item.highlight ? 'text-teal-600 dark:text-teal-400' : 'text-neutral-900 dark:text-neutral-100'} font-mono`}>{item.value}</p>
                     </div>
                   ))}
                 </div>
@@ -718,4 +830,3 @@ export default function App() {
     </div>
   );
 }
-

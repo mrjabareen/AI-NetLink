@@ -19,6 +19,40 @@ function Get-DefaultConfig {
         RepoUrl = 'https://github.com/mrjabareen/AI-NetLink.git'
         Username = 'mrjabareen'
         Token = ''
+        SelectedProjectId = ''
+        SavedProjects = @()
+    }
+}
+
+function New-SavedProject([hashtable]$project) {
+    $projectPath = [string]$project.ProjectPath
+    $repoUrl = [string]$project.RepoUrl
+    $username = [string]$project.Username
+    $token = [string]$project.Token
+    $name = [string]$project.Name
+
+    if ([string]::IsNullOrWhiteSpace($name)) {
+        $name = Split-Path $projectPath -Leaf
+    }
+    if ([string]::IsNullOrWhiteSpace($name)) {
+        $name = $repoUrl -replace '^https?://', '' -replace '\.git$', ''
+    }
+    if ([string]::IsNullOrWhiteSpace($name)) {
+        $name = 'Saved Project'
+    }
+
+    $id = [string]$project.Id
+    if ([string]::IsNullOrWhiteSpace($id)) {
+        $id = '{0}-{1}' -f [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds(), ([guid]::NewGuid().ToString('N').Substring(0, 6))
+    }
+
+    return @{
+        Id = $id
+        Name = $name.Trim()
+        ProjectPath = $projectPath.Trim()
+        RepoUrl = $repoUrl.Trim()
+        Username = $username.Trim()
+        Token = $token.Trim()
     }
 }
 
@@ -30,12 +64,27 @@ function Load-PublisherConfig {
 
     try {
         $raw = Get-Content -Path $PublisherConfigPath -Raw -Encoding UTF8 | ConvertFrom-Json
-        foreach ($key in @('ProjectPath', 'RepoUrl', 'Username', 'Token')) {
+        foreach ($key in @('ProjectPath', 'RepoUrl', 'Username', 'Token', 'SelectedProjectId')) {
             $value = $raw.PSObject.Properties[$key].Value
             if ($null -ne $value -and [string]$value -ne '') {
                 $defaults[$key] = [string]$value
             }
         }
+        $savedProjects = @()
+        if ($raw.PSObject.Properties['SavedProjects']) {
+            foreach ($item in @($raw.SavedProjects)) {
+                if ($null -eq $item) { continue }
+                $savedProjects += (New-SavedProject @{
+                    Id = [string]$item.Id
+                    Name = [string]$item.Name
+                    ProjectPath = [string]$item.ProjectPath
+                    RepoUrl = [string]$item.RepoUrl
+                    Username = [string]$item.Username
+                    Token = [string]$item.Token
+                })
+            }
+        }
+        $defaults['SavedProjects'] = $savedProjects
     } catch {
         # Ignore broken config and continue with defaults.
     }
@@ -48,7 +97,25 @@ function Save-PublisherConfig([hashtable]$config) {
         New-Item -ItemType Directory -Path $PublisherConfigDir | Out-Null
     }
 
-    Write-Utf8NoBomFile -path $PublisherConfigPath -content ($config | ConvertTo-Json -Depth 5)
+    $normalized = @{
+        ProjectPath = [string]$config.ProjectPath
+        RepoUrl = [string]$config.RepoUrl
+        Username = [string]$config.Username
+        Token = [string]$config.Token
+        SelectedProjectId = [string]$config.SelectedProjectId
+        SavedProjects = @($config.SavedProjects | ForEach-Object {
+            New-SavedProject @{
+                Id = $_.Id
+                Name = $_.Name
+                ProjectPath = $_.ProjectPath
+                RepoUrl = $_.RepoUrl
+                Username = $_.Username
+                Token = $_.Token
+            }
+        })
+    }
+
+    Write-Utf8NoBomFile -path $PublisherConfigPath -content ($normalized | ConvertTo-Json -Depth 8)
 }
 
 function Load-Strings {
@@ -63,6 +130,14 @@ function Quote-GitArgument([string]$value) {
 }
 
 function Invoke-Git([string]$arguments, [string]$workingDirectory) {
+    $result = Invoke-GitDetailed $arguments $workingDirectory
+    return @{
+        ExitCode = $result.ExitCode
+        Output = $result.Output
+    }
+}
+
+function Invoke-GitDetailed([string]$arguments, [string]$workingDirectory) {
     $psi = New-Object System.Diagnostics.ProcessStartInfo
     $psi.FileName = 'git'
     $psi.Arguments = $arguments
@@ -79,7 +154,78 @@ function Invoke-Git([string]$arguments, [string]$workingDirectory) {
 
     return @{
         ExitCode = $process.ExitCode
+        StdOut = $stdout
+        StdErr = $stderr
         Output = (($stdout + [Environment]::NewLine + $stderr).Trim())
+    }
+}
+
+function Get-GitNullSeparatedOutput([string]$arguments, [string]$workingDirectory) {
+    $result = Invoke-GitDetailed $arguments $workingDirectory
+    if ($result.ExitCode -ne 0) {
+        throw $result.Output
+    }
+
+    return @($result.StdOut -split "`0" | Where-Object { $_ -and $_.Trim() -ne '' } | ForEach-Object { $_.Trim() })
+}
+
+function Should-IgnoreProjectPath([string]$relativePath) {
+    $pathValue = ([string]$relativePath).Replace('\', '/').Trim()
+    if ([string]::IsNullOrWhiteSpace($pathValue)) { return $true }
+
+    if (
+        $pathValue -eq 'NetLink Enterprise DB' -or
+        $pathValue.StartsWith('NetLink Enterprise DB/') -or
+        $pathValue -eq 'AI NetLink Interface/ai-net-link/git_config.json' -or
+        $pathValue -eq 'AI NetLink Interface/ai-net-link/.wwebjs_cache' -or
+        $pathValue.StartsWith('AI NetLink Interface/ai-net-link/.wwebjs_cache/')
+    ) {
+        return $true
+    }
+
+    foreach ($segment in ($pathValue -split '/')) {
+        if ($segment -in @('.git', 'node_modules', 'dist', 'build', 'out', 'release', 'release-portable', 'win-unpacked', '.next', '.nuxt', 'coverage', 'tmp', 'temp', 'logs', 'uploads')) {
+            return $true
+        }
+    }
+
+    $extension = [System.IO.Path]::GetExtension($pathValue).ToLowerInvariant()
+    if ($extension -in @('.exe', '.dll', '.asar', '.bin', '.pak', '.msi', '.iso', '.dmg', '.zip', '.7z', '.rar', '.gz', '.tar', '.db', '.sqlite', '.sqlite3', '.mdb', '.accdb', '.log')) {
+        return $true
+    }
+
+    return $false
+}
+
+function Invoke-GitFileChunks([string]$prefix, [string[]]$paths, [string]$workingDirectory) {
+    $chunkSize = 80
+    for ($index = 0; $index -lt $paths.Count; $index += $chunkSize) {
+        $chunk = @($paths[$index..([Math]::Min($index + $chunkSize - 1, $paths.Count - 1))])
+        if ($chunk.Count -eq 0) { continue }
+        $quoted = @($chunk | ForEach-Object { Quote-GitArgument $_ }) -join ' '
+        $result = Invoke-Git ("{0} {1}" -f $prefix, $quoted) $workingDirectory
+        if ($result.ExitCode -ne 0) {
+            throw $result.Output
+        }
+    }
+}
+
+function Stage-PublishableChanges([string]$repoRoot) {
+    $trackedFiles = Get-GitNullSeparatedOutput 'ls-files -z' $repoRoot
+    $trackedIgnored = @($trackedFiles | Where-Object { Should-IgnoreProjectPath $_ })
+    if ($trackedIgnored.Count -gt 0) {
+        Invoke-GitFileChunks 'rm -r --cached --ignore-unmatch --' $trackedIgnored $repoRoot
+    }
+
+    $updateTracked = Invoke-Git 'add -u -- .' $repoRoot
+    if ($updateTracked.ExitCode -ne 0) {
+        throw $updateTracked.Output
+    }
+
+    $untrackedFiles = Get-GitNullSeparatedOutput 'ls-files --others --exclude-standard -z' $repoRoot
+    $allowedUntracked = @($untrackedFiles | Where-Object { -not (Should-IgnoreProjectPath $_) })
+    if ($allowedUntracked.Count -gt 0) {
+        Invoke-GitFileChunks 'add --' $allowedUntracked $repoRoot
     }
 }
 
@@ -158,6 +304,16 @@ function Build-AuthenticatedUrl([string]$repoUrl, [string]$token) {
     }
 
     return $cleanRepo -replace '^https://', ("https://{0}@" -f $token.Trim())
+}
+
+function Sanitize-Secrets([string]$text, [string[]]$secrets) {
+    $output = [string]$text
+    foreach ($secret in @($secrets)) {
+        $value = [string]$secret
+        if ([string]::IsNullOrWhiteSpace($value)) { continue }
+        $output = $output.Replace($value.Trim(), '***')
+    }
+    return $output
 }
 
 function Write-Utf8NoBomFile([string]$path, [string]$content) {
@@ -403,7 +559,15 @@ function Get-Text([string]$key) {
               </StackPanel>
             </Grid>
 
-            <Button x:Name="BtnSaveSettings" Style="{StaticResource SecondaryButtonStyle}" HorizontalAlignment="Left" Width="200" Height="48"/>
+            <WrapPanel Margin="0,0,0,10">
+              <Button x:Name="BtnSaveSettings" Style="{StaticResource SecondaryButtonStyle}" Width="200" Height="48" Margin="0,0,12,10"/>
+              <Button x:Name="BtnSaveProject" Style="{StaticResource PrimaryButtonStyle}" Width="220" Height="48" Margin="0,0,12,10"/>
+              <Button x:Name="BtnDeleteProject" Style="{StaticResource SecondaryButtonStyle}" Width="190" Height="48" Margin="0,0,0,10"/>
+            </WrapPanel>
+            <TextBlock x:Name="LblSavedProjects" Style="{StaticResource LabelStyle}"/>
+            <TextBlock x:Name="TxtSavedProjectsHint" Margin="0,0,0,10" Foreground="#94A3B8" TextWrapping="Wrap"/>
+            <ComboBox x:Name="CmbSavedProjects" Background="#091121" Foreground="#E2E8F0" BorderBrush="#233047" BorderThickness="1" Padding="10,8" FontSize="14" Margin="0,0,0,10"/>
+            <TextBlock x:Name="TxtSettingsSavedNotice" Foreground="#99F6E4" FontWeight="SemiBold" Visibility="Collapsed"/>
           </StackPanel>
         </Border>
 
@@ -433,13 +597,13 @@ function Get-Text([string]$key) {
                 <Border Grid.Column="1" Background="#091121" BorderBrush="#233047" BorderThickness="1" CornerRadius="20" Padding="18" Margin="0,0,12,0">
                   <StackPanel>
                     <TextBlock x:Name="LblRepoRoot" Foreground="#94A3B8" FontSize="12" FontWeight="SemiBold"/>
-                    <TextBlock x:Name="ValRepoRoot" Foreground="White" Margin="0,10,0,0" TextWrapping="Wrap"/>
+                    <TextBlock x:Name="ValRepoRoot" Foreground="White" Margin="0,10,0,0" TextWrapping="Wrap" TextTrimming="CharacterEllipsis" MaxHeight="48" FontSize="13"/>
                   </StackPanel>
                 </Border>
                 <Border Grid.Column="2" Background="#091121" BorderBrush="#233047" BorderThickness="1" CornerRadius="20" Padding="18">
                   <StackPanel>
                     <TextBlock x:Name="LblAppRoot" Foreground="#94A3B8" FontSize="12" FontWeight="SemiBold"/>
-                    <TextBlock x:Name="ValAppRoot" Foreground="White" Margin="0,10,0,0" TextWrapping="Wrap"/>
+                    <TextBlock x:Name="ValAppRoot" Foreground="White" Margin="0,10,0,0" TextWrapping="Wrap" TextTrimming="CharacterEllipsis" MaxHeight="48" FontSize="13"/>
                   </StackPanel>
                 </Border>
               </Grid>
@@ -560,6 +724,12 @@ $TxtTokenPassword = Find-Control 'TxtTokenPassword'
 $TxtTokenVisible = Find-Control 'TxtTokenVisible'
 $BtnToggleToken = Find-Control 'BtnToggleToken'
 $BtnSaveSettings = Find-Control 'BtnSaveSettings'
+$BtnSaveProject = Find-Control 'BtnSaveProject'
+$BtnDeleteProject = Find-Control 'BtnDeleteProject'
+$LblSavedProjects = Find-Control 'LblSavedProjects'
+$TxtSavedProjectsHint = Find-Control 'TxtSavedProjectsHint'
+$CmbSavedProjects = Find-Control 'CmbSavedProjects'
+$TxtSettingsSavedNotice = Find-Control 'TxtSettingsSavedNotice'
 $StatusCardTitle = Find-Control 'StatusCardTitle'
 $StatusCardHint = Find-Control 'StatusCardHint'
 $LblProjectName = Find-Control 'LblProjectName'
@@ -596,6 +766,7 @@ $folderDialog.ShowNewFolderButton = $false
 
 $script:IsTokenVisible = $false
 $script:CurrentContext = $null
+$script:SettingsNoticeTimer = $null
 
 function Get-TokenValue {
     if ($script:IsTokenVisible) {
@@ -609,11 +780,119 @@ function Set-TokenValue([string]$value) {
     $TxtTokenVisible.Text = $value
 }
 
+function Get-UiConfigSnapshot {
+    return @{
+        ProjectPath = $TxtProjectPath.Text.Trim()
+        RepoUrl = $TxtRepoUrl.Text.Trim()
+        Username = $TxtUsername.Text.Trim()
+        Token = Get-TokenValue
+        SelectedProjectId = if ($CmbSavedProjects.SelectedValue) { [string]$CmbSavedProjects.SelectedValue } else { [string]$config.SelectedProjectId }
+        SavedProjects = @($config.SavedProjects)
+    }
+}
+
+function Show-SettingsNotice([string]$message) {
+    $TxtSettingsSavedNotice.Text = $message
+    $TxtSettingsSavedNotice.Visibility = 'Visible'
+    if ($script:SettingsNoticeTimer) {
+        $script:SettingsNoticeTimer.Stop()
+    }
+    $script:SettingsNoticeTimer = New-Object System.Windows.Threading.DispatcherTimer
+    $script:SettingsNoticeTimer.Interval = [TimeSpan]::FromSeconds(3)
+    $script:SettingsNoticeTimer.Add_Tick({
+        $script:SettingsNoticeTimer.Stop()
+        $TxtSettingsSavedNotice.Visibility = 'Collapsed'
+    })
+    $script:SettingsNoticeTimer.Start()
+}
+
+function Refresh-SavedProjectsUi([string]$selectedId = '') {
+    $CmbSavedProjects.ItemsSource = $null
+    $items = @($config.SavedProjects | ForEach-Object {
+        [pscustomobject]@{
+            Id = [string]$_.Id
+            Name = [string]$_.Name
+        }
+    })
+    $CmbSavedProjects.DisplayMemberPath = 'Name'
+    $CmbSavedProjects.SelectedValuePath = 'Id'
+    $CmbSavedProjects.ItemsSource = $items
+    if (-not [string]::IsNullOrWhiteSpace($selectedId)) {
+        $CmbSavedProjects.SelectedValue = $selectedId
+    } elseif ($config.SelectedProjectId) {
+        $CmbSavedProjects.SelectedValue = $config.SelectedProjectId
+    } else {
+        $CmbSavedProjects.SelectedIndex = -1
+    }
+}
+
+function Apply-ConfigToUi([hashtable]$state) {
+    $TxtProjectPath.Text = [string]$state.ProjectPath
+    $TxtRepoUrl.Text = [string]$state.RepoUrl
+    $TxtUsername.Text = [string]$state.Username
+    Set-TokenValue ([string]$state.Token)
+    Refresh-SavedProjectsUi ([string]$state.SelectedProjectId)
+}
+
+function Save-CurrentProjectProfile {
+    $context = Resolve-ProjectContext $TxtProjectPath.Text
+    $state = Get-UiConfigSnapshot
+    $profile = New-SavedProject @{
+        Id = $state.SelectedProjectId
+        Name = $context.ProjectName
+        ProjectPath = $state.ProjectPath
+        RepoUrl = $state.RepoUrl
+        Username = $state.Username
+        Token = $state.Token
+    }
+
+    $items = @($config.SavedProjects | Where-Object { [string]$_.Id -ne $profile.Id })
+    $config.SavedProjects = @($profile) + $items
+    $config.SelectedProjectId = $profile.Id
+    $config.ProjectPath = $profile.ProjectPath
+    $config.RepoUrl = $profile.RepoUrl
+    $config.Username = $profile.Username
+    $config.Token = $profile.Token
+    Save-PublisherConfig $config
+    Apply-ConfigToUi $config
+}
+
+function Load-SavedProjectById([string]$projectId) {
+    $selected = @($config.SavedProjects | Where-Object { [string]$_.Id -eq [string]$projectId }) | Select-Object -First 1
+    if (-not $selected) {
+        throw (Get-Text 'errSavedProjectMissing')
+    }
+
+    $config.SelectedProjectId = [string]$selected.Id
+    $config.ProjectPath = [string]$selected.ProjectPath
+    $config.RepoUrl = [string]$selected.RepoUrl
+    $config.Username = [string]$selected.Username
+    $config.Token = [string]$selected.Token
+    Save-PublisherConfig $config
+    Apply-ConfigToUi $config
+}
+
+function Delete-SelectedProjectProfile {
+    $selectedId = if ($CmbSavedProjects.SelectedValue) { [string]$CmbSavedProjects.SelectedValue } else { '' }
+    if ([string]::IsNullOrWhiteSpace($selectedId)) {
+        return
+    }
+
+    $config.SavedProjects = @($config.SavedProjects | Where-Object { [string]$_.Id -ne $selectedId })
+    if ($config.SelectedProjectId -eq $selectedId) {
+        $config.SelectedProjectId = ''
+    }
+    Save-PublisherConfig $config
+    Refresh-SavedProjectsUi $config.SelectedProjectId
+}
+
 function Set-CurrentContext([hashtable]$context, [hashtable]$versionData = $null) {
     $script:CurrentContext = $context
     $ValProjectName.Text = if ($context -and $context.ProjectName) { $context.ProjectName } else { Get-Text 'valueNotLoaded' }
     $ValRepoRoot.Text = if ($context) { $context.RepoRoot } else { Get-Text 'valueNotLoaded' }
     $ValAppRoot.Text = if ($context) { $context.AppRoot } else { Get-Text 'valueNotLoaded' }
+    $ValRepoRoot.ToolTip = if ($context) { $context.RepoRoot } else { $null }
+    $ValAppRoot.ToolTip = if ($context) { $context.AppRoot } else { $null }
     if ($versionData) {
         $ValLoadedVersion.Text = "v$($versionData.Version)"
         $ValLoadedDate.Text = if ($versionData.BuildDate) { $versionData.BuildDate } else { Get-Text 'valueNotLoaded' }
@@ -625,7 +904,7 @@ function Set-CurrentContext([hashtable]$context, [hashtable]$versionData = $null
 }
 
 function Set-BusyState([bool]$busy, [string]$statusKey) {
-    foreach ($control in @($BtnBrowse, $BtnSaveSettings, $BtnRefreshProject, $BtnLoadVersion, $BtnPublish, $BtnToggleToken, $BtnArabic, $BtnEnglish)) {
+    foreach ($control in @($BtnBrowse, $BtnSaveSettings, $BtnSaveProject, $BtnDeleteProject, $BtnRefreshProject, $BtnLoadVersion, $BtnPublish, $BtnToggleToken, $BtnArabic, $BtnEnglish, $CmbSavedProjects)) {
         $control.IsEnabled = -not $busy
     }
     $StatusChip.Text = Get-Text $statusKey
@@ -650,6 +929,11 @@ function Apply-Language {
     $LblToken.Text = Get-Text 'token'
     $BtnToggleToken.Content = if ($script:IsTokenVisible) { Get-Text 'hideToken' } else { Get-Text 'showToken' }
     $BtnSaveSettings.Content = Get-Text 'saveSettings'
+    $BtnSaveProject.Content = Get-Text 'saveProject'
+    $BtnDeleteProject.Content = Get-Text 'deleteProject'
+    $LblSavedProjects.Text = Get-Text 'savedProjects'
+    $TxtSavedProjectsHint.Text = Get-Text 'savedProjectsHint'
+    $CmbSavedProjects.ToolTip = Get-Text 'selectSavedProject'
     $StatusCardTitle.Text = Get-Text 'statusCardTitle'
     $StatusCardHint.Text = Get-Text 'statusCardHint'
     $LblProjectName.Text = Get-Text 'projectName'
@@ -771,16 +1055,52 @@ $TxtProjectPath.Add_LostFocus({
 
 $BtnSaveSettings.Add_Click({
     try {
-        Save-PublisherConfig @{
-            ProjectPath = $TxtProjectPath.Text.Trim()
-            RepoUrl = $TxtRepoUrl.Text.Trim()
-            Username = $TxtUsername.Text.Trim()
-            Token = Get-TokenValue
-        }
+        $snapshot = Get-UiConfigSnapshot
+        $config.ProjectPath = $snapshot.ProjectPath
+        $config.RepoUrl = $snapshot.RepoUrl
+        $config.Username = $snapshot.Username
+        $config.Token = $snapshot.Token
+        $config.SelectedProjectId = $snapshot.SelectedProjectId
+        Save-PublisherConfig $config
         Write-Log (Get-Text 'logSettingsSaved')
+        Show-SettingsNotice (Get-Text 'settingsSavedBody')
         [System.Windows.MessageBox]::Show((Get-Text 'settingsSavedBody'), (Get-Text 'settingsSavedTitle'))
     } catch {
         [System.Windows.MessageBox]::Show($_.Exception.Message, (Get-Text 'genericErrorTitle'))
+    }
+})
+
+$BtnSaveProject.Add_Click({
+    try {
+        Save-CurrentProjectProfile
+        Write-Log (Get-Text 'logProjectSaved')
+        Show-SettingsNotice (Get-Text 'projectSavedBody')
+        [System.Windows.MessageBox]::Show((Get-Text 'projectSavedBody'), (Get-Text 'projectSavedTitle'))
+    } catch {
+        [System.Windows.MessageBox]::Show($_.Exception.Message, (Get-Text 'genericErrorTitle'))
+    }
+})
+
+$BtnDeleteProject.Add_Click({
+    try {
+        Delete-SelectedProjectProfile
+        Write-Log (Get-Text 'logProjectDeleted')
+        Show-SettingsNotice (Get-Text 'projectDeletedBody')
+        [System.Windows.MessageBox]::Show((Get-Text 'projectDeletedBody'), (Get-Text 'projectDeletedTitle'))
+    } catch {
+        [System.Windows.MessageBox]::Show($_.Exception.Message, (Get-Text 'genericErrorTitle'))
+    }
+})
+
+$CmbSavedProjects.Add_SelectionChanged({
+    if (-not $CmbSavedProjects.SelectedValue) { return }
+    try {
+        Load-SavedProjectById ([string]$CmbSavedProjects.SelectedValue)
+        Load-VersionIntoUi
+        Write-Log (Get-Text 'logProjectRefreshed')
+    } catch {
+        Set-CurrentContext $null $null
+        Write-Log $_.Exception.Message
     }
 })
 
@@ -839,6 +1159,7 @@ $BtnPublish.Add_Click({
 
         $context = Resolve-ProjectContext $TxtProjectPath.Text
         $authenticatedUrl = Build-AuthenticatedUrl $TxtRepoUrl.Text (Get-TokenValue)
+        $secrets = @($authenticatedUrl, (Get-TokenValue))
         $remoteVersion = Get-RemoteVersionData $TxtRepoUrl.Text (Get-TokenValue)
 
         if ($remoteVersion.version -eq $version) {
@@ -847,7 +1168,7 @@ $BtnPublish.Add_Click({
 
         Write-Log (Get-Text 'logPulling')
         $pull = Invoke-Git ("pull --rebase --autostash {0} main" -f (Quote-GitArgument $authenticatedUrl)) $context.RepoRoot
-        if ($pull.ExitCode -ne 0) { throw ("{0}`r`n{1}" -f (Get-Text 'errGitPullFailed'), $pull.Output) }
+        if ($pull.ExitCode -ne 0) { throw (Sanitize-Secrets ("{0}`r`n{1}" -f (Get-Text 'errGitPullFailed'), $pull.Output) $secrets) }
 
         Save-VersionData $context.VersionPath $version $buildDate $changelog
         Write-Log (Get-Text 'logVersionUpdated')
@@ -855,33 +1176,33 @@ $BtnPublish.Add_Click({
         foreach ($command in @(
             'config user.email "admin@aljabareen.com"',
             'config user.name "NetLink Windows Publisher"',
-            'config core.longpaths true',
-            'add -A .',
-            'reset -q -- "NetLink Enterprise DB" "AI NetLink Interface/ai-net-link/git_config.json" "AI NetLink Interface/ai-net-link/.wwebjs_cache"'
+            'config core.longpaths true'
         )) {
             $result = Invoke-Git $command $context.RepoRoot
             if ($result.ExitCode -ne 0) {
-                throw ("{0}`r`n{1}" -f (Get-Text 'errGitCommandFailed'), $result.Output)
+                throw (Sanitize-Secrets ("{0}`r`n{1}" -f (Get-Text 'errGitCommandFailed'), $result.Output) $secrets)
             }
         }
+        Stage-PublishableChanges $context.RepoRoot
 
         $commit = Invoke-Git ("commit -m {0}" -f (Quote-GitArgument ("release: v{0}" -f $version))) $context.RepoRoot
         if ($commit.ExitCode -ne 0 -and $commit.Output -notmatch 'nothing to commit|no changes added') {
-            throw ("{0}`r`n{1}" -f (Get-Text 'errGitCommitFailed'), $commit.Output)
+            throw (Sanitize-Secrets ("{0}`r`n{1}" -f (Get-Text 'errGitCommitFailed'), $commit.Output) $secrets)
         }
 
         Write-Log (Get-Text 'logPublishing')
         $push = Invoke-Git ("push {0} HEAD:main" -f (Quote-GitArgument $authenticatedUrl)) $context.RepoRoot
         if ($push.ExitCode -ne 0) {
-            throw ("{0}`r`n{1}" -f (Get-Text 'errGitPushFailed'), $push.Output)
+            throw (Sanitize-Secrets ("{0}`r`n{1}" -f (Get-Text 'errGitPushFailed'), $push.Output) $secrets)
         }
 
-        Save-PublisherConfig @{
-            ProjectPath = $TxtProjectPath.Text.Trim()
-            RepoUrl = $TxtRepoUrl.Text.Trim()
-            Username = $TxtUsername.Text.Trim()
-            Token = Get-TokenValue
-        }
+        $snapshot = Get-UiConfigSnapshot
+        $config.ProjectPath = $snapshot.ProjectPath
+        $config.RepoUrl = $snapshot.RepoUrl
+        $config.Username = $snapshot.Username
+        $config.Token = $snapshot.Token
+        $config.SelectedProjectId = $snapshot.SelectedProjectId
+        Save-PublisherConfig $config
 
         Set-CurrentContext $context @{
             Version = $version
@@ -895,8 +1216,9 @@ $BtnPublish.Add_Click({
         [System.Windows.MessageBox]::Show(((Get-Text 'publishSuccessBody') -f $version), (Get-Text 'publishSuccessTitle'))
     } catch {
         Set-BusyState $false 'statusError'
-        Write-Log $_.Exception.Message
-        [System.Windows.MessageBox]::Show($_.Exception.Message, (Get-Text 'publishErrorTitle'))
+        $safeMessage = Sanitize-Secrets $_.Exception.Message @((Get-TokenValue))
+        Write-Log $safeMessage
+        [System.Windows.MessageBox]::Show($safeMessage, (Get-Text 'publishErrorTitle'))
     }
 })
 
@@ -912,10 +1234,8 @@ $TxtTokenVisible.Add_TextChanged({
     }
 })
 
-$TxtProjectPath.Text = $config.ProjectPath
-$TxtRepoUrl.Text = $config.RepoUrl
-$TxtUsername.Text = $config.Username
-Set-TokenValue $config.Token
+$CmbSavedProjects.SelectedValue = $null
+Apply-ConfigToUi $config
 $TxtBuildDate.Text = Get-Date -Format 'yyyy-MM-dd'
 
 Apply-Language
