@@ -243,7 +243,11 @@ export const dict = {
         latestVersion: "Latest Available",
         publishPin: "Publish PIN",
         publishPinPlaceholder: "Enter secure PIN",
-        invalidPin: "Publish PIN is required."
+        invalidPin: "Publish PIN is required.",
+        syncTestTitle: "Sync Test Marker",
+        syncTestDesc: "If this card appears on the server, then the latest interface build has arrived successfully.",
+        syncTestButton: "Temporary Sync Test",
+        syncTestCode: "SYNC-TEST-2026-04-06-B"
       },
       profile: {
         language: "Language",
@@ -702,7 +706,11 @@ export const dict = {
         latestVersion: "أحدث إصدار متاح",
         publishPin: "الرقم السري للنشر",
         publishPinPlaceholder: "أدخل الرقم السري",
-        invalidPin: "الرقم السري للنشر مطلوب."
+        invalidPin: "الرقم السري للنشر مطلوب.",
+        syncTestTitle: "مؤشر اختبار المزامنة",
+        syncTestDesc: "إذا ظهرت هذه البطاقة على السيرفر فهذا يعني أن آخر نسخة من الواجهة وصلت وتم بناؤها بنجاح.",
+        syncTestButton: "زر اختبار مؤقت",
+        syncTestCode: "SYNC-TEST-2026-04-06-B"
       },
       profile: {
         language: "اللغة",

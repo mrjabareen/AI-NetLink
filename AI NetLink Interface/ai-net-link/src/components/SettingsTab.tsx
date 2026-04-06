@@ -1246,6 +1246,29 @@ export default function SettingsTab({ state, setState }: SettingsTabProps) {
                 </div>
               </div>
 
+              <div className="p-4 sm:p-6 rounded-3xl border border-emerald-200 dark:border-emerald-500/20 bg-emerald-50/70 dark:bg-emerald-500/5 shadow-sm space-y-4 lg:col-span-2">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="space-y-1">
+                    <h4 className="font-bold text-emerald-800 dark:text-emerald-300 flex items-center gap-2">
+                      <CheckCircle2 size={18} />
+                      {t.settings.update.syncTestTitle}
+                    </h4>
+                    <p className="text-xs text-emerald-700/80 dark:text-emerald-300/80">
+                      {t.settings.update.syncTestDesc}
+                    </p>
+                  </div>
+                  <span className="px-3 py-1 rounded-xl bg-white dark:bg-[#0F172A] border border-emerald-200 dark:border-emerald-500/20 text-[10px] font-extrabold text-emerald-700 dark:text-emerald-300 tracking-wider">
+                    {t.settings.update.syncTestCode}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-bold transition-all shadow-lg shadow-emerald-600/20"
+                >
+                  {t.settings.update.syncTestButton}
+                </button>
+              </div>
+
               {/* Developer & Company Card */}
               <div className="p-4 sm:p-6 rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#09090B] space-y-4 shadow-sm">
                 <h4 className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
