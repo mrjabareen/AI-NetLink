@@ -1,9 +1,22 @@
-2026/04/06-11:09:48.501 12f Reusing MANIFEST /app/AI-NetLink/NetLink Enterprise DB/[01_DATABASE]/System/whatsapp-auth/session/Default/IndexedDB/https_web.whatsapp.com_0.indexeddb.leveldb/MANIFEST-000001
-2026/04/06-11:09:48.501 12f Recovering log #184
-2026/04/06-11:09:48.505 12f Reusing old log /app/AI-NetLink/NetLink Enterprise DB/[01_DATABASE]/System/whatsapp-auth/session/Default/IndexedDB/https_web.whatsapp.com_0.indexeddb.leveldb/000184.log 
-2026/04/06-11:09:48.505 12f Delete type=2 #188
-2026/04/06-11:09:48.505 12f Delete type=2 #187
-2026/04/06-11:09:48.505 12f Delete type=2 #189
-2026/04/06-11:09:48.505 12f Delete type=2 #186
-2026/04/06-11:09:48.505 12f Delete type=2 #190
-2026/04/06-11:09:48.505 12f Delete type=2 #191
+2026/04/06-11:50:28.248 131 Reusing MANIFEST /app/AI-NetLink/NetLink Enterprise DB/[01_DATABASE]/System/whatsapp-auth/session/Default/IndexedDB/https_web.whatsapp.com_0.indexeddb.leveldb/MANIFEST-000001
+2026/04/06-11:50:28.248 131 Recovering log #184
+2026/04/06-11:50:28.273 131 Reusing old log /app/AI-NetLink/NetLink Enterprise DB/[01_DATABASE]/System/whatsapp-auth/session/Default/IndexedDB/https_web.whatsapp.com_0.indexeddb.leveldb/000184.log 
+2026/04/06-11:50:35.209 131 Level-0 table #186: started
+2026/04/06-11:50:35.330 131 Level-0 table #186: 1765815 bytes OK
+2026/04/06-11:50:35.365 131 Delete type=0 #184
+2026/04/06-11:50:42.698 131 Compacting 1@1 + 6@2 files
+2026/04/06-11:50:42.831 131 Generated table #187@1: 75875 keys, 2306069 bytes
+2026/04/06-11:50:42.931 131 Generated table #188@1: 8058 keys, 2139482 bytes
+2026/04/06-11:50:43.023 131 Generated table #189@1: 2327 keys, 2146917 bytes
+2026/04/06-11:50:43.165 131 Generated table #190@1: 23700 keys, 2204613 bytes
+2026/04/06-11:50:43.285 131 Generated table #191@1: 33111 keys, 2160173 bytes
+2026/04/06-11:50:43.376 131 Generated table #192@1: 55716 keys, 1427969 bytes
+2026/04/06-11:50:43.377 131 Compacted 1@1 + 6@2 files => 12385223 bytes
+2026/04/06-11:50:43.418 131 compacted to: files[ 0 0 6 0 0 0 0 ]
+2026/04/06-11:50:43.419 131 Delete type=2 #178
+2026/04/06-11:50:43.419 131 Delete type=2 #179
+2026/04/06-11:50:43.419 131 Delete type=2 #182
+2026/04/06-11:50:43.419 131 Delete type=2 #186
+2026/04/06-11:50:43.419 131 Delete type=2 #181
+2026/04/06-11:50:43.419 131 Delete type=2 #177
+2026/04/06-11:50:43.419 131 Delete type=2 #180
