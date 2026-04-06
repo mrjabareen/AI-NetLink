@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />   
+    <meta http-equiv="pragma" content="no-cache">
+    <meta http-equiv="expires" content="-1">
+    <title>NetLink - تسجيل الخروج</title>
+    <link rel="stylesheet" href="css/style.css">
+    
+    <script>
+        function openLogin() {
+            if (window.name != 'hotspot_logout') return true;
+            open('$(link-login)', '_blank', '');
+            window.close();
+            return false;
+        }
+    </script>
+</head>
+
+<body>
+
+<!-- Animated Floating Background Shapes -->
+<div class="shape shape-1"></div>
+<div class="shape shape-2"></div>
+<div class="shape shape-3"></div>
+
+<div class="container">
+    <header>
+        <div class="logo-area">NETLINK</div>
+        <div class="tagline">نتمنى أن تكون قد استمتعت بخدمتنا</div>
+        <div class="top-badge" style="color:#ffb703; border-color:#ffb703; background:rgba(255,183,3,0.15);">Session Ended</div>
+    </header>
+
+    <section class="login-section">
+        <div class="glass-card">
+            <h2 class="login-title" style="color: #ffb703; font-size: 1.6rem;">تم تسجيل الخروج بنجاح!</h2>
+            <div class="login-subtitle">تفاصيل جلستك المنتهية:</div>
+
+            <table class="status-table">  
+                <tr><td class="label">اسم المستخدم</td><td class="value">$(username)</td></tr>
+                <tr><td class="label">عنوان IP</td><td class="value">$(ip)</td></tr>
+                <tr><td class="label">مدة الاتصال</td><td class="value">$(uptime)</td></tr>
+                $(if session-time-left)
+                <tr><td class="label">الوقت المتبقي</td><td class="value">$(session-time-left)</td></tr>
+                $(endif)
+                <tr><td class="label">تنزيل / رفع</td><td class="value">$(bytes-out-nice) / $(bytes-in-nice)</td></tr>
+            </table>
+
+            <form action="$(link-login)" name="login" onSubmit="return openLogin()">
+                <button type="submit" class="btn-go" style="background: linear-gradient(45deg, #023e8a, #0077b6);">تسجيل الدخول مرة أخرى</button>
+            </form>
+            
+            <div class="hint-text">
+                شكراً لاختيارك <b>NetLink</b> كزود لخدمة الإنترنت.
+            </div>
+        </div>
+    </section>
+
+    <footer>
+        <p>شركة نت لينك للاتصالات - NetLink</p>
+        <p>للدعم الفني: <a href="tel:0597409040" style="font-size:1.2rem; font-weight:700;">0597 409 040</a></p>
+    </footer>
+</div>
+
+</body>
+</html>

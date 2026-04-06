@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="pragma" content="no-cache">
+    <meta http-equiv="expires" content="-1">
+    <title>NetLink - حدث خطأ</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+
+<body>
+    <!-- Animated Floating Background Shapes -->
+    <div class="shape shape-1" style="animation-duration: 8s;"></div>
+    <div class="shape shape-2"></div>
+
+    <div class="container" style="justify-content: center;">
+        <div class="glass-card" style="text-align: center;">
+            <div class="logo-area" style="font-size: 2.5rem; margin-bottom: 2rem;">NETLINK</div>
+            
+            <svg style="margin: 0 auto; display: block; filter: drop-shadow(0 0 10px rgba(239,35,60,0.5)); outline: none;" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#ef233c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="12" y1="8" x2="12" y2="12"></line>
+                <line x1="12" y1="16" x2="12.01" y2="16"></line>
+            </svg>
+            
+            <h1 class="login-title" style="margin-top: 1rem;">حدث خطأ أثناء الدخول</h1>
+            
+            <div class="error-box" id="error-message" style="margin: 1.5rem 0; font-size: 1.1rem; padding: 1.5rem;">
+                $(error)
+            </div>
+            
+            <p class="hint-text" style="font-size: 1rem; margin-bottom: 1.5rem;">الرجاء العودة إلى صفحة الدخول والمحاولة مرة أخرى</p>
+            
+            <a href="$(link-login)" class="btn-go" style="display:inline-block; text-align:center; text-decoration:none;">العودة للدخول</a>
+        </div>
+    </div>
+    
+    <script type="text/javascript">
+        // Smart Arabic Error Translation
+        var errMsg = document.getElementById("error-message");
+        if (errMsg) {
+            var errText = errMsg.innerText || errMsg.textContent;
+            errText = errText.toLowerCase();
+            
+            if (errText.includes("invalid password") || errText.includes("invalid username")) {
+                errMsg.innerText = "الكرت غير صحيح؛ تأكد من رقم الكرت وحاول مجدداً ❌";
+            } else if (errText.includes("simultaneous session limit")) {
+                errMsg.innerText = "هذا الكرت مستخدم حالياً على جهاز آخر! 📱💻";
+            } else if (errText.includes("uptime limit")) {
+                errMsg.innerText = "للأسف، لقد انتهى وقت الكرت الخاص بك ⏳";
+            } else if (errText.includes("transfer limit") || errText.includes("download limit") || errText.includes("byte limit") || errText.includes("traffic limit")) {
+                errMsg.innerText = "لقد استهلكت كامل حزمة الجيجات المخصصة لك 📉";
+            } else if (errText.includes("not found")) {
+                errMsg.innerText = "الكرت الذي أدخلته غير موجود في النظام 🔍";
+            } else if (errText.includes("radius") || errText.includes("timeout")) {
+                errMsg.innerText = "يوجد ضغط على الشبكة حالياً، يرجى المحاولة بعد قليل 🔄";
+            } else {
+                errMsg.innerText = "تعذر الدخول، يرجى المحاولة مرة أخرى لاحقاً ⚠️";
+            }
+        }
+    </script>
+</body>
+</html>

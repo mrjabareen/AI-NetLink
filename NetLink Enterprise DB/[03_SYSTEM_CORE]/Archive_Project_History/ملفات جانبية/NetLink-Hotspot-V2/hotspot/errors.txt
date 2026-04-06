@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>NetLink - خطأ في الاتصال</title>
+    <link rel="stylesheet" href="css/style.css">
+    <style>
+        .error-card { background: white; border-radius: 20px; padding: 30px; box-shadow: 0 10px 25px rgba(0,0,0,0.08); text-align: center; margin-top: 30px; border-top: 5px solid #ff4d4d; }
+        .error-icon { font-size: 50px; color: #ff4d4d; margin-bottom: 15px; }
+        .error-msg { color: #333; font-size: 18px; font-weight: bold; margin-bottom: 10px; line-height: 1.6; }
+        .error-details { color: #888; font-size: 14px; margin-bottom: 25px; background: #fff5f5; padding: 10px; border-radius: 8px; font-family: monospace; }
+        .btn-retry { background: var(--blue); color: white; border: none; padding: 15px 30px; border-radius: 12px; font-weight: bold; cursor: pointer; text-decoration: none; display: inline-block; transition: 0.3s; }
+        .btn-retry:hover { opacity: 0.9; transform: translateY(-2px); }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <div class="logo-area">NETLINK</div>
+        <div class="tagline">نعتذر منك.. حصل خطأ بسيط</div>
+    </header>
+
+    <section class="login-section">
+        <div class="error-card">
+            <div class="error-icon">⚠️</div>
+            <div class="error-msg">عذراً، لم نتمكن من إتمام عملية الدخول</div>
+            
+            <div class="error-details">
+                السبب: $(error)
+            </div>
+
+            <p style="color: #666; font-size: 14px; margin-bottom: 20px;">
+                تأكد من كتابة رقم الكرت بشكل صحيح، أو تأكد من صلاحية اشتراكك.
+            </p>
+
+            <a href="$(link-login)" class="btn-retry">العودة لصفحة الدخول</a>
+        </div>
+    </section>
+
+    <footer style="text-align:center; padding:40px 0; color:#888;">
+        <p>شركة نت لينك للاتصالات - NetLink</p>
+        <p>للمساعدة الفنية اتصل بنا: <a href="tel:0597409040" style="color:#ff6600; font-weight:bold; text-decoration:none;">0597 409 040</a></p>
+    </footer>
+</div>
+
+</body>
+</html>

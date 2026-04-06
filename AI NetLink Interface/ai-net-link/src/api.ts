@@ -4,7 +4,14 @@
  * Website: aljabareen.com
  * Contact: admin@aljabareen.com | +970597409040
  */
-export const BASE_URL = 'http://localhost:3001/api';
+const getDefaultBaseUrl = () => {
+  if (typeof window === 'undefined') return 'http://localhost:3001/api';
+  const { protocol, hostname } = window.location;
+  return `${protocol}//${hostname}:3001/api`;
+};
+
+const ENV_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '').trim();
+export const BASE_URL = (ENV_BASE_URL || getDefaultBaseUrl()).replace(/\/$/, '');
 
 export const getMessageData = async () => {
   try {
@@ -566,4 +573,3 @@ export const publishSystemToGithub = async () => {
     }
     return await res.json();
 };
-

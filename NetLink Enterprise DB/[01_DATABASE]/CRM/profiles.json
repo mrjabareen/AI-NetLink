@@ -1,0 +1,107 @@
+[
+  {
+    "id": "1775291705240",
+    "createdAt": "2026-04-04T08:35:05.240Z",
+    "name": "نيت لينك-المنزلي-100 ميجا-غير محدود-100₪",
+    "price": 100,
+    "type": "both",
+    "validityUnit": "days",
+    "validityValue": 30,
+    "downloadSpeed": "100m",
+    "uploadSpeed": "100m",
+    "burstEnabled": false,
+    "burstRate": "",
+    "burstThreshold": "",
+    "burstTime": "",
+    "queuePriority": 8,
+    "poolName": "PPPoE_Pool_2",
+    "addressList": "10.0.0.1",
+    "sharedUsers": 1,
+    "quotaLimitTotalMb": 200,
+    "quotaLimitUploadMb": 40,
+    "quotaLimitDownloadMb": 100,
+    "limitByDuration": {
+      "enabled": true,
+      "value": 1,
+      "unit": "months"
+    },
+    "limitByTime": {
+      "enabled": false,
+      "value": 0,
+      "unit": "minutes"
+    },
+    "limitByDownload": {
+      "enabled": false,
+      "value": 0
+    },
+    "limitByUpload": {
+      "enabled": false,
+      "value": 0
+    },
+    "limitByTotalTraffic": {
+      "enabled": false,
+      "value": 0
+    },
+    "dailyAllowedTime": {
+      "value": 0,
+      "unit": "minutes"
+    },
+    "mikrotikName": "NL-Home-100M-Unlimited-100₪",
+    "cancelOnExpiration": false,
+    "expiredProfileId": ""
+  },
+  {
+    "id": "1775332012105",
+    "createdAt": "2026-04-04T19:46:52.105Z",
+    "name": "باقة NetLink سمارت 15/50 = 50₪",
+    "price": 50,
+    "type": "pppoe",
+    "validityUnit": "months",
+    "validityValue": 1,
+    "downloadSpeed": "50m",
+    "uploadSpeed": "25m",
+    "burstEnabled": false,
+    "burstRate": "",
+    "burstThreshold": "",
+    "burstTime": "",
+    "queuePriority": 8,
+    "poolName": "PPPoE_Pool_2",
+    "addressList": "10.0.0.1",
+    "sharedUsers": 1,
+    "quotaLimitTotalMb": 0,
+    "quotaLimitUploadMb": 0,
+    "quotaLimitDownloadMb": 0,
+    "limitByDuration": {
+      "enabled": true,
+      "value": 1,
+      "unit": "months"
+    },
+    "limitByTime": {
+      "enabled": false,
+      "value": 0,
+      "unit": "hours"
+    },
+    "limitByDownload": {
+      "enabled": false,
+      "value": 0
+    },
+    "limitByUpload": {
+      "enabled": false,
+      "value": 0
+    },
+    "limitByTotalTraffic": {
+      "enabled": false,
+      "value": 0
+    },
+    "dailyAllowedTime": {
+      "value": 0,
+      "unit": "minutes"
+    },
+    "mikrotikName": "NetLink Smart 15/50 Bundle = 50₪",
+    "cancelOnExpiration": true,
+    "fixedExpirationTimeEnabled": true,
+    "fixedExpirationTime": "10:30",
+    "isAvailableInPanel": false,
+    "expiredProfileId": ""
+  }
+]

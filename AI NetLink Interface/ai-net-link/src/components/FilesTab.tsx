@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Lock, Settings, FolderClosed, Plus, FileText, Download, Upload, AlertTriangle, ArrowLeft, ArrowRight, ChevronRight, ChevronLeft, Save, X, FileJson, Folder } from 'lucide-react';
 import { AppState } from '../types';
 import { dict } from '../dict';
+import { BASE_URL } from '../api';
 import Editor from 'react-simple-code-editor';
 import Prism from 'prismjs';
 import 'prismjs/components/prism-json';
@@ -57,7 +58,7 @@ export default function FilesTab({ state, setState }: FilesTabProps) {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const API_BASE = 'http://localhost:3001/api/files';
+  const API_BASE = `${BASE_URL}/files`;
 
   useEffect(() => {
     if (state.role !== 'user') {

@@ -1,0 +1,5010 @@
+{
+    "Series": "2024-71",
+    "Manager": "admin",
+    "Total_Qty": 500,
+    "Used_Qty": 4,
+    "Available_Qty": 496,
+    "Card_Value": 75,
+    "Cards": [
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-1",
+            "PIN": "G123131661073",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-2",
+            "PIN": "G236656420136",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-3",
+            "PIN": "G513521823137",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": 1.0
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-4",
+            "PIN": "G202170502247",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-5",
+            "PIN": "G780711240671",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-6",
+            "PIN": "G573866464782",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-7",
+            "PIN": "G520724303252",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-8",
+            "PIN": "G167213168455",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-9",
+            "PIN": "G813162122184",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-10",
+            "PIN": "G503606023522",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-11",
+            "PIN": "G838853442558",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-12",
+            "PIN": "G548755386456",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-13",
+            "PIN": "G156388580355",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-14",
+            "PIN": "G677843505481",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-15",
+            "PIN": "G800526030547",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-16",
+            "PIN": "G414540887770",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-17",
+            "PIN": "G811537625557",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-18",
+            "PIN": "G068724343775",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-19",
+            "PIN": "G774450428372",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-20",
+            "PIN": "G835268063723",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-21",
+            "PIN": "G068344612835",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-22",
+            "PIN": "G658574567804",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-23",
+            "PIN": "G878252658361",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-24",
+            "PIN": "G730803260107",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-25",
+            "PIN": "G462252548454",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-26",
+            "PIN": "G428135317175",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-27",
+            "PIN": "G513301847152",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-28",
+            "PIN": "G284110360053",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-29",
+            "PIN": "G663288540858",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-30",
+            "PIN": "G843436655047",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-31",
+            "PIN": "G062865013112",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-32",
+            "PIN": "G174147032283",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-33",
+            "PIN": "G837332826814",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-34",
+            "PIN": "G485717723017",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-35",
+            "PIN": "G702708262004",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-36",
+            "PIN": "G266755214565",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-37",
+            "PIN": "G155457325305",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-38",
+            "PIN": "G222421837384",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-39",
+            "PIN": "G813460763417",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-40",
+            "PIN": "G020557171111",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-41",
+            "PIN": "G272121510635",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-42",
+            "PIN": "G622861664400",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-43",
+            "PIN": "G288100137147",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-44",
+            "PIN": "G177141683677",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-45",
+            "PIN": "G822142171762",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-46",
+            "PIN": "G553277083777",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-47",
+            "PIN": "G734171743056",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-48",
+            "PIN": "G152038073301",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": 1.0
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-49",
+            "PIN": "G877243726335",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-50",
+            "PIN": "G487574280461",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-51",
+            "PIN": "G276586483087",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-52",
+            "PIN": "G170811231768",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-53",
+            "PIN": "G205022027657",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-54",
+            "PIN": "G274553378367",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-55",
+            "PIN": "G261348056536",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-56",
+            "PIN": "G637483012467",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-57",
+            "PIN": "G675380214337",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-58",
+            "PIN": "G031474248765",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-59",
+            "PIN": "G176101748187",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-60",
+            "PIN": "G016420012157",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-61",
+            "PIN": "G452136632343",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-62",
+            "PIN": "G405324823546",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-63",
+            "PIN": "G455641485406",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-64",
+            "PIN": "G860273323835",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-65",
+            "PIN": "G407543086531",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-66",
+            "PIN": "G778108784882",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-67",
+            "PIN": "G223524245700",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-68",
+            "PIN": "G818362327235",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-69",
+            "PIN": "G822182412544",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-70",
+            "PIN": "G046317106743",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-71",
+            "PIN": "G774577867066",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-72",
+            "PIN": "G015248523264",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-73",
+            "PIN": "G073645821368",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-74",
+            "PIN": "G853750258883",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-75",
+            "PIN": "G744848256508",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-76",
+            "PIN": "G862008674058",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-77",
+            "PIN": "G872741023206",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-78",
+            "PIN": "G122550545725",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-79",
+            "PIN": "G681866753127",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-80",
+            "PIN": "G001221831886",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-81",
+            "PIN": "G628201667744",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-82",
+            "PIN": "G528818608528",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-83",
+            "PIN": "G480576040857",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-84",
+            "PIN": "G023507157720",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-85",
+            "PIN": "G677310066702",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-86",
+            "PIN": "G414270182423",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-87",
+            "PIN": "G236787535366",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-88",
+            "PIN": "G141720051578",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-89",
+            "PIN": "G585618010607",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-90",
+            "PIN": "G251706311272",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-91",
+            "PIN": "G257115853224",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-92",
+            "PIN": "G806744570637",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-93",
+            "PIN": "G367305501321",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-94",
+            "PIN": "G684714184566",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-95",
+            "PIN": "G024788633441",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-96",
+            "PIN": "G700610778047",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-97",
+            "PIN": "G456613415685",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-98",
+            "PIN": "G356771658610",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-99",
+            "PIN": "G685370225876",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-100",
+            "PIN": "G125665018465",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-101",
+            "PIN": "G338280037475",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-102",
+            "PIN": "G475843353011",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-103",
+            "PIN": "G380046357386",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-104",
+            "PIN": "G161616044636",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-105",
+            "PIN": "G743022151843",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-106",
+            "PIN": "G570386883053",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-107",
+            "PIN": "G467618363466",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-108",
+            "PIN": "G650844001027",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-109",
+            "PIN": "G616881237076",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-110",
+            "PIN": "G813261614770",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-111",
+            "PIN": "G087180061437",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-112",
+            "PIN": "G551158728023",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-113",
+            "PIN": "G804373370078",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-114",
+            "PIN": "G053006742755",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-115",
+            "PIN": "G427308488024",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-116",
+            "PIN": "G142147023222",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-117",
+            "PIN": "G886040580210",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-118",
+            "PIN": "G158732244238",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-119",
+            "PIN": "G121242411815",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-120",
+            "PIN": "G752753647321",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-121",
+            "PIN": "G344767650884",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-122",
+            "PIN": "G814015388342",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-123",
+            "PIN": "G516358281676",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-124",
+            "PIN": "G322388671852",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-125",
+            "PIN": "G468213465071",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-126",
+            "PIN": "G877853566575",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-127",
+            "PIN": "G344410467366",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-128",
+            "PIN": "G681088866750",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-129",
+            "PIN": "G186743255607",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-130",
+            "PIN": "G444058635715",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-131",
+            "PIN": "G410085072564",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-132",
+            "PIN": "G881431274467",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-133",
+            "PIN": "G138701322121",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-134",
+            "PIN": "G438663150201",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-135",
+            "PIN": "G217454255233",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-136",
+            "PIN": "G146358400166",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-137",
+            "PIN": "G352161360813",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-138",
+            "PIN": "G118612826550",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-139",
+            "PIN": "G270374081107",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-140",
+            "PIN": "G012073182142",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-141",
+            "PIN": "G134688684520",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-142",
+            "PIN": "G018807606675",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-143",
+            "PIN": "G062176370546",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-144",
+            "PIN": "G286746557545",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-145",
+            "PIN": "G303768156442",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-146",
+            "PIN": "G150214624378",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-147",
+            "PIN": "G832485103460",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-148",
+            "PIN": "G473827141243",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-149",
+            "PIN": "G613831624862",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-150",
+            "PIN": "G250516433725",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-151",
+            "PIN": "G430532684075",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-152",
+            "PIN": "G847222448287",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-153",
+            "PIN": "G738188630574",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-154",
+            "PIN": "G543038322844",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-155",
+            "PIN": "G266873456166",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-156",
+            "PIN": "G017745018382",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-157",
+            "PIN": "G132325520087",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-158",
+            "PIN": "G433147527412",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-159",
+            "PIN": "G781611824054",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-160",
+            "PIN": "G587584418511",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-161",
+            "PIN": "G262781770021",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-162",
+            "PIN": "G103306755383",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-163",
+            "PIN": "G614553478637",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-164",
+            "PIN": "G713616706034",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-165",
+            "PIN": "G600116278414",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-166",
+            "PIN": "G860713302764",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-167",
+            "PIN": "G224626174865",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-168",
+            "PIN": "G584233600452",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-169",
+            "PIN": "G500854156327",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-170",
+            "PIN": "G035402858180",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-171",
+            "PIN": "G438564522317",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-172",
+            "PIN": "G703243746376",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-173",
+            "PIN": "G361077128755",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-174",
+            "PIN": "G218527108311",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-175",
+            "PIN": "G685211827733",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-176",
+            "PIN": "G324300620352",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-177",
+            "PIN": "G251882051372",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-178",
+            "PIN": "G555116358786",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-179",
+            "PIN": "G756503608765",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-180",
+            "PIN": "G048877011512",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-181",
+            "PIN": "G047824578026",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-182",
+            "PIN": "G384041323318",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-183",
+            "PIN": "G818040022612",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-184",
+            "PIN": "G847750266651",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-185",
+            "PIN": "G581803882565",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-186",
+            "PIN": "G577727710503",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-187",
+            "PIN": "G628174131212",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-188",
+            "PIN": "G371436064526",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-189",
+            "PIN": "G307255506402",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-190",
+            "PIN": "G613834850001",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-191",
+            "PIN": "G407830357074",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-192",
+            "PIN": "G512042213675",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-193",
+            "PIN": "G161058108770",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-194",
+            "PIN": "G715611853157",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-195",
+            "PIN": "G486555840025",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-196",
+            "PIN": "G844522471023",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-197",
+            "PIN": "G216312138582",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-198",
+            "PIN": "G885067340770",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-199",
+            "PIN": "G726038338767",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-200",
+            "PIN": "G051717084380",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-201",
+            "PIN": "G202080841542",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-202",
+            "PIN": "G255830425504",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-203",
+            "PIN": "G201440448627",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-204",
+            "PIN": "G512645871245",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-205",
+            "PIN": "G205535053215",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-206",
+            "PIN": "G037881422587",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-207",
+            "PIN": "G853077377832",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-208",
+            "PIN": "G215614206185",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-209",
+            "PIN": "G025052547823",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-210",
+            "PIN": "G561334365715",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-211",
+            "PIN": "G235822204710",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-212",
+            "PIN": "G062565820733",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-213",
+            "PIN": "G257638233713",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-214",
+            "PIN": "G034303170424",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-215",
+            "PIN": "G014776102043",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-216",
+            "PIN": "G866027230667",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-217",
+            "PIN": "G053705375753",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-218",
+            "PIN": "G253458523336",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-219",
+            "PIN": "G837602477858",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-220",
+            "PIN": "G464038154387",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-221",
+            "PIN": "G047351032502",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-222",
+            "PIN": "G757622346730",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-223",
+            "PIN": "G444873475322",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-224",
+            "PIN": "G205543526488",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-225",
+            "PIN": "G404167210688",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-226",
+            "PIN": "G734364373637",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-227",
+            "PIN": "G180717755052",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-228",
+            "PIN": "G574521274710",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-229",
+            "PIN": "G257308115005",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-230",
+            "PIN": "G551134482622",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-231",
+            "PIN": "G750210013553",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-232",
+            "PIN": "G445843408320",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-233",
+            "PIN": "G848818262083",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-234",
+            "PIN": "G073338763136",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-235",
+            "PIN": "G476186158750",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-236",
+            "PIN": "G456734820231",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-237",
+            "PIN": "G117308724434",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-238",
+            "PIN": "G027871736288",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-239",
+            "PIN": "G471414604214",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-240",
+            "PIN": "G285628820785",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-241",
+            "PIN": "G866475324273",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-242",
+            "PIN": "G641863262724",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-243",
+            "PIN": "G414462168784",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-244",
+            "PIN": "G207405767842",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-245",
+            "PIN": "G260322563808",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-246",
+            "PIN": "G183742360110",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-247",
+            "PIN": "G464268463475",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-248",
+            "PIN": "G441811520874",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-249",
+            "PIN": "G110801848363",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-250",
+            "PIN": "G120446801062",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-251",
+            "PIN": "G122810100187",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-252",
+            "PIN": "G153087107833",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-253",
+            "PIN": "G521407617676",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-254",
+            "PIN": "G584513326405",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-255",
+            "PIN": "G314177247387",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-256",
+            "PIN": "G846484141302",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-257",
+            "PIN": "G424162771070",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-258",
+            "PIN": "G704321885525",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-259",
+            "PIN": "G717856008223",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-260",
+            "PIN": "G570677635845",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-261",
+            "PIN": "G133465746612",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-262",
+            "PIN": "G311041108144",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-263",
+            "PIN": "G807380873030",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-264",
+            "PIN": "G582153165267",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-265",
+            "PIN": "G385070450087",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-266",
+            "PIN": "G055166106312",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-267",
+            "PIN": "G537152678257",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-268",
+            "PIN": "G283160855260",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-269",
+            "PIN": "G061602635240",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-270",
+            "PIN": "G517411020337",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-271",
+            "PIN": "G103500506645",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-272",
+            "PIN": "G708322151683",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-273",
+            "PIN": "G885816624774",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-274",
+            "PIN": "G843385645466",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-275",
+            "PIN": "G672551628010",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-276",
+            "PIN": "G662848211530",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-277",
+            "PIN": "G803540087031",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-278",
+            "PIN": "G003815850834",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": 1.0
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-279",
+            "PIN": "G754887775118",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-280",
+            "PIN": "G815608800288",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-281",
+            "PIN": "G554547811170",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-282",
+            "PIN": "G638220110580",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-283",
+            "PIN": "G450258122456",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-284",
+            "PIN": "G027234207111",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-285",
+            "PIN": "G002058012038",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-286",
+            "PIN": "G658874375008",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-287",
+            "PIN": "G437228126203",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-288",
+            "PIN": "G804275128786",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-289",
+            "PIN": "G033513354155",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-290",
+            "PIN": "G755476744061",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-291",
+            "PIN": "G453331844273",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-292",
+            "PIN": "G318622277733",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-293",
+            "PIN": "G288773820231",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-294",
+            "PIN": "G303522843514",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-295",
+            "PIN": "G832483823501",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-296",
+            "PIN": "G861664685045",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-297",
+            "PIN": "G020451822872",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-298",
+            "PIN": "G344672568625",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-299",
+            "PIN": "G884287807623",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-300",
+            "PIN": "G684872884152",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-301",
+            "PIN": "G386038435833",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-302",
+            "PIN": "G403273442817",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-303",
+            "PIN": "G817101141524",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": 1.0
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-304",
+            "PIN": "G365847287303",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-305",
+            "PIN": "G627687556146",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-306",
+            "PIN": "G258310626021",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-307",
+            "PIN": "G728466716485",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-308",
+            "PIN": "G221635158877",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-309",
+            "PIN": "G821521583410",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-310",
+            "PIN": "G882538131074",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-311",
+            "PIN": "G307085777638",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-312",
+            "PIN": "G765216075037",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-313",
+            "PIN": "G828727237836",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-314",
+            "PIN": "G402163731150",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-315",
+            "PIN": "G738142615605",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-316",
+            "PIN": "G407281628614",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-317",
+            "PIN": "G087803054868",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-318",
+            "PIN": "G841488838636",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-319",
+            "PIN": "G578340726526",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-320",
+            "PIN": "G622186878717",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-321",
+            "PIN": "G608342077610",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-322",
+            "PIN": "G683343785782",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-323",
+            "PIN": "G370258806731",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-324",
+            "PIN": "G840681761873",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-325",
+            "PIN": "G241520757561",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-326",
+            "PIN": "G551214206276",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-327",
+            "PIN": "G131026221372",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-328",
+            "PIN": "G335862005117",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-329",
+            "PIN": "G337833544434",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-330",
+            "PIN": "G156162173641",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-331",
+            "PIN": "G741332843536",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-332",
+            "PIN": "G680211434021",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-333",
+            "PIN": "G236401553476",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-334",
+            "PIN": "G561805472474",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-335",
+            "PIN": "G525727838376",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-336",
+            "PIN": "G413738485364",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-337",
+            "PIN": "G612037260741",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-338",
+            "PIN": "G312040688742",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-339",
+            "PIN": "G660106555556",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-340",
+            "PIN": "G353115046228",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-341",
+            "PIN": "G085870044752",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-342",
+            "PIN": "G217743276307",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-343",
+            "PIN": "G870312012587",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-344",
+            "PIN": "G362746065821",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-345",
+            "PIN": "G028756345454",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-346",
+            "PIN": "G653680426508",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-347",
+            "PIN": "G073563455211",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-348",
+            "PIN": "G643086442881",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-349",
+            "PIN": "G643471150514",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-350",
+            "PIN": "G840361236643",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-351",
+            "PIN": "G365435310755",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-352",
+            "PIN": "G641600074018",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-353",
+            "PIN": "G031475500244",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-354",
+            "PIN": "G775538183034",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-355",
+            "PIN": "G730128020148",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-356",
+            "PIN": "G406521006358",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-357",
+            "PIN": "G247321515527",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-358",
+            "PIN": "G407322042605",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-359",
+            "PIN": "G573217112655",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-360",
+            "PIN": "G884256776516",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-361",
+            "PIN": "G582550816327",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-362",
+            "PIN": "G137181670873",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-363",
+            "PIN": "G552181521574",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-364",
+            "PIN": "G656388870488",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-365",
+            "PIN": "G544430773782",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-366",
+            "PIN": "G722888134763",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-367",
+            "PIN": "G438587220764",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-368",
+            "PIN": "G550036218377",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-369",
+            "PIN": "G201655710666",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-370",
+            "PIN": "G268346510511",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-371",
+            "PIN": "G211828746681",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-372",
+            "PIN": "G142116723436",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-373",
+            "PIN": "G185124323416",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-374",
+            "PIN": "G168646751041",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-375",
+            "PIN": "G403744263753",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-376",
+            "PIN": "G065416814776",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-377",
+            "PIN": "G450432572634",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-378",
+            "PIN": "G148225532852",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-379",
+            "PIN": "G343701234077",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-380",
+            "PIN": "G233204788610",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-381",
+            "PIN": "G061136361631",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-382",
+            "PIN": "G554060563601",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-383",
+            "PIN": "G170828835046",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-384",
+            "PIN": "G654507453037",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-385",
+            "PIN": "G065233121013",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-386",
+            "PIN": "G804376042470",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-387",
+            "PIN": "G235416011314",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-388",
+            "PIN": "G635516705233",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-389",
+            "PIN": "G746062105426",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-390",
+            "PIN": "G026165418077",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-391",
+            "PIN": "G438750032620",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-392",
+            "PIN": "G817330030434",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-393",
+            "PIN": "G156752675568",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-394",
+            "PIN": "G561611672283",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-395",
+            "PIN": "G207048534027",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-396",
+            "PIN": "G083520254323",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-397",
+            "PIN": "G482481888402",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-398",
+            "PIN": "G335537114466",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-399",
+            "PIN": "G383715253282",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-400",
+            "PIN": "G172800113464",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-401",
+            "PIN": "G175502138420",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-402",
+            "PIN": "G724123238408",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-403",
+            "PIN": "G410744050580",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-404",
+            "PIN": "G502222114524",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-405",
+            "PIN": "G645366215060",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-406",
+            "PIN": "G263201051284",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-407",
+            "PIN": "G473635178715",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-408",
+            "PIN": "G215780815015",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-409",
+            "PIN": "G180126344605",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-410",
+            "PIN": "G013862381877",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-411",
+            "PIN": "G646225624636",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-412",
+            "PIN": "G360510118286",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-413",
+            "PIN": "G203188831364",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-414",
+            "PIN": "G836377812843",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-415",
+            "PIN": "G852778278485",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-416",
+            "PIN": "G350384555283",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-417",
+            "PIN": "G774046112177",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-418",
+            "PIN": "G105722445274",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-419",
+            "PIN": "G637236513787",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-420",
+            "PIN": "G407415203586",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-421",
+            "PIN": "G511138370173",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-422",
+            "PIN": "G514863581330",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-423",
+            "PIN": "G631067626517",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-424",
+            "PIN": "G425231582768",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-425",
+            "PIN": "G805018870776",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-426",
+            "PIN": "G536087720141",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-427",
+            "PIN": "G287264162643",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-428",
+            "PIN": "G331317048445",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-429",
+            "PIN": "G227031130656",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-430",
+            "PIN": "G041286627550",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-431",
+            "PIN": "G132077677250",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-432",
+            "PIN": "G343127622722",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-433",
+            "PIN": "G264138820116",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-434",
+            "PIN": "G672378101413",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-435",
+            "PIN": "G073346561754",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-436",
+            "PIN": "G445546012020",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-437",
+            "PIN": "G830862067402",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-438",
+            "PIN": "G837023348673",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-439",
+            "PIN": "G372585556443",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-440",
+            "PIN": "G638258541321",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-441",
+            "PIN": "G435304410568",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-442",
+            "PIN": "G113555708624",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-443",
+            "PIN": "G356467521230",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-444",
+            "PIN": "G481446237561",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-445",
+            "PIN": "G841811355802",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-446",
+            "PIN": "G642546383515",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-447",
+            "PIN": "G038763668750",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-448",
+            "PIN": "G663252306368",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-449",
+            "PIN": "G777138411167",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-450",
+            "PIN": "G534480465868",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-451",
+            "PIN": "G170524472074",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-452",
+            "PIN": "G625743606144",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-453",
+            "PIN": "G061535222252",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-454",
+            "PIN": "G400777051533",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-455",
+            "PIN": "G673205670514",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-456",
+            "PIN": "G134141388447",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-457",
+            "PIN": "G043814253371",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-458",
+            "PIN": "G848707201415",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-459",
+            "PIN": "G553377153452",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-460",
+            "PIN": "G657004168747",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-461",
+            "PIN": "G547706130467",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-462",
+            "PIN": "G152205471058",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-463",
+            "PIN": "G476238004552",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-464",
+            "PIN": "G263308884113",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-465",
+            "PIN": "G638634560264",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-466",
+            "PIN": "G042407422532",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-467",
+            "PIN": "G431020373247",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-468",
+            "PIN": "G402516711031",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-469",
+            "PIN": "G551715868768",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-470",
+            "PIN": "G876271700031",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-471",
+            "PIN": "G410583646837",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-472",
+            "PIN": "G224808764502",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-473",
+            "PIN": "G473264116173",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-474",
+            "PIN": "G228880710007",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-475",
+            "PIN": "G085425541677",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-476",
+            "PIN": "G187583085685",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-477",
+            "PIN": "G646445222554",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-478",
+            "PIN": "G888154642411",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-479",
+            "PIN": "G710256701244",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-480",
+            "PIN": "G544717206082",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-481",
+            "PIN": "G247466555451",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-482",
+            "PIN": "G118113575754",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-483",
+            "PIN": "G663142466024",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-484",
+            "PIN": "G457001822733",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-485",
+            "PIN": "G861427062186",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-486",
+            "PIN": "G313813130630",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-487",
+            "PIN": "G720771167188",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-488",
+            "PIN": "G665874505664",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-489",
+            "PIN": "G157828678736",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-490",
+            "PIN": "G841551405784",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-491",
+            "PIN": "G322808284074",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-492",
+            "PIN": "G040603475330",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-493",
+            "PIN": "G450137360547",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-494",
+            "PIN": "G266442627405",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-495",
+            "PIN": "G723156880074",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-496",
+            "PIN": "G518541465888",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-497",
+            "PIN": "G251708351747",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-498",
+            "PIN": "G244322573215",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-499",
+            "PIN": "G450758672652",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-71",
+            "SN": "2024-71-63-500",
+            "PIN": "G585740372784",
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-01-01",
+            "Used": NaN
+        }
+    ]
+}

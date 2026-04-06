@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta http-equiv="refresh" content="2; url=$(link-orig)">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />   
+    <meta http-equiv="pragma" content="no-cache">
+    <meta http-equiv="expires" content="-1">
+    <title>NetLink - جاري تحضير الاتصال</title>
+    <link rel="stylesheet" href="css/style.css">
+    <script>
+        var popup = '';
+        function openOrig() {
+            if (window.focus) popup.focus();
+            location.href = unescape('$(link-orig-esc)');
+        }
+        function openAd() {
+            location.href = unescape('$(link-redirect-esc)');
+        }
+        function openAdvert() {
+            if (window.name != 'hotspot_advert') {
+                popup = open('$(link-redirect)', 'hotspot_advert', '');
+                setTimeout("openOrig()", 1000);
+                return;
+            }
+            setTimeout("openAd()", 1000);
+        }
+    </script>
+    <style>
+        .ad-box { text-align: center; margin-top: 80px; padding: 20px; }
+        .ad-card { background: white; border-radius: 20px; padding: 40px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); display: inline-block; min-width: 300px; }
+        .loading-ring {
+            display: inline-block; width: 50px; height: 50px;
+            border: 3px solid rgba(0,188,212,0.1); border-radius: 50%;
+            border-top-color: var(--blue); animation: spin 1s ease-in-out infinite;
+            margin-bottom: 20px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+</head>
+<body onLoad="openAdvert()">
+
+<div class="container">
+    <div class="ad-box">
+        <div class="ad-card">
+            <div class="logo-area" style="margin-bottom: 20px;">NETLINK</div>
+            <div class="loading-ring"></div>
+            <h2 style="color: #333; margin-bottom: 10px;">جاري الاتصال بالشبكة..</h2>
+            <p style="color: #666; font-size: 14px; line-height: 1.6;">
+                انتظر لحظة، يتم الآن تحضير أفضل تجربة إنترنت لك.
+            </p>
+            
+            <p style="margin-top: 25px; font-size: 12px; color: #aaa;">
+                إذا لم تفتح الصفحة تلقائياً، اضغط على 
+                <a href="$(link-redirect)" target="hotspot_advert" style="color: var(--blue); font-weight: bold; text-decoration: none;">هذا الرابط</a>
+            </p>
+        </div>
+    </div>
+
+    <footer style="text-align:center; padding:40px 0; color:#888;">
+        <p>شركة نت لينك للاتصالات - NetLink</p>
+    </footer>
+</div>
+
+</body>
+</html>

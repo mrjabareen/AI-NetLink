@@ -33,15 +33,44 @@ app.use(express.json());
 // Path to the database files
 const DB_PATH = process.env.DB_PATH || path.resolve(__dirname, '../../NetLink Enterprise DB/[01_DATABASE]');
 
-// Helper to safely join paths and ensure directory exists (Docker/Linux friendly)
+// Helper to safely join paths without breaking absolute Linux/Windows roots.
+const splitPathSegments = (value) => String(value || '').split(/[\\/]+/).filter(Boolean);
+
 const getSafePath = (...parts) => {
-  const normalizedParts = parts.flatMap(p => p.split(/[\\/]/));
-  const fullPath = path.join(...normalizedParts);
+  const validParts = parts.filter(part => part !== undefined && part !== null && String(part).trim() !== '').map(String);
+  if (validParts.length === 0) return '';
+
+  const [basePart, ...restParts] = validParts;
+  const normalizedRest = restParts.flatMap(splitPathSegments);
+  const baseIsAbsolute = path.isAbsolute(basePart) || /^[A-Za-z]:[\\/]/.test(basePart);
+
+  const fullPath = baseIsAbsolute
+    ? path.join(basePart, ...normalizedRest)
+    : path.join(...splitPathSegments(basePart), ...normalizedRest);
+
   const dir = path.extname(fullPath) ? path.dirname(fullPath) : fullPath;
   if (!fs.existsSync(dir)) {
-    try { fs.mkdirSync(dir, { recursive: true }); } catch (e) { console.error('Failed to create directory:', dir); }
+    try {
+      fs.mkdirSync(dir, { recursive: true });
+    } catch (e) {
+      console.error('Failed to create directory:', dir);
+    }
   }
   return fullPath;
+};
+
+const logDirectoryStatus = (label, ...parts) => {
+  const dirPath = getSafePath(DB_PATH, ...parts);
+  try {
+    if (!fs.existsSync(dirPath)) {
+      console.log(`[DB DEBUG] ${label}: missing -> ${dirPath}`);
+      return;
+    }
+    const jsonFiles = fs.readdirSync(dirPath).filter(file => file.endsWith('.json'));
+    console.log(`[DB DEBUG] ${label}: ${jsonFiles.length} json file(s) -> ${dirPath}`);
+  } catch (error) {
+    console.error(`[DB DEBUG] ${label}: failed to inspect ${dirPath}`, error.message);
+  }
 };
 
 // Utility to read JSON
@@ -2311,5 +2340,9 @@ app.listen(PORT, () => {
   console.log(`\n===========================================`);
   console.log(`🚀 NetLink API Server is running on \x1b[36mhttp://localhost:${PORT}\x1b[0m`);
   console.log(`📂 Database Path connected: \x1b[33m${DB_PATH}\x1b[0m`);
+  logDirectoryStatus('Subscribers', 'Subscribers');
+  logDirectoryStatus('Managers', 'Financial', 'System_Managers');
+  logDirectoryStatus('Suppliers', 'Financial', 'Suppliers');
+  logDirectoryStatus('Investors', 'Financial', 'Investors');
   console.log(`===========================================\n`);
 });

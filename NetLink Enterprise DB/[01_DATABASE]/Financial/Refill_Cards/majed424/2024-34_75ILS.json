@@ -1,0 +1,110 @@
+{
+    "Series": "2024-34",
+    "Manager": "majed424",
+    "Total_Qty": 10,
+    "Used_Qty": 7,
+    "Available_Qty": 3,
+    "Card_Value": 75,
+    "Cards": [
+        {
+            "Series": "2024-34",
+            "SN": "2024-34-31-1",
+            "PIN": 522636685705,
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-10-22",
+            "Used": 1.0
+        },
+        {
+            "Series": "2024-34",
+            "SN": "2024-34-31-2",
+            "PIN": 667107754052,
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-10-22",
+            "Used": 1.0
+        },
+        {
+            "Series": "2024-34",
+            "SN": "2024-34-31-3",
+            "PIN": 477872344518,
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-10-22",
+            "Used": 1.0
+        },
+        {
+            "Series": "2024-34",
+            "SN": "2024-34-31-4",
+            "PIN": 275653000887,
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-10-22",
+            "Used": 1.0
+        },
+        {
+            "Series": "2024-34",
+            "SN": "2024-34-31-5",
+            "PIN": 671156275773,
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-10-22",
+            "Used": 1.0
+        },
+        {
+            "Series": "2024-34",
+            "SN": "2024-34-31-6",
+            "PIN": 15356053526,
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-10-22",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-34",
+            "SN": "2024-34-31-7",
+            "PIN": 815604242235,
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-10-22",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-34",
+            "SN": "2024-34-31-8",
+            "PIN": 834222421056,
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-10-22",
+            "Used": NaN
+        },
+        {
+            "Series": "2024-34",
+            "SN": "2024-34-31-9",
+            "PIN": 733183554102,
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-10-22",
+            "Used": 1.0
+        },
+        {
+            "Series": "2024-34",
+            "SN": "2024-34-31-10",
+            "PIN": 614636320552,
+            "Username": NaN,
+            "Password": NaN,
+            "Value": 75,
+            "Expiration": "2030-10-22",
+            "Used": 1.0
+        }
+    ]
+}

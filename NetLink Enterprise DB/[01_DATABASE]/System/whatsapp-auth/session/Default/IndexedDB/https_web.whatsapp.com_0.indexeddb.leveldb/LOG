@@ -1,0 +1,9 @@
+2026/04/06-11:09:48.501 12f Reusing MANIFEST /app/AI-NetLink/NetLink Enterprise DB/[01_DATABASE]/System/whatsapp-auth/session/Default/IndexedDB/https_web.whatsapp.com_0.indexeddb.leveldb/MANIFEST-000001
+2026/04/06-11:09:48.501 12f Recovering log #184
+2026/04/06-11:09:48.505 12f Reusing old log /app/AI-NetLink/NetLink Enterprise DB/[01_DATABASE]/System/whatsapp-auth/session/Default/IndexedDB/https_web.whatsapp.com_0.indexeddb.leveldb/000184.log 
+2026/04/06-11:09:48.505 12f Delete type=2 #188
+2026/04/06-11:09:48.505 12f Delete type=2 #187
+2026/04/06-11:09:48.505 12f Delete type=2 #189
+2026/04/06-11:09:48.505 12f Delete type=2 #186
+2026/04/06-11:09:48.505 12f Delete type=2 #190
+2026/04/06-11:09:48.505 12f Delete type=2 #191
