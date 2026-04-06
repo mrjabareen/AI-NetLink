@@ -12,7 +12,8 @@ echo "Starting AI NetLink Professional Update..."
 
 # 1. Pull latest code from GitHub
 cd "$PROJECT_ROOT"
-git pull origin main
+git config pull.rebase false
+git pull --no-rebase origin main
 
 # 2. Build Frontend (React)
 cd "$SCRIPT_DIR"

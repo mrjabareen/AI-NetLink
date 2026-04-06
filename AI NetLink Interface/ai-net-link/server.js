@@ -2340,6 +2340,7 @@ app.post('/api/system/publish', async (req, res) => {
     const commands = [
       `git config user.email "admin@aljabareen.com"`,
       `git config user.name "NetLink System AutoSync"`,
+      `git config pull.rebase false`,
       `git add .`,
       `git commit -m "${commitMessage.replace(/"/g, '\\"')}" || echo "No changes to commit"`,
       `git push "${remoteUrl}" HEAD:main`
