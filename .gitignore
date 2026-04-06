@@ -26,6 +26,8 @@ node_modules/
 dist/
 build/
 uploads/
+NetLink Publisher/Gemini UI/dist/
+NetLink Publisher/Gemini UI/release-portable/
 
 # IDE files
 .vscode/
