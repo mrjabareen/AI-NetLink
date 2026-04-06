@@ -34,6 +34,9 @@ app.use(express.json());
 const DB_PATH = process.env.DB_PATH || path.resolve(__dirname, '../../NetLink Enterprise DB/[01_DATABASE]');
 const GITHUB_PUBLISH_PIN = process.env.GITHUB_PUBLISH_PIN || '1993';
 
+const stripBom = (text = '') => String(text).replace(/^\uFEFF/, '');
+const readJsonFile = (filePath) => JSON.parse(stripBom(fs.readFileSync(filePath, 'utf-8')));
+
 // Helper to safely join paths without breaking absolute Linux/Windows roots.
 const splitPathSegments = (value) => String(value || '').split(/[\\/]+/).filter(Boolean);
 
@@ -2254,8 +2257,8 @@ app.get('/api/system/check-update', async (req, res) => {
       return res.status(500).json({ error: 'Configuration or Version file missing.' });
     }
 
-    const localData = JSON.parse(fs.readFileSync(localVersionPath, 'utf-8'));
-    const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+    const localData = readJsonFile(localVersionPath);
+    const config = readJsonFile(configPath);
 
     const repoParts = config.repo_url.replace('.git', '').split('/');
     const repoOwner = repoParts[repoParts.length - 2];
@@ -2276,7 +2279,7 @@ app.get('/api/system/check-update', async (req, res) => {
     if (!remoteMeta.content) throw new Error('Remote version payload is empty');
 
     const remoteText = Buffer.from(String(remoteMeta.content).replace(/\n/g, ''), 'base64').toString('utf-8');
-    const remoteData = JSON.parse(remoteText);
+    const remoteData = JSON.parse(stripBom(remoteText));
 
     res.json({ 
       data: {
@@ -2290,7 +2293,7 @@ app.get('/api/system/check-update', async (req, res) => {
 
   } catch (err) { 
     console.error('Update Check Error:', err);
-    res.status(500).json({ error: 'Update check failed.' }); 
+    res.status(500).json({ error: err?.message || 'Update check failed.' }); 
   }
 });
 
@@ -2317,8 +2320,8 @@ app.post('/api/system/publish', async (req, res) => {
     if (!fs.existsSync(configPath)) return res.status(500).json({ error: 'Git configuration missing.' });
     if (!fs.existsSync(versionPath)) return res.status(500).json({ error: 'Version file missing.' });
 
-    const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
-    const versionData = JSON.parse(fs.readFileSync(versionPath, 'utf-8'));
+    const config = readJsonFile(configPath);
+    const versionData = readJsonFile(versionPath);
     const body = req.body || {};
     const pin = String(body.pin || '').trim();
     const version = String(versionData.version || '').trim();

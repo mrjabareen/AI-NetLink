@@ -48,7 +48,7 @@ function Save-PublisherConfig([hashtable]$config) {
         New-Item -ItemType Directory -Path $PublisherConfigDir | Out-Null
     }
 
-    ($config | ConvertTo-Json -Depth 5) | Set-Content -Path $PublisherConfigPath -Encoding UTF8
+    Write-Utf8NoBomFile -path $PublisherConfigPath -content ($config | ConvertTo-Json -Depth 5)
 }
 
 function Load-Strings {
@@ -135,7 +135,7 @@ function Save-VersionData([string]$versionPath, [string]$version, [string]$build
         changelog = $changelog
     }
 
-    ($payload | ConvertTo-Json -Depth 5) | Set-Content -Path $versionPath -Encoding UTF8
+    Write-Utf8NoBomFile -path $versionPath -content ($payload | ConvertTo-Json -Depth 5)
 }
 
 function Build-AuthenticatedUrl([string]$repoUrl, [string]$token) {
@@ -149,6 +149,11 @@ function Build-AuthenticatedUrl([string]$repoUrl, [string]$token) {
     }
 
     return $cleanRepo -replace '^https://', ("https://{0}@" -f $token.Trim())
+}
+
+function Write-Utf8NoBomFile([string]$path, [string]$content) {
+    $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+    [System.IO.File]::WriteAllText($path, $content, $utf8NoBom)
 }
 
 function Write-Log([string]$message) {

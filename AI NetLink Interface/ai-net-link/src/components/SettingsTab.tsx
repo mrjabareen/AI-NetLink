@@ -81,10 +81,10 @@ export default function SettingsTab({ state, setState }: SettingsTabProps) {
           error: undefined
         }
       }));
-    } catch (err) {
+    } catch (err: any) {
       setState(prev => ({ 
         ...prev, 
-        updateStatus: { ...prev.updateStatus, checking: false, error: isRTL ? 'فشل التحقق من التحديثات' : 'Failed to check for updates' } 
+        updateStatus: { ...prev.updateStatus, checking: false, error: err?.message || (isRTL ? 'فشل التحقق من التحديثات' : 'Failed to check for updates') } 
       }));
     }
   };
@@ -97,8 +97,8 @@ export default function SettingsTab({ state, setState }: SettingsTabProps) {
       const result = await startSystemUpdate();
       setState(prev => ({ ...prev, updateStatus: { ...prev.updateStatus, checking: false } }));
       alert(result.message || (isRTL ? 'بدأ التحديث! سيقوم النظام بإعادة التشغيل تلقائياً.' : 'Update started! The system will restart automatically.'));
-    } catch (err) {
-      setState(prev => ({ ...prev, updateStatus: { ...prev.updateStatus, checking: false, error: 'Update failed' } }));
+    } catch (err: any) {
+      setState(prev => ({ ...prev, updateStatus: { ...prev.updateStatus, checking: false, error: err?.message || 'Update failed' } }));
     }
   };
 
