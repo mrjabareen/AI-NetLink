@@ -31,7 +31,7 @@ app.use((req, res, next) => {
 app.use(express.json());
 
 // Path to the database files
-const DB_PATH = process.env.DB_PATH || path.resolve(__dirname, 'NetLink Enterprise DB/[01_DATABASE]');
+const DB_PATH = process.env.DB_PATH || path.resolve(__dirname, '../../NetLink Enterprise DB/[01_DATABASE]');
 
 // Helper to safely join paths and ensure directory exists (Docker/Linux friendly)
 const getSafePath = (...parts) => {
