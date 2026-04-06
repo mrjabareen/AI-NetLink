@@ -32,6 +32,7 @@ app.use(express.json());
 
 // Path to the database files
 const DB_PATH = process.env.DB_PATH || path.resolve(__dirname, '../../NetLink Enterprise DB/[01_DATABASE]');
+const GITHUB_PUBLISH_PIN = process.env.GITHUB_PUBLISH_PIN || '1993';
 
 // Helper to safely join paths without breaking absolute Linux/Windows roots.
 const splitPathSegments = (value) => String(value || '').split(/[\\/]+/).filter(Boolean);
@@ -2317,6 +2318,11 @@ app.post('/api/system/publish', async (req, res) => {
     const changelog = Array.isArray(body.changelog)
       ? body.changelog.map(item => String(item || '').trim()).filter(Boolean)
       : [];
+    const pin = String(body.pin || '').trim();
+
+    if (pin !== GITHUB_PUBLISH_PIN) {
+      return res.status(403).json({ error: 'Invalid publish PIN.' });
+    }
 
     if (!version || !/^\d+\.\d+\.\d+$/.test(version)) {
       return res.status(400).json({ error: 'A valid semantic version is required. Example: 1.0.4' });
@@ -2331,6 +2337,10 @@ app.post('/api/system/publish', async (req, res) => {
     const buildDate = new Date().toISOString().split('T')[0];
     const commitMessage = String(body.commitMessage || `release: v${version}`).trim();
 
+    if (!config.repo_url || !config.pat || config.pat.includes('your_personal_access_token_here')) {
+      return res.status(500).json({ error: 'GitHub token is missing in git_config.json on the server.' });
+    }
+
     fs.writeFileSync(versionPath, JSON.stringify({ version, buildDate, changelog }, null, 2));
     
     // Commands to run in sequence
@@ -2341,15 +2351,16 @@ app.post('/api/system/publish', async (req, res) => {
       `git config user.email "admin@aljabareen.com"`,
       `git config user.name "NetLink System AutoSync"`,
       `git config pull.rebase false`,
-      `git add .`,
+      `git add -A .`,
+      `git reset -q -- "NetLink Enterprise DB" "AI NetLink Interface/ai-net-link/git_config.json" "AI NetLink Interface/ai-net-link/.wwebjs_cache" || true`,
       `git commit -m "${commitMessage.replace(/"/g, '\\"')}" || echo "No changes to commit"`,
       `git push "${remoteUrl}" HEAD:main`
     ].join(' && ');
 
     exec(commands, { cwd: projectRoot }, (err, stdout, stderr) => {
       if (err) {
-        console.error('Git Publish Error:', stderr);
-        return res.status(500).json({ error: 'Publish failed.', details: stderr });
+        console.error('Git Publish Error:', stderr || stdout);
+        return res.status(500).json({ error: (stderr || stdout || 'Publish failed.').trim() });
       }
       res.json({ message: 'Release published to GitHub successfully!', data: { version, buildDate, changelog } });
     });
