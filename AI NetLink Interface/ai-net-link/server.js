@@ -2307,12 +2307,31 @@ app.post('/api/system/update', async (req, res) => {
 app.post('/api/system/publish', async (req, res) => {
   try {
     const configPath = path.join(__dirname, 'git_config.json');
+    const versionPath = path.join(__dirname, 'public', 'version.json');
     if (!fs.existsSync(configPath)) return res.status(500).json({ error: 'Git configuration missing.' });
+    if (!fs.existsSync(versionPath)) return res.status(500).json({ error: 'Version file missing.' });
+
     const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+    const body = req.body || {};
+    const version = String(body.version || '').trim();
+    const changelog = Array.isArray(body.changelog)
+      ? body.changelog.map(item => String(item || '').trim()).filter(Boolean)
+      : [];
+
+    if (!version || !/^\d+\.\d+\.\d+$/.test(version)) {
+      return res.status(400).json({ error: 'A valid semantic version is required. Example: 1.0.4' });
+    }
+
+    if (changelog.length === 0) {
+      return res.status(400).json({ error: 'At least one changelog item is required.' });
+    }
     
     // Project Root (where .git is)
     const projectRoot = path.resolve(__dirname, '../../');
-    const timestamp = new Date().toLocaleString();
+    const buildDate = new Date().toISOString().split('T')[0];
+    const commitMessage = String(body.commitMessage || `release: v${version}`).trim();
+
+    fs.writeFileSync(versionPath, JSON.stringify({ version, buildDate, changelog }, null, 2));
     
     // Commands to run in sequence
     // Using simple auth in URL from config
@@ -2322,8 +2341,8 @@ app.post('/api/system/publish', async (req, res) => {
       `git config user.email "admin@aljabareen.com"`,
       `git config user.name "NetLink System AutoSync"`,
       `git add .`,
-      `git commit -m "System Sync: ${timestamp}" || echo "No changes to commit"`,
-      `git push origin main`
+      `git commit -m "${commitMessage.replace(/"/g, '\\"')}" || echo "No changes to commit"`,
+      `git push "${remoteUrl}" HEAD:main`
     ].join(' && ');
 
     exec(commands, { cwd: projectRoot }, (err, stdout, stderr) => {
@@ -2331,7 +2350,7 @@ app.post('/api/system/publish', async (req, res) => {
         console.error('Git Publish Error:', stderr);
         return res.status(500).json({ error: 'Publish failed.', details: stderr });
       }
-      res.json({ message: 'Changes published to GitHub successfully!' });
+      res.json({ message: 'Release published to GitHub successfully!', data: { version, buildDate, changelog } });
     });
 
   } catch (err) { res.status(500).json({ error: 'Server error during publish.' }); }

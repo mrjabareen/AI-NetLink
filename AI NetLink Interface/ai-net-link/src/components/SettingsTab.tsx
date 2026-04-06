@@ -10,7 +10,7 @@ import { Settings, User, Network, Cpu, CreditCard, Users, Shield, Save, Key, Dat
 import { AppState } from '../types';
 import { dict } from '../dict';
 import { formatNumber, normalizeDigits, parseNumericInput } from '../utils/format';
-import { getGatewaysConfig, saveGatewaysConfig, getWhatsappStatus, restartWhatsappEngine, getNetworkConfig, saveNetworkConfig, testMikrotikConnection, checkSystemUpdate, startSystemUpdate, publishSystemToGithub } from '../api';
+import { getGatewaysConfig, saveGatewaysConfig, getWhatsappStatus, restartWhatsappEngine, getNetworkConfig, saveNetworkConfig, testMikrotikConnection, BASE_URL, checkSystemUpdate, startSystemUpdate, publishSystemToGithub } from '../api';
 import NumericInput from './NumericInput';
 import DateInput from './DateInput';
 
@@ -18,6 +18,12 @@ interface SettingsTabProps {
   state: AppState;
   setState: React.Dispatch<React.SetStateAction<AppState>>;
 }
+
+const getNextPatchVersion = (version: string) => {
+  const parts = String(version || '').split('.').map(Number);
+  if (parts.length !== 3 || parts.some(Number.isNaN)) return '1.0.0';
+  return `${parts[0]}.${parts[1]}.${parts[2] + 1}`;
+};
 
 export default function SettingsTab({ state, setState }: SettingsTabProps) {
   const t = dict[state.lang];
@@ -35,6 +41,8 @@ export default function SettingsTab({ state, setState }: SettingsTabProps) {
   const [gateways, setGateways] = useState<any>(null);
   const [waStatus, setWaStatus] = useState<any>(null);
   const [isPublishing, setIsPublishing] = useState(false);
+  const [releaseVersion, setReleaseVersion] = useState(() => getNextPatchVersion(state.versionInfo.version));
+  const [releaseNotes, setReleaseNotes] = useState(() => (state.versionInfo.changelog || []).join('\n'));
 
   React.useEffect(() => {
     if (activeCategory === 'gateways') {
@@ -43,6 +51,10 @@ export default function SettingsTab({ state, setState }: SettingsTabProps) {
       return () => clearInterval(interval);
     }
   }, [activeCategory]);
+
+  React.useEffect(() => {
+    setReleaseVersion(getNextPatchVersion(state.versionInfo.version));
+  }, [state.versionInfo.version]);
 
   const loadGatewaysOnce = async () => {
     const g = await getGatewaysConfig();
@@ -101,10 +113,41 @@ export default function SettingsTab({ state, setState }: SettingsTabProps) {
   };
 
   const handlePublishToGithub = async () => {
+    const changelog = releaseNotes.split('\n').map(line => line.trim()).filter(Boolean);
+    if (!releaseVersion.trim() || changelog.length === 0) {
+      alert(t.settings.update.releaseRequired);
+      return;
+    }
+
     setIsPublishing(true);
     try {
-      await publishSystemToGithub();
-      alert(t.settings.update.publishSuccess);
+      const result = await publishSystemToGithub({
+        version: releaseVersion.trim(),
+        changelog,
+        commitMessage: `release: v${releaseVersion.trim()}`
+      });
+
+      const published = result.data || {
+        version: releaseVersion.trim(),
+        buildDate: new Date().toISOString().split('T')[0],
+        changelog
+      };
+
+      setState(prev => ({
+        ...prev,
+        versionInfo: published,
+        updateStatus: {
+          ...prev.updateStatus,
+          hasUpdate: false,
+          latestVersion: null,
+          checking: false,
+          error: undefined
+        }
+      }));
+
+      setReleaseVersion(getNextPatchVersion(published.version));
+      setReleaseNotes('');
+      alert(`${t.settings.update.publishSuccess} v${published.version}`);
     } catch (err: any) {
       alert(err.message || 'Publish failed');
     } finally {
@@ -1164,6 +1207,32 @@ export default function SettingsTab({ state, setState }: SettingsTabProps) {
                     </div>
                   </div>
 
+                  <div className="space-y-3 p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/40">
+                    <div className="space-y-1">
+                      <label className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">{t.settings.update.releaseVersion}</label>
+                      <input
+                        type="text"
+                        value={releaseVersion}
+                        onChange={(e) => setReleaseVersion(e.target.value)}
+                        disabled={state.updateStatus.checking || isPublishing}
+                        placeholder="1.0.5"
+                        className="w-full bg-white dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2.5 text-sm text-slate-800 dark:text-slate-200 focus:outline-none focus:border-teal-500 font-mono disabled:opacity-60"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">{t.settings.update.releaseNotes}</label>
+                      <textarea
+                        rows={4}
+                        value={releaseNotes}
+                        onChange={(e) => setReleaseNotes(e.target.value)}
+                        disabled={state.updateStatus.checking || isPublishing}
+                        placeholder={t.settings.update.releasePlaceholder}
+                        className="w-full bg-white dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-800 dark:text-slate-200 focus:outline-none focus:border-teal-500 resize-none disabled:opacity-60"
+                      />
+                    </div>
+                    <p className="text-[10px] text-slate-500 dark:text-slate-400">{t.settings.update.publishHelp}</p>
+                  </div>
+
                   <div className="flex flex-wrap items-center gap-2">
                     <button 
                       onClick={handleCheckUpdate}
@@ -1194,6 +1263,11 @@ export default function SettingsTab({ state, setState }: SettingsTabProps) {
                   </div>
                   {state.updateStatus.error && (
                     <p className="text-[10px] text-rose-500 font-bold text-center uppercase tracking-wider">{state.updateStatus.error}</p>
+                  )}
+                  {state.updateStatus.latestVersion && (
+                    <p className="text-[10px] text-center text-amber-600 dark:text-amber-400 font-bold">
+                      {t.settings.update.latestVersion}: v{state.updateStatus.latestVersion}
+                    </p>
                   )}
                 </div>
               </div>
