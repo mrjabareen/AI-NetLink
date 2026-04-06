@@ -565,8 +565,12 @@ export const startSystemUpdate = async () => {
     return await res.json();
 };
 
-export const publishSystemToGithub = async () => {
-    const res = await fetch(`${BASE_URL}/system/publish`, { method: 'POST' });
+export const publishSystemToGithub = async (payload: { version: string; changelog: string[]; commitMessage?: string }) => {
+    const res = await fetch(`${BASE_URL}/system/publish`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+    });
     if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         throw new Error(data.error || 'Failed to publish to GitHub');

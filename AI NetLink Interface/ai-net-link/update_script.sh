@@ -3,13 +3,20 @@
 # © 2026 NetLink - System Update Script
 # Generated for: Muhammad Rateb Jabarin
 
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+
 echo "Starting AI NetLink Professional Update..."
 
 # 1. Pull latest code from GitHub
-git pull origin main
+cd "$PROJECT_ROOT"
+git config pull.rebase false
+git pull --no-rebase origin main
 
 # 2. Build Frontend (React)
-cd "AI NetLink Interface/ai-net-link"
+cd "$SCRIPT_DIR"
 npm install
 npm run build
 

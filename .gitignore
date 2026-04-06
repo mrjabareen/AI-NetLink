@@ -1,0 +1,52 @@
+# NetLink Enterprise Database - DO NOT COMMIT
+NetLink Enterprise DB/
+
+# WhatsApp session data
+*.session
+*.session-journal
+
+# Environment variables and secrets
+.env
+.env.local
+.env.production
+
+# Log files
+*.log
+logs/
+
+# Runtime data
+pids/
+*.pid
+*.seed
+
+# Dependency directories
+node_modules/
+
+# Build outputs
+dist/
+build/
+uploads/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Temporary files
+.tmp/
+temp/
+
+# App cache and local debug helpers
+AI NetLink Interface/ai-net-link/.wwebjs_cache/
+AI NetLink Interface/ai-net-link/check_json.js
+AI NetLink Interface/ai-net-link/check_json.mjs
+AI NetLink Interface/ai-net-link/check_tags.js
+AI NetLink Interface/ai-net-link/test_api.mjs
+AI NetLink Interface/ai-net-link/update_tab.cjs
+AI NetLink Interface/ai-net-link/update_tab.js
+AI NetLink Interface/ai-net-link/metadata.json

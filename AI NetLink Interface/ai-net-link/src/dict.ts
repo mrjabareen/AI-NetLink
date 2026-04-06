@@ -236,9 +236,15 @@ export const dict = {
         restartMsg: "System will restart after update.",
         version: "Version",
         buildDate: "Build Date",
-        publish: "Publish to GitHub",
-        publishing: "Publishing Changes...",
-        publishSuccess: "Changes published successfully!"
+        publish: "Publish Release to GitHub",
+        publishing: "Publishing Release...",
+        publishSuccess: "Release published successfully!",
+        releaseVersion: "Next Version",
+        releaseNotes: "Release Notes",
+        releasePlaceholder: "Add one change per line",
+        publishHelp: "This button updates version.json and pushes the latest code to GitHub main.",
+        latestVersion: "Latest Available",
+        releaseRequired: "Version and release notes are required."
       },
       profile: {
         language: "Language",
@@ -690,9 +696,15 @@ export const dict = {
         restartMsg: "سيتم إعادة تشغيل النظام بعد التحديث.",
         version: "الإصدار",
         buildDate: "تاريخ البناء",
-        publish: "نشر التعديلات إلى GitHub",
-        publishing: "جاري نشر التعديلات...",
-        publishSuccess: "تم نشر التعديلات بنجاح!"
+        publish: "نشر إصدار جديد إلى GitHub",
+        publishing: "جاري نشر الإصدار...",
+        publishSuccess: "تم نشر الإصدار بنجاح!",
+        releaseVersion: "الإصدار التالي",
+        releaseNotes: "سجل التغييرات",
+        releasePlaceholder: "ضع كل تغيير في سطر مستقل",
+        publishHelp: "هذا الزر يحدث version.json ويدفع آخر نسخة إلى GitHub على فرع main.",
+        latestVersion: "أحدث إصدار متاح",
+        releaseRequired: "رقم الإصدار وسجل التغييرات مطلوبان."
       },
       profile: {
         language: "اللغة",
