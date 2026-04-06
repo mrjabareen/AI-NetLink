@@ -2257,28 +2257,33 @@ app.get('/api/system/check-update', async (req, res) => {
     const localData = JSON.parse(fs.readFileSync(localVersionPath, 'utf-8'));
     const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
 
-    // Construct Raw URL for private repo
-    // Example: https://raw.githubusercontent.com/mrjabareen/AI-NetLink/main/public/version.json
     const repoParts = config.repo_url.replace('.git', '').split('/');
     const repoOwner = repoParts[repoParts.length - 2];
     const repoName = repoParts[repoParts.length - 1];
-    
-    const rawUrl = `https://raw.githubusercontent.com/${repoOwner}/${repoName}/main/AI%20NetLink%20Interface/ai-net-link/public/version.json`;
 
-    // Fetch from GitHub with PAT authentication
-    const response = await fetch(rawUrl, {
-      headers: { 'Authorization': `token ${config.pat}`, 'Accept': 'application/vnd.github.v3.raw' }
-    });
+    const remotePath = 'AI NetLink Interface/ai-net-link/public/version.json';
+    const apiUrl = `https://api.github.com/repos/${repoOwner}/${repoName}/contents/${encodeURIComponent(remotePath)}?ref=main`;
+    const headers = { 'Accept': 'application/vnd.github+json' };
+    if (config.pat && !config.pat.includes('your_personal_access_token_here')) {
+      headers.Authorization = `token ${config.pat}`;
+    }
+
+    const response = await fetch(apiUrl, { headers });
 
     if (!response.ok) throw new Error('Failed to fetch remote version');
-    
-    const remoteData = await response.json();
-    
+
+    const remoteMeta = await response.json();
+    if (!remoteMeta.content) throw new Error('Remote version payload is empty');
+
+    const remoteText = Buffer.from(String(remoteMeta.content).replace(/\n/g, ''), 'base64').toString('utf-8');
+    const remoteData = JSON.parse(remoteText);
+
     res.json({ 
       data: {
         current: localData.version,
         latest: remoteData.version,
         hasUpdate: localData.version !== remoteData.version,
+        buildDate: remoteData.buildDate || null,
         changelog: remoteData.changelog || []
       } 
     });

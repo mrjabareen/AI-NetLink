@@ -557,24 +557,18 @@ export const fetchRoutersList = async () => {
 // System Update & Sync
 export const checkSystemUpdate = async () => {
     const res = await fetch(`${BASE_URL}/system/check-update`);
+    if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || 'Failed to check for updates');
+    }
     return await res.json();
 };
 
 export const startSystemUpdate = async () => {
     const res = await fetch(`${BASE_URL}/system/update`, { method: 'POST' });
-    return await res.json();
-};
-
-export const publishSystemToGithub = async (payload: { pin: string }) => {
-    const res = await fetch(`${BASE_URL}/system/publish`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-    });
     if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        const message = [data.error, data.details].filter(Boolean).join('\n') || 'Failed to publish to GitHub';
-        throw new Error(message);
+        throw new Error(data.error || 'Failed to start update');
     }
     return await res.json();
 };

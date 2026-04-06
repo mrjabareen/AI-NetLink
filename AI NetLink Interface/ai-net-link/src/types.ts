@@ -19,6 +19,8 @@ export interface VersionInfo {
 export interface UpdateStatus {
   hasUpdate: boolean;
   latestVersion: string | null;
+  latestBuildDate?: string | null;
+  latestChangelog?: string[];
   checking: boolean;
   error?: string;
 }

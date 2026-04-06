@@ -6,11 +6,11 @@
  */
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
-import { Settings, User, Network, Cpu, CreditCard, Users, Shield, Save, Key, Database, Server, Lock, Bell, Globe, Moon, Sun, Plus, Trash2, TrendingUp, RefreshCw, Clock, CheckCircle2, XCircle, DollarSign, Calendar, Percent, Eye, EyeOff, Mail, Send, Smartphone, ScanLine, Activity, MessageSquare, QrCode, ShieldCheck, Search, Download, CloudUpload } from 'lucide-react';
+import { Settings, User, Network, Cpu, CreditCard, Users, Shield, Save, Key, Database, Server, Lock, Bell, Globe, Moon, Sun, Plus, Trash2, TrendingUp, RefreshCw, Clock, CheckCircle2, XCircle, DollarSign, Calendar, Percent, Eye, EyeOff, Mail, Send, Smartphone, ScanLine, Activity, MessageSquare, QrCode, ShieldCheck, Search, Download } from 'lucide-react';
 import { AppState } from '../types';
 import { dict } from '../dict';
 import { formatNumber, normalizeDigits, parseNumericInput } from '../utils/format';
-import { getGatewaysConfig, saveGatewaysConfig, getWhatsappStatus, restartWhatsappEngine, getNetworkConfig, saveNetworkConfig, testMikrotikConnection, BASE_URL, checkSystemUpdate, startSystemUpdate, publishSystemToGithub } from '../api';
+import { getGatewaysConfig, saveGatewaysConfig, getWhatsappStatus, restartWhatsappEngine, getNetworkConfig, saveNetworkConfig, testMikrotikConnection, BASE_URL, checkSystemUpdate, startSystemUpdate } from '../api';
 import NumericInput from './NumericInput';
 import DateInput from './DateInput';
 
@@ -34,8 +34,6 @@ export default function SettingsTab({ state, setState }: SettingsTabProps) {
   const [isAddingMember, setIsAddingMember] = useState(false);
   const [gateways, setGateways] = useState<any>(null);
   const [waStatus, setWaStatus] = useState<any>(null);
-  const [isPublishing, setIsPublishing] = useState(false);
-  const [publishPin, setPublishPin] = useState('');
 
   React.useEffect(() => {
     if (activeCategory === 'gateways') {
@@ -77,7 +75,10 @@ export default function SettingsTab({ state, setState }: SettingsTabProps) {
         updateStatus: {
           hasUpdate,
           latestVersion: hasUpdate ? latestVersion : null,
-          checking: false
+          latestBuildDate: hasUpdate ? payload.buildDate || null : null,
+          latestChangelog: hasUpdate ? payload.changelog || [] : [],
+          checking: false,
+          error: undefined
         }
       }));
     } catch (err) {
@@ -98,45 +99,6 @@ export default function SettingsTab({ state, setState }: SettingsTabProps) {
       alert(result.message || (isRTL ? 'بدأ التحديث! سيقوم النظام بإعادة التشغيل تلقائياً.' : 'Update started! The system will restart automatically.'));
     } catch (err) {
       setState(prev => ({ ...prev, updateStatus: { ...prev.updateStatus, checking: false, error: 'Update failed' } }));
-    }
-  };
-
-  const handlePublishToGithub = async () => {
-    if (!publishPin.trim()) {
-      alert(t.settings.update.invalidPin);
-      return;
-    }
-
-    setIsPublishing(true);
-    try {
-      const result = await publishSystemToGithub({
-        pin: publishPin
-      });
-
-      const published = result.data || {
-        version: state.versionInfo.version,
-        buildDate: state.versionInfo.buildDate,
-        changelog: state.versionInfo.changelog
-      };
-
-      setState(prev => ({
-        ...prev,
-        versionInfo: published,
-        updateStatus: {
-          ...prev.updateStatus,
-          hasUpdate: false,
-          latestVersion: null,
-          checking: false,
-          error: undefined
-        }
-      }));
-
-      setPublishPin('');
-      alert(`${t.settings.update.publishSuccess} v${published.version}`);
-    } catch (err: any) {
-      alert(err.message || 'Publish failed');
-    } finally {
-      setIsPublishing(false);
     }
   };
 
@@ -1192,42 +1154,36 @@ export default function SettingsTab({ state, setState }: SettingsTabProps) {
                     </div>
                   </div>
 
-                  <div className="space-y-3 p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/40">
-                    <div className="space-y-1">
-                      <label className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">{t.settings.update.publishPin}</label>
-                      <input
-                        type="password"
-                        value={publishPin}
-                        onChange={(e) => setPublishPin(e.target.value)}
-                        disabled={state.updateStatus.checking || isPublishing}
-                        placeholder={t.settings.update.publishPinPlaceholder}
-                        className="w-full bg-white dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2.5 text-sm text-slate-800 dark:text-slate-200 focus:outline-none focus:border-teal-500 font-mono disabled:opacity-60"
-                      />
-                    </div>
-                    <p className="text-[10px] text-slate-500 dark:text-slate-400">{t.settings.update.publishHelp}</p>
+                  <div className="space-y-2 p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/40">
+                    <p className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">
+                      {state.updateStatus.hasUpdate ? t.settings.update.availableNotes : t.settings.update.currentNotes}
+                    </p>
+                    {(state.updateStatus.hasUpdate ? state.updateStatus.latestChangelog : state.versionInfo.changelog)?.length ? (
+                      <div className="space-y-2">
+                        {(state.updateStatus.hasUpdate ? state.updateStatus.latestChangelog : state.versionInfo.changelog).map((item, index) => (
+                          <div key={`${item}-${index}`} className="text-sm text-slate-700 dark:text-slate-300 rounded-xl bg-white/70 dark:bg-[#18181B] px-3 py-2 border border-slate-200 dark:border-slate-700">
+                            {item}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-slate-500 dark:text-slate-400">{t.settings.update.noNotes}</p>
+                    )}
                   </div>
 
                   <div className="flex flex-wrap items-center gap-2">
                     <button 
                       onClick={handleCheckUpdate}
-                      disabled={state.updateStatus.checking || isPublishing}
+                      disabled={state.updateStatus.checking}
                       className="flex-1 min-w-[140px] px-4 py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 disabled:opacity-50"
                     >
                       {state.updateStatus.checking ? <RefreshCw size={14} className="animate-spin" /> : <Search size={14} />}
-                      {t.settings.update.checking}
-                    </button>
-                    <button 
-                      onClick={handlePublishToGithub}
-                      disabled={state.updateStatus.checking || isPublishing}
-                      className="flex-1 min-w-[140px] px-4 py-2.5 bg-teal-500/10 hover:bg-teal-500/20 text-teal-600 dark:text-teal-400 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 border border-teal-500/20 disabled:opacity-50"
-                    >
-                      {isPublishing ? <RefreshCw size={14} className="animate-spin" /> : <CloudUpload size={14} />}
-                      {isPublishing ? t.settings.update.publishing : t.settings.update.publish}
+                      {t.settings.update.checkNow}
                     </button>
                     {state.updateStatus.hasUpdate && (
                       <button 
                         onClick={handleUpdateSystem}
-                        disabled={state.updateStatus.checking || isPublishing}
+                        disabled={state.updateStatus.checking}
                         className="w-full mt-2 px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-lg shadow-blue-600/20 flex items-center justify-center gap-2"
                       >
                         <Download size={14} />
@@ -1239,34 +1195,12 @@ export default function SettingsTab({ state, setState }: SettingsTabProps) {
                     <p className="text-[10px] text-rose-500 font-bold text-center uppercase tracking-wider">{state.updateStatus.error}</p>
                   )}
                   {state.updateStatus.latestVersion && (
-                    <p className="text-[10px] text-center text-amber-600 dark:text-amber-400 font-bold">
-                      {t.settings.update.latestVersion}: v{state.updateStatus.latestVersion}
-                    </p>
+                    <div className="text-[10px] text-center text-amber-600 dark:text-amber-400 font-bold space-y-1">
+                      <p>{t.settings.update.latestVersion}: v{state.updateStatus.latestVersion}</p>
+                      {state.updateStatus.latestBuildDate && <p>{t.settings.update.buildDate}: {state.updateStatus.latestBuildDate}</p>}
+                    </div>
                   )}
                 </div>
-              </div>
-
-              <div className="p-4 sm:p-6 rounded-3xl border border-emerald-200 dark:border-emerald-500/20 bg-emerald-50/70 dark:bg-emerald-500/5 shadow-sm space-y-4 lg:col-span-2">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <div className="space-y-1">
-                    <h4 className="font-bold text-emerald-800 dark:text-emerald-300 flex items-center gap-2">
-                      <CheckCircle2 size={18} />
-                      {t.settings.update.syncTestTitle}
-                    </h4>
-                    <p className="text-xs text-emerald-700/80 dark:text-emerald-300/80">
-                      {t.settings.update.syncTestDesc}
-                    </p>
-                  </div>
-                  <span className="px-3 py-1 rounded-xl bg-white dark:bg-[#0F172A] border border-emerald-200 dark:border-emerald-500/20 text-[10px] font-extrabold text-emerald-700 dark:text-emerald-300 tracking-wider">
-                    {t.settings.update.syncTestCode}
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-bold transition-all shadow-lg shadow-emerald-600/20"
-                >
-                  {t.settings.update.syncTestButton}
-                </button>
               </div>
 
               {/* Developer & Company Card */}
