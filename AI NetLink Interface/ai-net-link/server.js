@@ -2301,16 +2301,25 @@ app.post('/api/system/update', async (req, res) => {
   const updateScript = path.join(__dirname, 'update_script.sh');
   const projectRoot = path.resolve(__dirname, '../../');
   if (!fs.existsSync(updateScript)) return res.status(500).json({ error: 'Update script not found' });
-  
-  // EXECUTE UPDATE SCRIPT
-  exec(`bash "${updateScript}"`, { cwd: projectRoot }, (err, stdout, stderr) => {
-    if (err) {
-      console.error('Update script execution failed:', stderr);
-      return res.status(500).json({ error: 'Update execution failed.' });
-    }
-    console.log('Update script output:', stdout);
-    res.json({ message: 'Update started successfully! System will reboot.' });
-  });
+
+  try {
+    const updateLogPath = path.join(projectRoot, 'update-run.log');
+    const outFd = fs.openSync(updateLogPath, 'a');
+
+    const child = require('child_process').spawn('bash', [updateScript], {
+      cwd: projectRoot,
+      detached: true,
+      stdio: ['ignore', outFd, outFd]
+    });
+
+    child.unref();
+    fs.closeSync(outFd);
+
+    return res.json({ message: 'Update started successfully! System will reboot.' });
+  } catch (err) {
+    console.error('Update script start failed:', err);
+    return res.status(500).json({ error: 'Update execution failed.' });
+  }
 });
 
 app.post('/api/system/publish', async (req, res) => {
