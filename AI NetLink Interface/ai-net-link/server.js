@@ -1122,7 +1122,10 @@ const startWhatsAppEngine = () => {
     
     waClient = new Client({
         authStrategy: new LocalAuth({ dataPath: path.join(DB_PATH, 'System', 'whatsapp-auth') }),
-        puppeteer: { args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-accelerated-2d-canvas', '--disable-gpu'] }
+        puppeteer: { 
+            executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium',
+            args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-accelerated-2d-canvas', '--disable-gpu'] 
+        }
     });
 
     waClient.on('qr', (qr) => {
@@ -2217,12 +2220,12 @@ app.get('/api/system/check-update', async (req, res) => {
     const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
 
     // Construct Raw URL for private repo
-    // Example: https://raw.githubusercontent.com/mrjabareen/AI-NetLink/main/AI%20NetLink%20Interface/ai-net-link/public/version.json
+    // Example: https://raw.githubusercontent.com/mrjabareen/AI-NetLink/main/public/version.json
     const repoParts = config.repo_url.replace('.git', '').split('/');
     const repoOwner = repoParts[repoParts.length - 2];
     const repoName = repoParts[repoParts.length - 1];
     
-    const rawUrl = `https://raw.githubusercontent.com/${repoOwner}/${repoName}/main/AI%20NetLink%20Interface/ai-net-link/public/version.json`;
+    const rawUrl = `https://raw.githubusercontent.com/${repoOwner}/${repoName}/main/public/version.json`;
 
     // Fetch from GitHub with PAT authentication
     const response = await fetch(rawUrl, {
