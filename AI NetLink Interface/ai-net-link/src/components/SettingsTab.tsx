@@ -19,12 +19,6 @@ interface SettingsTabProps {
   setState: React.Dispatch<React.SetStateAction<AppState>>;
 }
 
-const getNextPatchVersion = (version: string) => {
-  const parts = String(version || '').split('.').map(Number);
-  if (parts.length !== 3 || parts.some(Number.isNaN)) return '1.0.0';
-  return `${parts[0]}.${parts[1]}.${parts[2] + 1}`;
-};
-
 export default function SettingsTab({ state, setState }: SettingsTabProps) {
   const t = dict[state.lang];
   const isRTL = state.lang === 'ar';
@@ -41,7 +35,7 @@ export default function SettingsTab({ state, setState }: SettingsTabProps) {
   const [gateways, setGateways] = useState<any>(null);
   const [waStatus, setWaStatus] = useState<any>(null);
   const [isPublishing, setIsPublishing] = useState(false);
-  const [releaseVersion, setReleaseVersion] = useState(() => getNextPatchVersion(state.versionInfo.version));
+  const [releaseVersion, setReleaseVersion] = useState(() => state.versionInfo.version || '');
   const [releaseNotes, setReleaseNotes] = useState(() => (state.versionInfo.changelog || []).join('\n'));
   const [publishPin, setPublishPin] = useState('');
 
@@ -54,8 +48,9 @@ export default function SettingsTab({ state, setState }: SettingsTabProps) {
   }, [activeCategory]);
 
   React.useEffect(() => {
-    setReleaseVersion(getNextPatchVersion(state.versionInfo.version));
-  }, [state.versionInfo.version]);
+    setReleaseVersion(state.versionInfo.version || '');
+    setReleaseNotes((state.versionInfo.changelog || []).join('\n'));
+  }, [state.versionInfo.version, state.versionInfo.changelog]);
 
   const loadGatewaysOnce = async () => {
     const g = await getGatewaysConfig();
@@ -151,8 +146,8 @@ export default function SettingsTab({ state, setState }: SettingsTabProps) {
         }
       }));
 
-      setReleaseVersion(getNextPatchVersion(published.version));
-      setReleaseNotes('');
+      setReleaseVersion(published.version || '');
+      setReleaseNotes((published.changelog || []).join('\n'));
       setPublishPin('');
       alert(`${t.settings.update.publishSuccess} v${published.version}`);
     } catch (err: any) {
