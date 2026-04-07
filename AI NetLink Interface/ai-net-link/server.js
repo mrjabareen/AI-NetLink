@@ -255,7 +255,7 @@ const buildSmallTalkReply = (language = 'ar') => (
 
 const buildIdentityReply = (language = 'ar') => (
   language === 'ar'
-    ? 'أنا مساعدك التنفيذي الذكي يا مديرتي. أستطيع البحث في البيانات الداخلية والملفات والويب ومساعدتك في المهام التي تطلبينها.'
+    ? 'أنا مساعدك التنفيذي الذكي. أستطيع البحث في البيانات الداخلية والملفات والويب ومساعدتك في المهام التي تطلبها.'
     : 'I am your Executive AI assistant. I can search internal data, files, and the web and help with the tasks you request.'
 );
 
@@ -513,8 +513,8 @@ const resolveProviderModel = (primaryModel = '', provider = {}) => {
 
 const buildExecutivePrompt = ({ query, language, stats, sources, history, includeStats, preferBrief, internetResults, internetRequested }) => {
   const intro = language === 'ar'
-    ? 'أنت المساعد التنفيذي الذكي الخاص بمديرة نظام AI NetLink. عامليها كصاحبة صلاحيات عليا. استخدم البيانات الداخلية عند الحاجة، ويمكنك أيضا الإجابة من معرفتك العامة. إذا طلبت الإنترنت واُعطيت نتائج ويب فاستفد منها بوضوح.'
-    : 'You are the Executive AI assistant for the AI NetLink director. Treat the user as a high-authority decision maker. Use internal data when relevant, and you may also answer from general knowledge. If the user requests the internet and web results are provided, use them clearly.';
+    ? 'أنت المساعد التنفيذي الذكي الخاص بنظام AI NetLink. تعامل مع المستخدم كصاحب صلاحيات عليا. استخدم البيانات الداخلية عند الحاجة، ويمكنك أيضا الإجابة من معرفتك العامة. إذا طلب الإنترنت واُعطيت نتائج ويب فاستفد منها بوضوح.'
+    : 'You are the Executive AI assistant for AI NetLink. Treat the user as a high-authority decision maker. Use internal data when relevant, and you may also answer from general knowledge. If the user requests the internet and web results are provided, use them clearly.';
 
   const statsText = language === 'ar'
     ? `إحصاءات سريعة: المشتركون ${stats.subscribers}، المدراء ${stats.managers}، الموردون ${stats.suppliers}، المستثمرون ${stats.investors}، IPTV ${stats.iptv}.`
@@ -546,7 +546,7 @@ ${sourcesText}
 ${internetRequested ? `Web Results:\n${internetText}\n` : ''}
 
 ${language === 'ar'
-  ? 'قدم الجواب بالعربية بشكل عملي ومختصر. إذا كان السؤال عامًا فجاوب طبيعيًا من معرفتك. إذا طلبت المديرة الإنترنت فاعتمد أيضًا على نتائج الويب المرفقة. لا تسرد المصادر أو المسارات أو أسماء الملفات أو الإحصاءات إلا إذا طلبت ذلك صراحة. لا تقل "المصادر" ولا "الوثائق المفيدة" داخل الجواب.'
+  ? 'قدم الجواب بالعربية بشكل عملي ومختصر. إذا كان السؤال عامًا فجاوب طبيعيًا من معرفتك. إذا طلب المستخدم الإنترنت فاعتمد أيضًا على نتائج الويب المرفقة. لا تسرد المصادر أو المسارات أو أسماء الملفات أو الإحصاءات إلا إذا طلبت ذلك صراحة. لا تقل "المصادر" ولا "الوثائق المفيدة" داخل الجواب.'
   : 'Answer in practical concise Arabic or English as needed. If the question is general, answer naturally from your knowledge. If the director requests the internet, also rely on the provided web results. Do not list sources, file paths, or stats unless explicitly requested. Do not include sections named Sources or Useful Documents.'}
 ${preferBrief ? (language === 'ar' ? '\nالآن التزم برد قصير جدا من سطر إلى سطرين فقط.' : '\nNow strictly answer in only 1 to 2 short lines.') : ''}
 `;

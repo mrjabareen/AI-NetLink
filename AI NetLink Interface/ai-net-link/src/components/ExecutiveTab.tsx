@@ -26,7 +26,7 @@ const createWelcomeMessage = (lang: 'ar' | 'en'): Message => ({
   sender: 'ai',
   text: lang === 'en'
     ? 'Welcome. I am your executive assistant. I can search internal data, inspect files, and use the web when you explicitly ask for it.'
-    : 'مرحباً مديرتي. أنا مساعدك التنفيذي. أستطيع البحث في البيانات الداخلية وفحص الملفات واستخدام الإنترنت عندما تطلبين ذلك صراحة.',
+    : 'مرحباً. أنا مساعدك التنفيذي. أستطيع البحث في البيانات الداخلية وفحص الملفات واستخدام الإنترنت عندما تطلب ذلك صراحة.',
   time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
 });
 
@@ -137,7 +137,7 @@ export default function ExecutiveTab({ state }: ExecutiveTabProps) {
           sender: 'ai',
           text: state.lang === 'en'
             ? 'Hello, I am ready. Ask me for a specific task.'
-            : 'مرحباً مديرتي، أنا جاهز. اطلبي مني مهمة محددة.',
+            : 'مرحباً، أنا جاهز. اطلب مني مهمة محددة.',
           time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           sources: [],
           stats: null,
@@ -154,7 +154,7 @@ export default function ExecutiveTab({ state }: ExecutiveTabProps) {
           sender: 'ai',
           text: state.lang === 'en'
             ? 'I am your executive AI assistant. I can search internal data, inspect files, and help with tasks you request.'
-            : 'أنا مساعدك التنفيذي الذكي يا مديرتي. أستطيع البحث في البيانات الداخلية وفحص الملفات والويب ومساعدتك في المهام التي تطلبينها.',
+            : 'أنا مساعدك التنفيذي الذكي. أستطيع البحث في البيانات الداخلية وفحص الملفات والويب ومساعدتك في المهام التي تطلبها.',
           time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           sources: [],
           stats: null,
