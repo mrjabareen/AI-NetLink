@@ -10,7 +10,7 @@ import { Settings, User, Network, Cpu, CreditCard, Users, Shield, Save, Key, Dat
 import { AppState } from '../types';
 import { dict } from '../dict';
 import { formatNumber, normalizeDigits, parseNumericInput } from '../utils/format';
-import { getGatewaysConfig, saveGatewaysConfig, getWhatsappStatus, restartWhatsappEngine, getNetworkConfig, saveNetworkConfig, testMikrotikConnection, BASE_URL, checkSystemUpdate, startSystemUpdate } from '../api';
+import { getGatewaysConfig, saveGatewaysConfig, getWhatsappStatus, restartWhatsappEngine, getNetworkConfig, saveNetworkConfig, testMikrotikConnection, BASE_URL, checkSystemUpdate, startSystemUpdate, testAiProvider } from '../api';
 import NumericInput from './NumericInput';
 import DateInput from './DateInput';
 
@@ -34,6 +34,7 @@ export default function SettingsTab({ state, setState }: SettingsTabProps) {
   const [isAddingMember, setIsAddingMember] = useState(false);
   const [gateways, setGateways] = useState<any>(null);
   const [waStatus, setWaStatus] = useState<any>(null);
+  const [aiTestingProviderId, setAiTestingProviderId] = useState<string | null>(null);
 
   React.useEffect(() => {
     if (activeCategory === 'gateways') {
@@ -83,6 +84,32 @@ export default function SettingsTab({ state, setState }: SettingsTabProps) {
     };
 
     window.setTimeout(poll, 6000);
+  };
+
+  const handleSaveAllSettings = () => {
+    localStorage.setItem('sas4_ai_settings', JSON.stringify(state.aiSettings));
+    alert(isRTL ? 'تم حفظ الإعدادات محليًا.' : 'Settings saved locally.');
+  };
+
+  const handleTestAiConnection = async (providerId: string) => {
+    try {
+      setAiTestingProviderId(providerId);
+      const result = await testAiProvider({
+        aiSettings: state.aiSettings,
+        providerId,
+        language: state.lang,
+      });
+
+      alert(
+        isRTL
+          ? `نجح الاتصال: ${result.provider?.name || providerId}`
+          : `Connection succeeded: ${result.provider?.name || providerId}`
+      );
+    } catch (error: any) {
+      alert(isRTL ? `فشل الاتصال: ${error.message}` : `Connection failed: ${error.message}`);
+    } finally {
+      setAiTestingProviderId(null);
+    }
   };
 
   const handleCheckUpdate = async () => {
@@ -403,7 +430,8 @@ export default function SettingsTab({ state, setState }: SettingsTabProps) {
                     <option value="gemini-3-flash-preview">Google Gemini 3 Flash</option>
                     <option value="gpt-4o">OpenAI GPT-4o</option>
                     <option value="claude-3-5-sonnet">Claude 3.5 Sonnet</option>
-                    <option value="grok-1">xAI Grok-1</option>
+                    <option value="grok-1">xAI Grok-1 / Groq Auto</option>
+                    <option value="llama-3.3-70b-versatile">Groq Llama 3.3 70B</option>
                     <option value="local-llama-3">Local Llama 3 (Ollama)</option>
                   </select>
                 </div>
@@ -459,14 +487,17 @@ export default function SettingsTab({ state, setState }: SettingsTabProps) {
                         </div>
                         
                         <div className="flex items-center gap-3">
-                          <button className="px-3 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 text-[10px] font-extrabold rounded-lg transition-colors flex items-center gap-1.5">
+                          <button onClick={() => handleTestAiConnection(provider.id)} className="px-3 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 text-[10px] font-extrabold rounded-lg transition-colors flex items-center gap-1.5">
                             <RefreshCw size={12} />
-                            {t.settings.ai.testConnection}
+                            {aiTestingProviderId === provider.id ? (isRTL ? 'جاري الفحص...' : 'Testing...') : t.settings.ai.testConnection}
                           </button>
                           <div 
                             onClick={() => {
-                              const newProviders = [...state.aiSettings.providers];
-                              newProviders[idx].enabled = !newProviders[idx].enabled;
+                              const nextEnabled = !provider.enabled;
+                              const newProviders = state.aiSettings.providers.map((item, itemIdx) => ({
+                                ...item,
+                                enabled: itemIdx === idx ? nextEnabled : (nextEnabled ? false : item.enabled),
+                              }));
                               setState(prev => ({ ...prev, aiSettings: { ...prev.aiSettings, providers: newProviders } }));
                             }}
                             className={`w-12 h-6 rounded-full relative cursor-pointer transition-colors ${provider.enabled ? 'bg-teal-500' : 'bg-slate-300 dark:bg-slate-700'}`}
@@ -1351,7 +1382,7 @@ export default function SettingsTab({ state, setState }: SettingsTabProps) {
           
           {/* Global Save Button */}
           <div className="mt-8 pt-6 border-t border-slate-200 dark:border-slate-800 flex justify-end">
-            <button className="px-6 py-2.5 bg-teal-500 hover:bg-teal-600 text-white rounded-xl text-sm font-bold transition-colors shadow-lg shadow-teal-500/20 flex items-center gap-2">
+            <button onClick={handleSaveAllSettings} className="px-6 py-2.5 bg-teal-500 hover:bg-teal-600 text-white rounded-xl text-sm font-bold transition-colors shadow-lg shadow-teal-500/20 flex items-center gap-2">
               <Save size={16} /> {t.settings.save}
             </button>
           </div>

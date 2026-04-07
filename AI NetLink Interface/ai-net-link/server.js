@@ -93,6 +93,693 @@ const readJson = (filePath) => {
 const sanitizeFileName = (value) => String(value || '').replace(/[\\/:*?"<>|]/g, '').trim();
 
 // ==========================================
+// Executive AI Helpers
+// ==========================================
+const KNOWLEDGE_BASE_PATH = process.env.KNOWLEDGE_BASE_PATH || path.resolve(__dirname, '../../NetLink Enterprise DB/[02_KNOWLEDGE_BASE]');
+const SYSTEM_CORE_PATH = process.env.SYSTEM_CORE_PATH || path.resolve(__dirname, '../../NetLink Enterprise DB/[03_SYSTEM_CORE]');
+const SEARCHABLE_EXTENSIONS = new Set(['.json', '.md', '.txt']);
+const SEARCH_SKIP_DIRS = new Set([
+  '.git',
+  'node_modules',
+  'whatsapp-auth',
+  'session',
+  'Cache',
+  'Cache_Data',
+  'Code Cache',
+  'GPUCache',
+  'Service Worker',
+  'Session Storage',
+  'IndexedDB',
+  'Local Storage',
+  'Codecs',
+]);
+
+const SEARCH_STOP_WORDS = new Set([
+  'كيف', 'من', 'عن', 'على', 'في', 'الى', 'إلى', 'ما', 'ماذا', 'هل', 'هو', 'هي', 'هذا', 'هذه',
+  'هناك', 'عندي', 'عنك', 'عنه', 'علي', 'عليه', 'اذا', 'إذا', 'فقط', 'جدا', 'جداً', 'اي', 'أي',
+  'انت', 'أنت', 'انا', 'أنا', 'مع', 'او', 'أو', 'ثم', 'كان', 'كانت', 'يكون', 'تكون', 'لقد',
+  'ابحث', 'اعطني', 'اعرض', 'لخص', 'اختصر', 'بردودك', 'لا', 'تطل', 'علي',
+  'how', 'what', 'who', 'where', 'when', 'why', 'the', 'a', 'an', 'and', 'or', 'to', 'for', 'of', 'in', 'on', 'at', 'is', 'are',
+]);
+
+const normalizeSearchText = (value = '') => String(value)
+  .toLowerCase()
+  .replace(/[^\p{L}\p{N}\s._/\-]+/gu, ' ')
+  .replace(/\s+/g, ' ')
+  .trim();
+
+const cleanUserQuery = (value = '') => String(value)
+  .replace(/^[\s\-*•.،]+/u, '')
+  .replace(/\s+/g, ' ')
+  .trim();
+
+const tokenizeSearchQuery = (value = '') => [...new Set(
+  normalizeSearchText(cleanUserQuery(value))
+    .split(' ')
+    .map(token => token.trim())
+    .filter(token => token.length >= 2 && !SEARCH_STOP_WORDS.has(token))
+)];
+
+const collectSearchableFiles = (dirPath, results = []) => {
+  if (!fs.existsSync(dirPath)) return results;
+
+  for (const entry of fs.readdirSync(dirPath, { withFileTypes: true })) {
+    if (SEARCH_SKIP_DIRS.has(entry.name)) continue;
+    const fullPath = path.join(dirPath, entry.name);
+    if (entry.isDirectory()) {
+      collectSearchableFiles(fullPath, results);
+      continue;
+    }
+
+    const ext = path.extname(entry.name).toLowerCase();
+    if (!SEARCHABLE_EXTENSIONS.has(ext)) continue;
+
+    try {
+      const stat = fs.statSync(fullPath);
+      if (stat.size > 1024 * 1024) continue;
+      results.push(fullPath);
+    } catch {
+      // Ignore unreadable files.
+    }
+  }
+
+  return results;
+};
+
+const readSearchableFileText = (filePath) => {
+  try {
+    const ext = path.extname(filePath).toLowerCase();
+    const raw = stripBom(fs.readFileSync(filePath, 'utf-8'));
+    if (ext === '.json') {
+      const parsed = JSON.parse(raw);
+      return JSON.stringify(parsed, null, 2);
+    }
+    return raw;
+  } catch {
+    return '';
+  }
+};
+
+const buildSearchSnippet = (content, tokens = []) => {
+  const text = String(content || '').replace(/\s+/g, ' ').trim();
+  if (!text) return '';
+
+  const lowered = text.toLowerCase();
+  let hitIndex = 0;
+  for (const token of tokens) {
+    const idx = lowered.indexOf(token.toLowerCase());
+    if (idx >= 0) {
+      hitIndex = idx;
+      break;
+    }
+  }
+
+  const start = Math.max(0, hitIndex - 120);
+  const end = Math.min(text.length, start + 420);
+  return text.slice(start, end).trim();
+};
+
+const getExecutiveStats = () => {
+  const countJsonFiles = (...parts) => {
+    const dirPath = getSafePath(DB_PATH, ...parts);
+    try {
+      if (!fs.existsSync(dirPath)) return 0;
+      return fs.readdirSync(dirPath).filter(file => file.endsWith('.json')).length;
+    } catch {
+      return 0;
+    }
+  };
+
+  return {
+    subscribers: countJsonFiles('Subscribers'),
+    managers: countJsonFiles('Financial', 'System_Managers'),
+    suppliers: countJsonFiles('Financial', 'Suppliers'),
+    investors: countJsonFiles('Financial', 'Investors'),
+    iptv: countJsonFiles('System_IPTV', 'Subscribers'),
+  };
+};
+
+const isSmallTalkQuery = (query = '') => {
+  const normalized = normalizeSearchText(cleanUserQuery(query));
+  if (!normalized) return false;
+
+  const exactMatches = new Set([
+    'مرحبا',
+    'مرحباً',
+    'اهلا',
+    'أهلا',
+    'اهلا وسهلا',
+    'السلام عليكم',
+    'هلا',
+    'hi',
+    'hello',
+    'hey',
+    'good morning',
+    'good evening',
+  ]);
+
+  if (exactMatches.has(normalized)) return true;
+  return normalized.split(' ').length <= 3 && /^(مرحبا|مرحباً|اهلا|أهلا|السلام عليكم|هلا|hi|hello|hey)\b/i.test(normalized);
+};
+
+const isIdentityQuery = (query = '') => {
+  const normalized = normalizeSearchText(cleanUserQuery(query));
+  return /^(من انت|من أنت|مين انت|مين أنت|عرفني بنفسك|who are you|what are you)$/i.test(normalized);
+};
+
+const buildSmallTalkReply = (language = 'ar') => (
+  language === 'ar'
+    ? 'مرحباً، أنا جاهز. اطلب مني شيئًا محددًا مثل: ابحث عن برمجة LiteBeam، اعرض بيانات المشتركين، أو لخص الباقات.'
+    : 'Hello, I am ready. Ask me something specific such as: find the LiteBeam programming guide, show subscriber data, or summarize packages.'
+);
+
+const buildIdentityReply = (language = 'ar') => (
+  language === 'ar'
+    ? 'أنا مساعدك التنفيذي الذكي يا مديرتي. أستطيع البحث في البيانات الداخلية والملفات والويب ومساعدتك في المهام التي تطلبينها.'
+    : 'I am your Executive AI assistant. I can search internal data, files, and the web and help with the tasks you request.'
+);
+
+const isInternetRequest = (query = '') => {
+  const normalized = normalizeSearchText(cleanUserQuery(query));
+  return /(ابحث في الانترنت|ابحث في الإنترنت|من الانترنت|من الإنترنت|في الانترنت|في الإنترنت|الويب|على الويب|اونلاين|online|internet|web|google it|search online|search the web)/i.test(normalized);
+};
+
+const isAffirmativeQuery = (query = '') => /^(نعم|نعم اريد|نعم أريد|نعم ارغب|نعم أرغب|اكيد|أكيد|تمام|موافق|yes|sure|ok|okay|please do)$/i.test(normalizeSearchText(cleanUserQuery(query)));
+
+const stripInternetCommand = (query = '') => {
+  return cleanUserQuery(String(query || ''))
+    .replace(/ابحث في الانترنت عن/gi, '')
+    .replace(/ابحث في الإنترنت عن/gi, '')
+    .replace(/ابحث على الويب عن/gi, '')
+    .replace(/search the web for/gi, '')
+    .replace(/search online for/gi, '')
+    .replace(/google it/gi, '')
+    .trim();
+};
+
+const decodeHtmlEntities = (text = '') => String(text)
+  .replace(/&amp;/g, '&')
+  .replace(/&quot;/g, '"')
+  .replace(/&#39;/g, "'")
+  .replace(/&lt;/g, '<')
+  .replace(/&gt;/g, '>')
+  .replace(/<[^>]+>/g, '')
+  .replace(/\s+/g, ' ')
+  .trim();
+
+const normalizeDuckDuckGoUrl = (rawUrl = '') => {
+  try {
+    const url = new URL(rawUrl, 'https://html.duckduckgo.com');
+    const uddg = url.searchParams.get('uddg');
+    return uddg ? decodeURIComponent(uddg) : url.toString();
+  } catch {
+    return rawUrl;
+  }
+};
+
+const resolveInternetSearchQuery = (query = '', history = []) => {
+  if (isInternetRequest(query)) {
+    return stripInternetCommand(query) || query;
+  }
+
+  if (!isAffirmativeQuery(query)) return '';
+
+  const reversed = [...history].reverse();
+  const lastInternetUserMessage = reversed.find((item) => item?.role === 'user' && isInternetRequest(item?.content || ''));
+  if (lastInternetUserMessage?.content) {
+    return stripInternetCommand(lastInternetUserMessage.content) || lastInternetUserMessage.content;
+  }
+
+  return '';
+};
+
+const fetchDuckDuckGoResults = async (query = '') => {
+  const url = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
+  const response = await fetch(url, {
+    headers: {
+      'User-Agent': 'AI-NetLink-Executive/1.0',
+      'Accept': 'text/html,application/xhtml+xml',
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error('Web search request failed.');
+  }
+
+  const html = await response.text();
+  const results = [];
+  const regex = /<a[^>]*class="[^"]*result__a[^"]*"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>[\s\S]*?(?:<a[^>]*class="[^"]*result__snippet[^"]*"[^>]*>|<div[^>]*class="[^"]*result__snippet[^"]*"[^>]*>)([\s\S]*?)(?:<\/a>|<\/div>)/gi;
+  let match;
+  while ((match = regex.exec(html)) && results.length < 5) {
+    const [, href, titleHtml, snippetHtml] = match;
+    const title = decodeHtmlEntities(titleHtml);
+    const snippet = decodeHtmlEntities(snippetHtml);
+    const normalizedUrl = normalizeDuckDuckGoUrl(href);
+    if (!title || !snippet) continue;
+
+    results.push({
+      title,
+      snippet,
+      url: normalizedUrl,
+    });
+  }
+
+  if (results.length === 0) {
+    const altRegex = /<a[^>]*class="[^"]*result__a[^"]*"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi;
+    while ((match = altRegex.exec(html)) && results.length < 5) {
+      const [, href, titleHtml] = match;
+      const title = decodeHtmlEntities(titleHtml);
+      if (!title) continue;
+      results.push({
+        title,
+        snippet: '',
+        url: normalizeDuckDuckGoUrl(href),
+      });
+    }
+  }
+
+  return results.slice(0, 5);
+};
+
+const buildInternetDirectReply = (language = 'ar', searchQuery = '', results = [], preferBrief = false) => {
+  if (!results.length) {
+    return language === 'ar'
+      ? `بحثت في الإنترنت عن: ${searchQuery}، لكن لم أحصل الآن على نتائج ويب واضحة كفاية.`
+      : `I searched the web for: ${searchQuery}, but I could not get clear enough web results right now.`;
+  }
+
+  const topResults = results.slice(0, preferBrief ? 2 : 3);
+  if (language === 'ar') {
+    const lines = topResults.map((item, index) => `${index + 1}. ${item.title}${item.snippet ? `: ${item.snippet}` : ''}`);
+    return `وجدت على الإنترنت معلومات عن: ${searchQuery}.\n${lines.join('\n')}`;
+  }
+
+  const lines = topResults.map((item, index) => `${index + 1}. ${item.title}${item.snippet ? `: ${item.snippet}` : ''}`);
+  return `I found web information about: ${searchQuery}.\n${lines.join('\n')}`;
+};
+
+const isStatsQuery = (query = '') => {
+  const normalized = normalizeSearchText(cleanUserQuery(query));
+  return /(كم عدد|عدد\s+(المشتركين|المدراء|الموردين|المستثمرين|iptv)|احصائ|إحصائ|statistics|stats|count of|summary of counts|ملخص ارقام|ملخص أرقام)/i.test(normalized);
+};
+
+const sanitizeExecutiveReply = (reply = '') => {
+  let text = String(reply || '').trim();
+
+  const sectionPatterns = [
+    /\n?\s*المصادر\s*:[\s\S]*$/i,
+    /\n?\s*الوثائق المفيدة[^\n]*:[\s\S]*$/i,
+    /\n?\s*أسماء الملفات المفيدة[^\n]*:[\s\S]*$/i,
+    /\n?\s*useful documents[^\n]*:[\s\S]*$/i,
+    /\n?\s*useful file names[^\n]*:[\s\S]*$/i,
+    /\n?\s*sources\s*:[\s\S]*$/i,
+  ];
+
+  for (const pattern of sectionPatterns) {
+    text = text.replace(pattern, '').trim();
+  }
+
+  text = text.replace(/`[^`]*NetLink Enterprise DB[^`]*`/gi, '').trim();
+  text = text.replace(/\s{2,}/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
+  return text;
+};
+
+const searchEnterpriseKnowledge = (query, limit = 6) => {
+  const tokens = tokenizeSearchQuery(query);
+  if (tokens.length === 0) return [];
+
+  const roots = [
+    getSafePath(DB_PATH, 'Subscribers'),
+    getSafePath(DB_PATH, 'Financial'),
+    getSafePath(DB_PATH, 'Assets_Inventory'),
+    getSafePath(DB_PATH, 'CRM'),
+    getSafePath(DB_PATH, 'System'),
+    getSafePath(DB_PATH, 'System_IPTV'),
+    KNOWLEDGE_BASE_PATH,
+    SYSTEM_CORE_PATH,
+  ];
+
+  const candidates = [];
+  for (const rootPath of roots) {
+    for (const filePath of collectSearchableFiles(rootPath, [])) {
+      const relativePath = path.relative(path.resolve(__dirname, '../..'), filePath).replace(/\\/g, '/');
+      const pathText = normalizeSearchText(relativePath);
+      const content = readSearchableFileText(filePath);
+      if (!content) continue;
+
+      const loweredContent = normalizeSearchText(content);
+      let score = 0;
+      for (const token of tokens) {
+        if (pathText.includes(token)) score += 12;
+        if (loweredContent.includes(token)) score += 4;
+      }
+
+      const hasStrongHit = tokens.some((token) => pathText.includes(token) || loweredContent.includes(token));
+      if (score < 8 || !hasStrongHit) continue;
+      candidates.push({
+        filePath,
+        relativePath,
+        score,
+        snippet: buildSearchSnippet(content, tokens),
+      });
+    }
+  }
+
+  return candidates
+    .sort((a, b) => b.score - a.score)
+    .slice(0, limit);
+};
+
+const hasBrevityPreference = (history = [], query = '') => {
+  const combined = [...history.map(item => item?.content || ''), cleanUserQuery(query)].join(' \n ');
+  return /(اختصر|مختصر|لا تطل|قصير|قصيرة|short|brief|concise)/i.test(combined);
+};
+
+const resolveAiProvider = (aiSettings = {}, providerOverride = '') => {
+  const providers = Array.isArray(aiSettings.providers) ? aiSettings.providers : [];
+  const enabledProviders = providers.filter(provider => provider && provider.enabled);
+  if (enabledProviders.length === 0) throw new Error('No enabled AI provider was found.');
+
+  if (providerOverride) {
+    const exact = enabledProviders.find(provider => provider.id === providerOverride);
+    if (exact) return exact;
+  }
+
+  const model = String(aiSettings.primaryModel || '').toLowerCase();
+  const preferredId =
+    model.startsWith('gemini') ? 'google' :
+    model.startsWith('gpt') ? 'openai' :
+    model.startsWith('claude') ? 'anthropic' :
+    model.startsWith('grok') ? 'grok' :
+    model.startsWith('mistral') ? 'mistral' :
+    model.startsWith('local') ? 'local' :
+    '';
+
+  return enabledProviders.find(provider => provider.id === preferredId) || enabledProviders[0];
+};
+
+const resolveAiModelName = (primaryModel = '', providerId = '') => {
+  const model = String(primaryModel || '').trim();
+  if (!model) {
+    return providerId === 'local' ? 'llama3' : 'gemini-2.0-flash';
+  }
+
+  if (providerId === 'local') {
+    if (model === 'local-llama-3') return 'llama3';
+    return model.replace(/^local-/, '').replace(/-/g, '');
+  }
+
+  return model;
+};
+
+const isGroqProvider = (provider = {}) => {
+  const apiKey = String(provider?.apiKey || '').trim();
+  const endpoint = String(provider?.endpoint || '').toLowerCase();
+  return apiKey.startsWith('gsk_') || endpoint.includes('api.groq.com');
+};
+
+const resolveProviderModel = (primaryModel = '', provider = {}) => {
+  const baseModel = resolveAiModelName(primaryModel, provider.id);
+
+  if (isGroqProvider(provider)) {
+    if (!baseModel || baseModel === 'grok-1') {
+      return 'llama-3.3-70b-versatile';
+    }
+    return baseModel;
+  }
+
+  return baseModel;
+};
+
+const buildExecutivePrompt = ({ query, language, stats, sources, history, includeStats, preferBrief, internetResults, internetRequested }) => {
+  const intro = language === 'ar'
+    ? 'أنت المساعد التنفيذي الذكي الخاص بمديرة نظام AI NetLink. عامليها كصاحبة صلاحيات عليا. استخدم البيانات الداخلية عند الحاجة، ويمكنك أيضا الإجابة من معرفتك العامة. إذا طلبت الإنترنت واُعطيت نتائج ويب فاستفد منها بوضوح.'
+    : 'You are the Executive AI assistant for the AI NetLink director. Treat the user as a high-authority decision maker. Use internal data when relevant, and you may also answer from general knowledge. If the user requests the internet and web results are provided, use them clearly.';
+
+  const statsText = language === 'ar'
+    ? `إحصاءات سريعة: المشتركون ${stats.subscribers}، المدراء ${stats.managers}، الموردون ${stats.suppliers}، المستثمرون ${stats.investors}، IPTV ${stats.iptv}.`
+    : `Quick stats: subscribers ${stats.subscribers}, managers ${stats.managers}, suppliers ${stats.suppliers}, investors ${stats.investors}, IPTV ${stats.iptv}.`;
+
+  const sourcesText = sources.length
+    ? sources.map((source, index) => `#${index + 1} ${source.relativePath}\n${source.snippet}`).join('\n\n')
+    : (language === 'ar' ? 'لا توجد نتائج مطابقة في الوثائق الداخلية.' : 'No matching internal documents were found.');
+
+  const internetText = Array.isArray(internetResults) && internetResults.length > 0
+    ? internetResults.map((item, index) => `#${index + 1} ${item.title}\n${item.snippet}\n${item.url || ''}`).join('\n\n')
+    : (language === 'ar' ? 'لا توجد نتائج ويب مرفقة.' : 'No web results were provided.');
+
+  const historyText = Array.isArray(history) && history.length > 0
+    ? history.slice(-8).map((item) => `${item.role === 'assistant' ? 'ASSISTANT' : 'USER'}: ${item.content}`).join('\n')
+    : '';
+
+  return `${intro}
+
+${includeStats ? statsText : ''}
+
+${historyText ? `Conversation History:\n${historyText}\n` : ''}
+User Request:
+${query}
+
+Internal Sources:
+${sourcesText}
+
+${internetRequested ? `Web Results:\n${internetText}\n` : ''}
+
+${language === 'ar'
+  ? 'قدم الجواب بالعربية بشكل عملي ومختصر. إذا كان السؤال عامًا فجاوب طبيعيًا من معرفتك. إذا طلبت المديرة الإنترنت فاعتمد أيضًا على نتائج الويب المرفقة. لا تسرد المصادر أو المسارات أو أسماء الملفات أو الإحصاءات إلا إذا طلبت ذلك صراحة. لا تقل "المصادر" ولا "الوثائق المفيدة" داخل الجواب.'
+  : 'Answer in practical concise Arabic or English as needed. If the question is general, answer naturally from your knowledge. If the director requests the internet, also rely on the provided web results. Do not list sources, file paths, or stats unless explicitly requested. Do not include sections named Sources or Useful Documents.'}
+${preferBrief ? (language === 'ar' ? '\nالآن التزم برد قصير جدا من سطر إلى سطرين فقط.' : '\nNow strictly answer in only 1 to 2 short lines.') : ''}
+`;
+};
+
+const callOpenAiCompatible = async ({ baseUrl, apiKey, model, prompt, extraHeaders = {} }) => {
+  const response = await fetch(`${String(baseUrl).replace(/\/+$/, '')}/chat/completions`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`,
+      ...extraHeaders,
+    },
+    body: JSON.stringify({
+      model,
+      temperature: 0.2,
+      messages: [
+        { role: 'user', content: prompt }
+      ],
+    }),
+  });
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data?.error?.message || data?.error || 'AI provider request failed.');
+  }
+
+  return data?.choices?.[0]?.message?.content || '';
+};
+
+const callAnthropic = async ({ apiKey, model, prompt }) => {
+  const response = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+    },
+    body: JSON.stringify({
+      model,
+      max_tokens: 1400,
+      temperature: 0.2,
+      messages: [{ role: 'user', content: prompt }],
+    }),
+  });
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data?.error?.message || data?.error?.type || 'Anthropic request failed.');
+  }
+
+  return Array.isArray(data?.content)
+    ? data.content.map(item => item?.text || '').join('\n').trim()
+    : '';
+};
+
+const callGemini = async ({ apiKey, model, prompt }) => {
+  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      generationConfig: {
+        temperature: 0.2,
+      },
+      contents: [
+        {
+          parts: [{ text: prompt }],
+        },
+      ],
+    }),
+  });
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data?.error?.message || 'Gemini request failed.');
+  }
+
+  return data?.candidates?.[0]?.content?.parts?.map(part => part?.text || '').join('\n').trim() || '';
+};
+
+const callLocalAi = async ({ endpoint, model, prompt, apiKey }) => {
+  const normalizedBase = String(endpoint || 'http://localhost:11434').replace(/\/+$/, '');
+
+  if (/\/v1$/i.test(normalizedBase) || /localhost:1234/i.test(normalizedBase) || /127\.0\.0\.1:1234/i.test(normalizedBase)) {
+    return callOpenAiCompatible({
+      baseUrl: normalizedBase,
+      apiKey: apiKey || 'local',
+      model,
+      prompt,
+    });
+  }
+
+  const response = await fetch(`${normalizedBase}/api/chat`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model,
+      stream: false,
+      messages: [{ role: 'user', content: prompt }],
+    }),
+  });
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data?.error || 'Local AI request failed.');
+  }
+
+  return data?.message?.content || '';
+};
+
+const executeExecutiveAi = async ({ aiSettings, query, history = [], language = 'ar', providerId = '' }) => {
+  const effectiveQuery = cleanUserQuery(query);
+  const provider = resolveAiProvider(aiSettings, providerId);
+  const model = resolveProviderModel(aiSettings?.primaryModel, provider);
+  const isSmallTalk = isSmallTalkQuery(effectiveQuery);
+  const isIdentity = isIdentityQuery(effectiveQuery);
+  const includeStats = isStatsQuery(effectiveQuery);
+  const internetSearchQuery = resolveInternetSearchQuery(effectiveQuery, history);
+  const internetRequested = Boolean(internetSearchQuery);
+  const preferBrief = hasBrevityPreference(history, effectiveQuery);
+  const stats = getExecutiveStats();
+  const sources = isSmallTalk ? [] : searchEnterpriseKnowledge(effectiveQuery, 6);
+  const internetResults = internetRequested ? await fetchDuckDuckGoResults(internetSearchQuery) : [];
+
+  if (isSmallTalk) {
+    return {
+      reply: buildSmallTalkReply(language),
+      provider: {
+        id: provider.id,
+        name: provider.name,
+        model,
+      },
+      sources: [],
+      stats: null,
+    };
+  }
+
+  if (isIdentity) {
+    return {
+      reply: buildIdentityReply(language),
+      provider: {
+        id: provider.id,
+        name: provider.name,
+        model,
+      },
+      sources: [],
+      stats: null,
+    };
+  }
+
+  if (internetRequested) {
+    return {
+      reply: buildInternetDirectReply(language, internetSearchQuery, internetResults, preferBrief),
+      provider: {
+        id: provider.id,
+        name: provider.name,
+        model,
+      },
+      sources: internetResults.map((item) => ({
+        path: item.url || item.title,
+        snippet: item.snippet || item.title,
+        score: 100,
+      })),
+      stats: null,
+    };
+  }
+
+  const prompt = buildExecutivePrompt({ query: effectiveQuery, language, stats, sources, history, includeStats, preferBrief, internetResults, internetRequested });
+
+  if (provider.id !== 'local' && !String(provider.apiKey || '').trim()) {
+    throw new Error(`API key is missing for provider: ${provider.name}`);
+  }
+
+  let reply = '';
+  switch (provider.id) {
+    case 'google':
+      reply = await callGemini({ apiKey: provider.apiKey, model, prompt });
+      break;
+    case 'anthropic':
+      reply = await callAnthropic({ apiKey: provider.apiKey, model, prompt });
+      break;
+    case 'local':
+      reply = await callLocalAi({ endpoint: provider.endpoint, model, prompt, apiKey: provider.apiKey });
+      break;
+    case 'openai':
+      reply = await callOpenAiCompatible({ baseUrl: provider.endpoint || 'https://api.openai.com/v1', apiKey: provider.apiKey, model, prompt });
+      break;
+    case 'openrouter':
+      reply = await callOpenAiCompatible({
+        baseUrl: provider.endpoint || 'https://openrouter.ai/api/v1',
+        apiKey: provider.apiKey,
+        model,
+        prompt,
+        extraHeaders: { 'HTTP-Referer': 'https://netlink.local', 'X-Title': 'AI NetLink' },
+      });
+      break;
+    case 'grok':
+      if (isGroqProvider(provider)) {
+        reply = await callOpenAiCompatible({
+          baseUrl: provider.endpoint || 'https://api.groq.com/openai/v1',
+          apiKey: provider.apiKey,
+          model,
+          prompt,
+        });
+      } else {
+        reply = await callOpenAiCompatible({ baseUrl: provider.endpoint || 'https://api.x.ai/v1', apiKey: provider.apiKey, model, prompt });
+      }
+      break;
+    case 'mistral':
+      reply = await callOpenAiCompatible({ baseUrl: provider.endpoint || 'https://api.mistral.ai/v1', apiKey: provider.apiKey, model, prompt });
+      break;
+    default:
+      reply = await callOpenAiCompatible({ baseUrl: provider.endpoint, apiKey: provider.apiKey, model, prompt });
+      break;
+  }
+
+  return {
+    reply: sanitizeExecutiveReply(reply),
+    provider: {
+      id: provider.id,
+      name: provider.name,
+      model,
+    },
+    sources: sources.map(source => ({
+      path: source.relativePath,
+      snippet: source.snippet,
+      score: source.score,
+    })),
+    stats: null,
+  };
+};
+
+// ==========================================
 // Gateways Config Manager
 // ==========================================
 const GATEWAYS_CONFIG_PATH = getSafePath(DB_PATH, 'System', 'gateways_config.json');
@@ -1153,6 +1840,26 @@ let waReady = false;
 let waQr = null;
 let waStatus = 'disconnected'; 
 
+const resolveBrowserExecutable = () => {
+    const candidates = [
+        process.env.PUPPETEER_EXECUTABLE_PATH,
+        '/usr/bin/chromium',
+        '/usr/bin/chromium-browser',
+        'C:/Program Files/Google/Chrome/Application/chrome.exe',
+        'C:/Program Files (x86)/Google/Chrome/Application/chrome.exe',
+        'C:/Program Files/Microsoft/Edge/Application/msedge.exe',
+        'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
+    ].filter(Boolean);
+
+    return candidates.find(candidate => {
+        try {
+            return fs.existsSync(candidate);
+        } catch {
+            return false;
+        }
+    }) || null;
+};
+
 const startWhatsAppEngine = () => {
     if (waClient) {
         waClient.destroy().catch(()=>{});
@@ -1160,14 +1867,27 @@ const startWhatsAppEngine = () => {
     waStatus = 'initializing';
     waReady = false;
     waQr = null;
-    
-    waClient = new Client({
-        authStrategy: new LocalAuth({ dataPath: getSafePath(DB_PATH, 'System', 'whatsapp-auth') }),
-        puppeteer: { 
-            executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium',
-            args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-accelerated-2d-canvas', '--disable-gpu'] 
-        }
-    });
+
+    const executablePath = resolveBrowserExecutable();
+    if (!executablePath) {
+        waStatus = 'error';
+        console.log('WhatsApp browser was not found. API will continue without WhatsApp engine.');
+        return;
+    }
+
+    try {
+        waClient = new Client({
+            authStrategy: new LocalAuth({ dataPath: getSafePath(DB_PATH, 'System', 'whatsapp-auth') }),
+            puppeteer: { 
+                executablePath,
+                args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-accelerated-2d-canvas', '--disable-gpu'] 
+            }
+        });
+    } catch (error) {
+        waStatus = 'error';
+        console.log('Failed to create WhatsApp client:', error.message);
+        return;
+    }
 
     waClient.on('qr', (qr) => {
         waQr = qr;
@@ -1920,6 +2640,48 @@ const setupCrudRoutes = (resourceName, subDir, nameKey) => {
 setupCrudRoutes('directors', 'Staff/Directors', 'الاسم');
 setupCrudRoutes('deputies', 'Staff/Deputies', 'الاسم');
 setupCrudRoutes('iptv', 'System_IPTV/Subscribers', 'الاسم');
+
+// ==========================================
+// Executive AI API
+// ==========================================
+app.post('/api/ai/test-provider', async (req, res) => {
+  try {
+    const { aiSettings, providerId, language } = req.body || {};
+    const result = await executeExecutiveAi({
+      aiSettings,
+      providerId,
+      language: language === 'en' ? 'en' : 'ar',
+      query: language === 'en'
+        ? 'Reply with a short success message and mention the active provider.'
+        : 'أجب برسالة نجاح قصيرة واذكر مزود الذكاء الاصطناعي النشط.',
+      history: [],
+    });
+
+    res.json({ data: result });
+  } catch (error) {
+    res.status(500).json({ error: error?.message || 'AI provider test failed.' });
+  }
+});
+
+app.post('/api/ai/executive-chat', async (req, res) => {
+  try {
+    const { message, messages, aiSettings, language } = req.body || {};
+    if (!String(message || '').trim()) {
+      return res.status(400).json({ error: 'Message is required.' });
+    }
+
+    const result = await executeExecutiveAi({
+      aiSettings,
+      language: language === 'en' ? 'en' : 'ar',
+      query: String(message).trim(),
+      history: Array.isArray(messages) ? messages : [],
+    });
+
+    res.json({ data: result });
+  } catch (error) {
+    res.status(500).json({ error: error?.message || 'Executive AI request failed.' });
+  }
+});
 
 // ==========================================
 // FILE MANAGER API ENDPOINTS

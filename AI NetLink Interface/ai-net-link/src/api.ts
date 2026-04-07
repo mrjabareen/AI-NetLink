@@ -579,3 +579,29 @@ export const startSystemUpdate = async () => {
     }
     return await res.json();
 };
+
+export const testAiProvider = async (payload: any) => {
+    const res = await fetch(`${BASE_URL}/ai/test-provider`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+        throw new Error(data.error || 'Failed to test AI provider');
+    }
+    return data.data;
+};
+
+export const executiveChat = async (payload: any) => {
+    const res = await fetch(`${BASE_URL}/ai/executive-chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+        throw new Error(data.error || 'Failed to query Executive AI');
+    }
+    return data.data;
+};

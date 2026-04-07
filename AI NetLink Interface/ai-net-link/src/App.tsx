@@ -32,6 +32,39 @@ import NetworkRadiusTab from './components/NetworkRadiusTab';
 import Login from './components/Login';
 import { fetchManagers } from './api';
 
+const DEFAULT_AI_SETTINGS = {
+  primaryModel: 'gemini-3-flash-preview',
+  autoRemediation: 2,
+  providers: [
+    { id: 'google', name: 'Google Gemini (Family)', enabled: true, apiKey: '••••••••••••••••', endpoint: '' },
+    { id: 'openai', name: 'OpenAI GPT (Family)', enabled: false, apiKey: '', endpoint: '' },
+    { id: 'anthropic', name: 'Anthropic Claude', enabled: false, apiKey: '', endpoint: '' },
+    { id: 'grok', name: 'xAI Grok', enabled: false, apiKey: '', endpoint: '' },
+    { id: 'openrouter', name: 'Open Router (All Models)', enabled: false, apiKey: '', endpoint: '' },
+    { id: 'mistral', name: 'Mistral AI', enabled: false, apiKey: '', endpoint: '' },
+    { id: 'local', name: 'Local AI (Ollama/LM Studio)', enabled: false, apiKey: '', endpoint: 'http://localhost:11434' },
+  ]
+};
+
+const getInitialAiSettings = () => {
+  if (typeof window === 'undefined') return DEFAULT_AI_SETTINGS;
+
+  try {
+    const savedAiSettings = window.localStorage.getItem('sas4_ai_settings');
+    if (!savedAiSettings) return DEFAULT_AI_SETTINGS;
+
+    const parsed = JSON.parse(savedAiSettings);
+    return {
+      ...DEFAULT_AI_SETTINGS,
+      ...parsed,
+      providers: Array.isArray(parsed?.providers) ? parsed.providers : DEFAULT_AI_SETTINGS.providers,
+    };
+  } catch (error) {
+    console.error('Failed to restore AI settings', error);
+    return DEFAULT_AI_SETTINGS;
+  }
+};
+
 export default function App() {
   const [state, setState] = useState<AppState>({
     lang: 'ar',
@@ -112,19 +145,7 @@ export default function App() {
       lastBackup: '2026-03-28 12:00:00',
       automatic: true,
     },
-    aiSettings: {
-      primaryModel: 'gemini-3-flash-preview',
-      autoRemediation: 2,
-      providers: [
-        { id: 'google', name: 'Google Gemini (Family)', enabled: true, apiKey: '••••••••••••••••', endpoint: '' },
-        { id: 'openai', name: 'OpenAI GPT (Family)', enabled: false, apiKey: '', endpoint: '' },
-        { id: 'anthropic', name: 'Anthropic Claude', enabled: false, apiKey: '', endpoint: '' },
-        { id: 'grok', name: 'xAI Grok', enabled: false, apiKey: '', endpoint: '' },
-        { id: 'openrouter', name: 'Open Router (All Models)', enabled: false, apiKey: '', endpoint: '' },
-        { id: 'mistral', name: 'Mistral AI', enabled: false, apiKey: '', endpoint: '' },
-        { id: 'local', name: 'Local AI (Ollama/LM Studio)', enabled: false, apiKey: '', endpoint: 'http://localhost:11434' },
-      ]
-    },
+    aiSettings: getInitialAiSettings(),
     versionInfo: {
       version: '4.0.0',
       buildDate: '2026-04-05',
@@ -194,6 +215,10 @@ export default function App() {
       }
     }
   }, []);
+
+  useEffect(() => {
+    localStorage.setItem('sas4_ai_settings', JSON.stringify(state.aiSettings));
+  }, [state.aiSettings]);
 
   // Handle font family based on language
   const fontClass = isRTL ? 'font-[Cairo]' : 'font-[Inter]';
