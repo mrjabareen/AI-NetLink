@@ -11,6 +11,7 @@ import { AppState } from '../types';
 import { dict as originalDict } from '../dict';
 const dict = originalDict as any;
 import { formatCurrency } from '../utils/currency';
+import { getSmartMatchScore } from '../utils/search';
 import { 
   fetchSubscribers, extendSubscriber, activateSubscriber, 
   getMessageData, saveMessageData, BASE_URL, getMikrotikStatusBatch,
@@ -130,22 +131,46 @@ export default function BoiExpiryTab({ state }: BoiExpiryTabProps) {
 
   // Memoized Stats & Filtered List
   const { filteredList, subStats } = useMemo(() => {
-    const list = subscribers.filter(s => {
-      const status = getSubStatus(s.expiry || s['تاريخ الانتهاء'] || s.expiration);
-      const matchesSearch = (s.name || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
-                            (s.phone || '').includes(searchTerm) ||
-                            (s.id || '').includes(searchTerm);
-      
-      const matchesFilter = activeFilter === 'all' || 
-                            (activeFilter === 'online' ? onlineStatuses[s.username || s['اسم المستخدم']] :
-                             activeFilter === 'activeOffline' ? (status === 'active' || status === '3days' || status === 'today') && !onlineStatuses[s.username || s['اسم المستخدم']] :
-                             activeFilter === 'suspended' ? (s.status === 'suspended' || s['حالة الحساب'] === 'موقوف') :
-                             activeFilter === 'demands' ? (parseFloat(String(s['عليه دين'] || 0)) > 0) :
-                             activeFilter === 'debts' ? (parseFloat(String(s['الرصيد المتبقي له'] || 0)) > 0) :
-                             status === activeFilter);
+    const getSubscriberSearchBlob = (subscriber: any) => [
+      subscriber.name,
+      subscriber.firstname,
+      subscriber.lastname,
+      subscriber['الاسم الأول'],
+      subscriber['اسم العائلة'],
+      subscriber.username,
+      subscriber.phone,
+      subscriber.address,
+      subscriber['عنوان المشترك'],
+      subscriber.agent,
+      subscriber['الوكيل المسؤل'],
+      subscriber.notes,
+    ].filter(Boolean).join(' ');
 
-      return matchesSearch && matchesFilter;
-    });
+    const list = subscribers
+      .map(s => {
+        const status = getSubStatus(s.expiry || s['تاريخ الانتهاء'] || s.expiration);
+        const searchBlob = getSubscriberSearchBlob(s);
+        const searchScore = Math.max(
+          getSmartMatchScore(searchTerm, searchBlob),
+          getSmartMatchScore(searchTerm, s.phone || ''),
+          getSmartMatchScore(searchTerm, s.id || ''),
+          getSmartMatchScore(searchTerm, s.username || s['اسم المستخدم'] || ''),
+        );
+
+        const matchesSearch = !searchTerm || searchScore > 0;
+        const matchesFilter = activeFilter === 'all' || 
+                              (activeFilter === 'online' ? onlineStatuses[s.username || s['اسم المستخدم']] :
+                               activeFilter === 'activeOffline' ? (status === 'active' || status === '3days' || status === 'today') && !onlineStatuses[s.username || s['اسم المستخدم']] :
+                               activeFilter === 'suspended' ? (s.status === 'suspended' || s['حالة الحساب'] === 'موقوف') :
+                               activeFilter === 'demands' ? (parseFloat(String(s['عليه دين'] || 0)) > 0) :
+                               activeFilter === 'debts' ? (parseFloat(String(s['الرصيد المتبقي له'] || 0)) > 0) :
+                               status === activeFilter);
+
+        return { item: s, score: searchScore, matchesSearch, matchesFilter };
+      })
+      .filter(entry => entry.matchesSearch && entry.matchesFilter)
+      .sort((a, b) => b.score - a.score || String(a.item.name || '').localeCompare(String(b.item.name || '')))
+      .map(entry => entry.item);
 
     const s = { 
       total: subscribers.length,

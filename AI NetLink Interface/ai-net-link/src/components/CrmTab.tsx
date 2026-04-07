@@ -4,7 +4,7 @@ import { Users, Search, Filter, MoreVertical, Phone, Mail, MapPin, Activity, Wif
 import { AppState } from '../types';
 import { dict } from '../dict';
 import { fetchSubscribers, BASE_URL, getMessageData, saveMessageData, activateSubscriber, fetchRoutersList, extendSubscriber } from '../api';
-import { smartMatch } from '../utils/search';
+import { getSmartMatchScore, smartMatch } from '../utils/search';
 
 interface CrmTabProps {
   state: AppState;
@@ -101,12 +101,26 @@ export default function CrmTab({ state }: CrmTabProps) {
     }
   };
 
-  const filteredCustomers = customers.filter(c => 
-    smartMatch(searchTerm, c.name) || 
-    smartMatch(searchTerm, c.phone) ||
-    smartMatch(searchTerm, c.email) ||
-    smartMatch(searchTerm, c.id)
-  );
+  const filteredCustomers = customers
+    .map(c => ({
+      customer: c,
+      score: Math.max(
+        getSmartMatchScore(searchTerm, c.name),
+        getSmartMatchScore(searchTerm, c.phone),
+        getSmartMatchScore(searchTerm, c.email),
+        getSmartMatchScore(searchTerm, c.id),
+      ),
+    }))
+    .filter(({ customer, score }) =>
+      !searchTerm ||
+      score > 0 ||
+      smartMatch(searchTerm, customer.name) ||
+      smartMatch(searchTerm, customer.phone) ||
+      smartMatch(searchTerm, customer.email) ||
+      smartMatch(searchTerm, customer.id)
+    )
+    .sort((a, b) => b.score - a.score || a.customer.name.localeCompare(b.customer.name))
+    .map(({ customer }) => customer);
 
   const toggleBulkSelect = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();

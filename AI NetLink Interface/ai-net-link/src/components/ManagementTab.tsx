@@ -6,7 +6,7 @@ import { dict } from '../dict';
 import { formatNumber, normalizeDigits } from '../utils/format';
 import { formatCurrency } from '../utils/currency';
 import { fetchSubscribers, fetchSuppliers, fetchInvestors, addSubscriber, updateSubscriber, deleteSubscriber, addSupplier, updateSupplier, deleteSupplier, fetchManagersRaw, addManager, updateManager, deleteManager, addInvestor, updateInvestor, deleteInvestor, directorsApi, deputiesApi, iptvApi, getMikrotikStatus, getMikrotikStatusBatch, disconnectSubscriber, disconnectAllSubscribers, deleteSecret, disableSecret, enableSecret, syncSubscriberToMikrotik, fetchRoutersList, fetchProfiles, activateSubscriber, extendSubscriber, getMessageData, saveMessageData, BASE_URL } from '../api';
-import { smartMatch } from '../utils/search';
+import { getSmartMatchScore, smartMatch } from '../utils/search';
 
 interface ManagementTabProps {
   state: AppState;
@@ -898,8 +898,26 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
 
   const filteredData = () => {
     let data: any[] = [];
+    const getSubscriberSearchBlob = (subscriber: any) => [
+      subscriber.name,
+      subscriber.firstname,
+      subscriber.lastname,
+      subscriber['الاسم الأول'],
+      subscriber['اسم العائلة'],
+      subscriber.username,
+      subscriber.phone,
+      subscriber.address,
+      subscriber['عنوان المشترك'],
+      subscriber.agent,
+      subscriber['الوكيل المسؤل'],
+      subscriber.notes,
+    ].filter(Boolean).join(' ');
+
     if (activeSubTab === 'subscribers') {
-      data = subscribers.filter(s => smartMatch(searchTerm, s.name) || smartMatch(searchTerm, String(s.id)));
+      data = subscribers.filter(s => {
+        const searchBlob = getSubscriberSearchBlob(s);
+        return smartMatch(searchTerm, searchBlob) || smartMatch(searchTerm, String(s.id));
+      });
       if (statusFilter !== 'all') {
         data = data.filter(s => s.status === statusFilter);
       }
@@ -922,7 +940,32 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
         return smartMatch(searchTerm, values) || smartMatch(searchTerm, String(a.id));
       });
     }
-    return data;
+    if (!searchTerm.trim()) return data;
+
+    const getItemScore = (item: any) => {
+      if (activeSubTab === 'subscribers') {
+        const searchBlob = getSubscriberSearchBlob(item);
+        return Math.max(getSmartMatchScore(searchTerm, searchBlob), getSmartMatchScore(searchTerm, String(item.id)));
+      }
+      if (activeSubTab === 'suppliers') {
+        const values = SUPPLIER_FIELDS.map(f => String(item[f.key] || '')).join(' ');
+        return Math.max(getSmartMatchScore(searchTerm, values), getSmartMatchScore(searchTerm, String(item.id)));
+      }
+      if (activeSubTab === 'shareholders') {
+        return Math.max(getSmartMatchScore(searchTerm, item.name), getSmartMatchScore(searchTerm, String(item.id)));
+      }
+      if (activeSubTab === 'directors' || activeSubTab === 'deputies') {
+        return Math.max(getSmartMatchScore(searchTerm, item.name), getSmartMatchScore(searchTerm, item.position));
+      }
+      if (activeSubTab === 'iptv') {
+        return Math.max(getSmartMatchScore(searchTerm, item.name), getSmartMatchScore(searchTerm, item.username));
+      }
+
+      const values = MANAGER_FIELDS.map(f => String(item[f.key] || '')).join(' ');
+      return Math.max(getSmartMatchScore(searchTerm, values), getSmartMatchScore(searchTerm, String(item.id)));
+    };
+
+    return [...data].sort((a, b) => getItemScore(b) - getItemScore(a));
   };
 
   return (

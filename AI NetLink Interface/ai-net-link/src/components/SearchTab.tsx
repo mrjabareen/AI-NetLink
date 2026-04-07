@@ -3,7 +3,7 @@ import { motion } from 'motion/react';
 import { Search, FileText, User, TrendingUp, Truck, ShieldCheck, ExternalLink, Database } from 'lucide-react';
 import { AppState } from '../types';
 import { dict } from '../dict';
-import { smartMatch } from '../utils/search';
+import { getSmartMatchScore, smartMatch } from '../utils/search';
 
 interface SearchTabProps {
   state: AppState;
@@ -43,11 +43,21 @@ export default function SearchTab({ state }: SearchTabProps) {
   ], [isRTL]);
 
   const filteredResults = useMemo(() => {
-    return database.filter(item => {
-      const matchesQuery = smartMatch(query, item.name) || smartMatch(query, item.details);
-      const matchesCategory = activeCategory === 'all' || item.type === activeCategory;
-      return matchesQuery && matchesCategory;
-    });
+    return database
+      .map(item => {
+        const score = Math.max(
+          getSmartMatchScore(query, item.name),
+          getSmartMatchScore(query, item.details)
+        );
+        return { item, score };
+      })
+      .filter(({ item, score }) => {
+        const matchesQuery = !query || score > 0;
+        const matchesCategory = activeCategory === 'all' || item.type === activeCategory;
+        return matchesQuery && matchesCategory;
+      })
+      .sort((a, b) => b.score - a.score || a.item.name.localeCompare(b.item.name))
+      .map(({ item }) => item);
   }, [query, activeCategory, database]);
 
   const knowledgeResults = [

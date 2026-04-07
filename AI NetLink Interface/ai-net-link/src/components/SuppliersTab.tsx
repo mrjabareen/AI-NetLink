@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { motion } from 'motion/react';
 import { Truck, Package, ShoppingCart, DollarSign, Clock, CheckCircle2, AlertCircle, Plus, Search, Filter, MoreVertical, ExternalLink } from 'lucide-react';
 import { AppState } from '../types';
 import { formatCurrency } from '../utils/currency';
 import { formatNumber } from '../utils/format';
+import { getSmartMatchScore } from '../utils/search';
 
 interface SuppliersTabProps {
   state: AppState;
@@ -25,6 +26,22 @@ const orders = [
 export default function SuppliersTab({ state }: SuppliersTabProps) {
   const isRTL = state.lang === 'ar';
   const [searchTerm, setSearchTerm] = useState('');
+
+  const filteredSuppliers = useMemo(() => {
+    return suppliers
+      .map((supplier) => ({
+        supplier,
+        score: Math.max(
+          getSmartMatchScore(searchTerm, supplier.name),
+          getSmartMatchScore(searchTerm, supplier.category),
+          getSmartMatchScore(searchTerm, supplier.status),
+          getSmartMatchScore(searchTerm, String(supplier.id)),
+        ),
+      }))
+      .filter(({ score }) => !searchTerm || score > 0)
+      .sort((a, b) => b.score - a.score || a.supplier.name.localeCompare(b.supplier.name))
+      .map(({ supplier }) => supplier);
+  }, [searchTerm]);
 
   return (
     <motion.div 
@@ -114,7 +131,7 @@ export default function SuppliersTab({ state }: SuppliersTabProps) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                {suppliers.map(supplier => (
+                {filteredSuppliers.map(supplier => (
                   <tr key={supplier.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors group">
                     <td className="px-6 py-5">
                       <div className="flex items-center gap-4">

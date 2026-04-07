@@ -1,5 +1,57 @@
 // src/utils/search.ts
 
+const ARABIC_DIACRITICS = /[\u064B-\u065F\u0670\u06D6-\u06ED]/g;
+const TATWEEL = /\u0640/g;
+const ARABIC_INDIC_DIGITS = '٠١٢٣٤٥٦٧٨٩';
+
+const SEARCH_STOP_WORDS = new Set([
+  'ال', 'بن', 'ابن',
+]);
+
+const normalizeDigits = (value: string) =>
+  value.replace(/[٠-٩]/g, (char) => String(ARABIC_INDIC_DIGITS.indexOf(char)));
+
+const simplifyArabic = (value: string) =>
+  value
+    .replace(/[أإآٱ]/g, 'ا')
+    .replace(/[ؤ]/g, 'و')
+    .replace(/[ئ]/g, 'ي')
+    .replace(/[ى]/g, 'ي')
+    .replace(/[ة]/g, 'ه')
+    .replace(/[گ]/g, 'ك')
+    .replace(/[ڤ]/g, 'ف')
+    .replace(/[پ]/g, 'ب');
+
+const simplifyLatin = (value: string) =>
+  value.normalize('NFKD').replace(/[\u0300-\u036f]/g, '');
+
+export const normalizeSearchText = (value: string = ''): string => {
+  return simplifyArabic(
+    simplifyLatin(
+      normalizeDigits(String(value || ''))
+        .toLowerCase()
+        .replace(ARABIC_DIACRITICS, '')
+        .replace(TATWEEL, '')
+    )
+  )
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+};
+
+const normalizeLooseToken = (value: string) => {
+  const normalized = normalizeSearchText(value);
+  return normalized.replace(/^ال/, '');
+};
+
+const collapseTokenSpacing = (value: string) => normalizeLooseToken(value).replace(/\s+/g, '');
+
+const tokenize = (value: string) =>
+  normalizeSearchText(value)
+    .split(' ')
+    .map((token) => token.trim())
+    .filter((token) => token.length > 0 && !SEARCH_STOP_WORDS.has(token));
+
 /**
  * Calculates the Levenshtein distance between two strings with an optimized space approach.
  */
@@ -24,68 +76,108 @@ export function levenshteinDistance(s1: string, s2: string): number {
   return v1[s2.length];
 }
 
-/**
- * A highly robust, typo-forgiving search utility.
- * - Handles Out-of-Order word searches (e.g. "Ahmed Kareem" will match "Kareem Ahmed").
- * - Avoids false positives on phone numbers and IDs by remaining strictly numeric.
- * - Allows minor typos based on `maxTypos` for long alphabetic words.
- */
+const similarityRatio = (a: string, b: string) => {
+  if (!a || !b) return 0;
+  const distance = levenshteinDistance(a, b);
+  const maxLen = Math.max(a.length, b.length) || 1;
+  return 1 - distance / maxLen;
+};
+
+const isNumericLike = (value: string) => /^[\d+\-.\s]+$/.test(value);
+
+const scoreTokenMatch = (queryToken: string, targetToken: string, maxTypos: number): number => {
+  if (!queryToken || !targetToken) return 0;
+
+  const q = normalizeLooseToken(queryToken);
+  const t = normalizeLooseToken(targetToken);
+
+  if (!q || !t) return 0;
+  if (q === t) return 100;
+  if (t.startsWith(q)) return 92;
+  if (t.includes(q) || q.includes(t)) return 82;
+
+  const ratio = similarityRatio(q, t);
+  const allowedTypos =
+    q.length <= 4 ? 0 :
+    q.length <= 6 ? 1 :
+    maxTypos;
+
+  if (levenshteinDistance(q, t) <= allowedTypos) {
+    return Math.round(70 + ratio * 20);
+  }
+
+  if (ratio >= 0.78) {
+    return Math.round(ratio * 75);
+  }
+
+  return 0;
+};
+
+export function getSmartMatchScore(query: string, target?: string | null, maxTypos: number = 2): number {
+  if (!target) return 0;
+  if (!query) return 1;
+
+  const nQuery = normalizeSearchText(query);
+  const nTarget = normalizeSearchText(target);
+  if (!nQuery || !nTarget) return 0;
+
+  const compactQuery = collapseTokenSpacing(query);
+  const compactTarget = collapseTokenSpacing(target);
+
+  if (nTarget === nQuery) return 1000;
+  if (nTarget.startsWith(nQuery)) return 950;
+  if (nTarget.includes(nQuery)) return 900;
+  if (compactTarget === compactQuery) return 980;
+  if (compactTarget.includes(compactQuery)) return 920;
+
+  if (isNumericLike(nQuery)) {
+    const numericQuery = nQuery.replace(/\s+/g, '');
+    const numericTarget = nTarget.replace(/\s+/g, '');
+    if (numericTarget === numericQuery) return 1000;
+    if (numericTarget.includes(numericQuery)) return 880;
+    return 0;
+  }
+
+  const queryTokens = tokenize(query);
+  const targetTokens = tokenize(target);
+  if (queryTokens.length === 0 || targetTokens.length === 0) return 0;
+
+  let totalScore = 0;
+  let matchedTokens = 0;
+
+  for (const queryToken of queryTokens) {
+    let bestTokenScore = 0;
+    for (const targetToken of targetTokens) {
+      bestTokenScore = Math.max(bestTokenScore, scoreTokenMatch(queryToken, targetToken, maxTypos));
+    }
+
+    if (bestTokenScore === 0) {
+      if (queryTokens.length === 1) {
+        const ratio = similarityRatio(normalizeLooseToken(queryToken), collapseTokenSpacing(target));
+        const minRatio = queryToken.length <= 4 ? 0.96 : queryToken.length <= 6 ? 0.88 : 0.8;
+        if (ratio >= minRatio) {
+          return Math.round(ratio * 700);
+        }
+      }
+      return 0;
+    }
+
+    matchedTokens += 1;
+    totalScore += bestTokenScore;
+  }
+
+  const coverageBonus = matchedTokens === queryTokens.length ? 120 : 0;
+  const phraseBonus = nTarget.includes(nQuery) ? 120 : 0;
+  const orderBonus = queryTokens.every((token, index) => (targetTokens[index] || '').startsWith(normalizeLooseToken(token))) ? 40 : 0;
+  const finalScore = totalScore + coverageBonus + phraseBonus + orderBonus;
+
+  if (queryTokens.length === 1 && queryTokens[0].length <= 4 && finalScore < 300) {
+    return 0;
+  }
+
+  return finalScore;
+}
+
 export function smartMatch(query: string, target?: string | null, maxTypos: number = 2): boolean {
-  if (!target) return false;
-  if (!query) return true;
-
-  const nQuery = query.toLowerCase().trim();
-  const nTarget = target.toLowerCase();
-
-  // 1. Instant perfect substring match
-  if (nTarget.includes(nQuery)) return true;
-
-  // 2. Strict Numeric Match: If the query is mostly digits (phone, ID), bypass fuzzy
-  const isNumeric = /^[\d\+\-\.\s]+$/.test(nQuery);
-  if (isNumeric) {
-     const noSpaceQuery = nQuery.replace(/\s+/g, '');
-     const noSpaceTarget = nTarget.replace(/\s+/g, '');
-     return noSpaceTarget.includes(noSpaceQuery);
-  }
-
-  // 3. Fuzzy Logic Fallback: Split query into discrete words and verify EVERY query word exists!
-  const queryWords = nQuery.split(/\s+/).filter(w => w.length > 0);
-  const targetWords = nTarget.split(/\s+/).filter(w => w.length > 0);
-
-  if (targetWords.length === 0) return false;
-
-  for (const qw of queryWords) {
-      if (qw.length < 3) {
-          // For very short query fragments, enforce strict substring
-          if (!nTarget.includes(qw)) return false;
-          continue;
-      }
-
-      // Dynamic maxTypos based on query word length
-      // 3-4 letters: 0 typos (too risky, "احمد" maps to "محمد" with 1 typo)
-      // 5-6 letters: 1 typo
-      // 7+ letters: maxTypos (default 2)
-      let currentMaxTypos = 0;
-      if (qw.length >= 5 && qw.length <= 6) currentMaxTypos = 1;
-      if (qw.length > 6) currentMaxTypos = maxTypos;
-
-      let wordMatched = false;
-      for (const tw of targetWords) {
-          // Does the target word perfectly contain the query word?
-          if (tw.includes(qw) || qw.includes(tw)) {
-              wordMatched = true;
-              break;
-          }
-          // If not, does the target word resemble the query word within the dynamic allowed edit distance?
-          if (levenshteinDistance(qw, tw) <= currentMaxTypos) {
-              wordMatched = true;
-              break;
-          }
-      }
-
-      // If ANY SINGLE query word completely fails to match the target, discard the entire result!
-      if (!wordMatched) return false; 
-  }
-
-  return true;
+  return getSmartMatchScore(query, target, maxTypos) > 0;
 }
