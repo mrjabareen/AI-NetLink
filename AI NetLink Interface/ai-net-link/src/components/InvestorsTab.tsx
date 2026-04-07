@@ -192,7 +192,7 @@ export default function InvestorsTab({ state, setState }: InvestorsTabProps) {
             <TrendingUp className="text-emerald-500" size={28} />
             {isShareholder ? t.investor.dashboard : t.management.tabs.shareholders}
           </h2>
-          <p className="text-slate-500 dark:text-slate-400 mt-1">
+          <p className="text-slate-500 dark:text-slate-400 mt-1 text-xs md:text-sm max-w-2xl leading-relaxed">
             {isShareholder ? t.investor.accountInfo : t.management.subtitle}
           </p>
         </div>

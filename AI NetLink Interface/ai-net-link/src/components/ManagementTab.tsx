@@ -982,7 +982,9 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
             <ShieldCheck className="text-teal-500" size={32} />
             {t.management.title}
           </h2>
-          <p className="text-slate-500 dark:text-slate-400 mt-1">{t.management.subtitle}</p>
+          <p className="text-slate-500 dark:text-slate-400 mt-1 text-xs md:text-sm max-w-2xl leading-relaxed">
+            {t.management.subtitle}
+          </p>
         </div>
         
         <div className="flex items-center gap-3">

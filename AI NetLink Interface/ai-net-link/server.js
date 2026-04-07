@@ -513,8 +513,8 @@ const resolveProviderModel = (primaryModel = '', provider = {}) => {
 
 const buildExecutivePrompt = ({ query, language, stats, sources, history, includeStats, preferBrief, internetResults, internetRequested }) => {
   const intro = language === 'ar'
-    ? 'أنت المساعد التنفيذي الذكي الخاص بنظام AI NetLink. تعامل مع المستخدم كصاحب صلاحيات عليا. استخدم البيانات الداخلية عند الحاجة، ويمكنك أيضا الإجابة من معرفتك العامة. إذا طلب الإنترنت واُعطيت نتائج ويب فاستفد منها بوضوح.'
-    : 'You are the Executive AI assistant for AI NetLink. Treat the user as a high-authority decision maker. Use internal data when relevant, and you may also answer from general knowledge. If the user requests the internet and web results are provided, use them clearly.';
+    ? 'أنت المساعد التنفيذي الذكي الخاص بنظام SAS NET. تعامل مع المستخدم كصاحب صلاحيات عليا. استخدم البيانات الداخلية عند الحاجة، ويمكنك أيضا الإجابة من معرفتك العامة. إذا طلب الإنترنت واُعطيت نتائج ويب فاستفد منها بوضوح.'
+    : 'You are the Executive AI assistant for SAS NET. Treat the user as a high-authority decision maker. Use internal data when relevant, and you may also answer from general knowledge. If the user requests the internet and web results are provided, use them clearly.';
 
   const statsText = language === 'ar'
     ? `إحصاءات سريعة: المشتركون ${stats.subscribers}، المدراء ${stats.managers}، الموردون ${stats.suppliers}، المستثمرون ${stats.investors}، IPTV ${stats.iptv}.`

@@ -390,7 +390,7 @@ export default function ExecutiveTab({ state }: ExecutiveTabProps) {
             <Briefcase className="text-amber-500" size={28} />
             {state.lang === 'en' ? 'Executive AI Assistant' : 'المساعد التنفيذي للذكاء الاصطناعي'}
           </h2>
-          <p className="text-sm md:text-base text-slate-500 dark:text-slate-400 mt-1">
+          <p className="text-sm md:text-base text-slate-500 dark:text-slate-400 mt-1 max-w-2xl leading-relaxed">
             {state.lang === 'en' ? 'Real AI answers powered by internal database and knowledge files.' : 'إجابات حقيقية مدعومة بقاعدة البيانات والملفات المعرفية الداخلية.'}
           </p>
         </div>
@@ -516,7 +516,7 @@ export default function ExecutiveTab({ state }: ExecutiveTabProps) {
                 <div className={`flex flex-col gap-1.5 ${msg.sender === 'user' ? 'items-end' : 'items-start'} w-full min-w-0`}>
                   <div className="flex items-center gap-2 px-1">
                     <span className="text-[10px] md:text-[11px] font-semibold text-slate-500 dark:text-slate-400">
-                      {msg.sender === 'ai' ? 'NetLink Executive AI' : (state.lang === 'en' ? 'CEO' : 'المدير التنفيذي')}
+                      {msg.sender === 'ai' ? 'SAS NET Executive AI' : (state.lang === 'en' ? 'CEO' : 'المدير التنفيذي')}
                     </span>
                     <span className="text-[9px] md:text-[10px] text-slate-400 dark:text-slate-500 font-mono">{msg.time}</span>
                     {msg.isEdited && <span className="text-[9px] text-slate-400 italic">({state.lang === 'en' ? 'edited' : 'معدل'})</span>}
@@ -617,7 +617,7 @@ export default function ExecutiveTab({ state }: ExecutiveTabProps) {
               </div>
               <div className="flex flex-col gap-1.5 items-start">
                 <div className="flex items-center gap-2 px-1">
-                  <span className="text-[10px] md:text-[11px] font-semibold text-slate-500 dark:text-slate-400">NetLink Executive AI</span>
+                  <span className="text-[10px] md:text-[11px] font-semibold text-slate-500 dark:text-slate-400">SAS NET Executive AI</span>
                 </div>
                 <div className="p-3 md:p-5 shadow-sm bg-white dark:bg-[#18181B] border border-slate-100 dark:border-slate-800/50 rounded-2xl rounded-tl-sm flex items-center gap-1.5 h-[44px] md:h-[52px]">
                   <span className="w-1.5 h-1.5 md:w-2 md:h-2 rounded-full bg-amber-500/60 animate-bounce" style={{ animationDelay: '0ms' }}></span>

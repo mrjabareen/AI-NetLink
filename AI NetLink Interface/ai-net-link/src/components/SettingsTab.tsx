@@ -819,7 +819,7 @@ export default function SettingsTab({ state, setState }: SettingsTabProps) {
               <div>
                 <h3 className="text-xl font-bold text-slate-800 dark:text-slate-100">{t.settings.categories.team}</h3>
                 <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-                  {isRTL ? 'إدارة مديري النظام، مديري SAS 4، وصلاحيات وصولهم.' : 'Manage system administrators, SaaS 4 managers, and their access permissions.'}
+                  {isRTL ? 'إدارة مديري النظام، مديري SAS NET، وصلاحيات وصولهم.' : 'Manage system administrators, SAS NET managers, and their access permissions.'}
                 </p>
               </div>
               {hasPermission('manage_team') && (
@@ -1354,11 +1354,11 @@ export default function SettingsTab({ state, setState }: SettingsTabProps) {
                </div>
               <ShieldCheck className="mx-auto text-blue-500 relative" size={40} />
               <div className="space-y-2 relative">
-                <h4 className="font-bold text-slate-900 dark:text-white text-lg">{isRTL ? 'حقوق الملكية الفكرية - NetLink' : 'IP Protection - NetLink'}</h4>
-                <p className="text-xs text-slate-500 dark:text-slate-400 max-w-2xl mx-auto leading-relaxed">
+                <h4 className="font-bold text-slate-900 dark:text-white text-lg">{isRTL ? 'حقوق الملكية الفكرية - SAS NET' : 'IP Protection - SAS NET'}</h4>
+                <p className="text-xs md:text-sm max-w-2xl leading-relaxed text-slate-500 dark:text-slate-400 mx-auto">
                   {isRTL 
-                    ? 'هذا النظام محمي بموجب قوانين تكنولوجيا المعلومات الدولية وحقوق المؤلف لعام 2026. أي محاولة لفك التشفير أو الهندسة العكسية للكود المصدري تعرضك للمساءلة القانونية المباشرة تحت إشراف شركة NetLink.'
-                    : 'This system is protected under international IT laws and 2026 copyright regulations. Any attempt to decrypt or reverse-engineer the source code will lead to direct legal action under NetLink supervision.'}
+                    ? 'هذا النظام محمي بموجب قوانين تكنولوجيا المعلومات الدولية وحقوق المؤلف لعام 2026. أي محاولة لفك التشفير أو الهندسة العكسية للكود المصدري تعرضك للمساءلة القانونية المباشرة تحت إشراف شركة SAS NET.'
+                    : 'This system is protected under international IT laws and 2026 copyright regulations. Any attempt to decrypt or reverse-engineer the source code will lead to direct legal action under SAS NET supervision.'}
                 </p>
               </div>
               <div className="pt-4 flex flex-wrap items-center justify-center gap-4 relative">
@@ -1382,7 +1382,7 @@ export default function SettingsTab({ state, setState }: SettingsTabProps) {
           <Settings className="text-slate-500" size={32} />
           {t.settings.title}
         </h2>
-        <p className="text-slate-500 dark:text-slate-400 mt-1">
+        <p className="text-slate-500 dark:text-slate-400 mt-1 text-xs md:text-sm max-w-2xl leading-relaxed">
           {t.settings.subtitle}
         </p>
       </header>

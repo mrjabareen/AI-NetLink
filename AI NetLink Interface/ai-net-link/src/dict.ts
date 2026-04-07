@@ -6,13 +6,13 @@
  */
 export const dict = {
   en: {
-    title: "AI NetLink",
-    subtitle: "Smart Operations Console",
+    title: "SAS NET",
+    subtitle: "Integrated Smart Enterprise Core",
     nav: { dashboard: "Dashboard", chat: "Operations Room", search: "Knowledge Search", settings: "Settings", files: "File Manager", topology: "Network Topology", security: "Security Radar", analytics: "Analytics & SLA", executive: "Executive AI (CEO)", billing: "Billing & Churn", inventory: "Smart Inventory", crm: "CRM", field: "Field Service", reports: "Report Builder", portal: "Portal Designer", investors: "Investors", suppliers: "Suppliers", boi_expiry: "Smart Subscription Control", management: "Subscribers Management", network_radius: "Network & RADIUS" },
     roles: {
       super_admin: "Super Administrator",
       admin: "Administrator",
-      sas4_manager: "SAS4 Manager (Hadlaq)",
+      sas4_manager: "SAS NET Manager (Hadlaq)",
       shareholder: "Shareholder / Investor",
       user: "Standard User"
     },
@@ -90,8 +90,8 @@ export const dict = {
       selectFile: "Select a file to view or edit its contents."
     },
     chat: { new: "New Chat", search: "Search History...", placeholder: "Type a command or query...", export: "Export", clear: "Clear",
-      assistantName: "NetLink Assistant", online: "Online",
-      welcomeMsg: "Hello. I am the AI NetLink Operations Assistant. I can help you diagnose network issues, query the knowledge base, or manage configurations. How can I assist you today?",
+      assistantName: "SAS NET Assistant", online: "Online",
+      welcomeMsg: "Hello. I am the SAS NET Operations Assistant. I can help you diagnose network issues, query the knowledge base, or manage configurations. How can I assist you today?",
       quickActions: ['Run Diagnostic', 'Check Logs', 'Restart Node', 'Analyze Traffic']
     },
     search: { 
@@ -178,7 +178,7 @@ export const dict = {
         }
       },
       admins: {
-        title: "System Administrators (SAS 4)",
+        title: "System Administrators (SAS NET)",
         add: "Add Administrator",
         table: {
           name: "Admin Name",
@@ -388,7 +388,7 @@ export const dict = {
           dashboard: "Dashboard",
           chat: "Operations Room",
           search: "Knowledge Search",
-          management: "SAS 4 Management",
+          management: "SAS NET Management",
           files: "File Manager",
           network: "Network & Infrastructure",
           security: "Security & Access",
@@ -462,13 +462,13 @@ export const dict = {
     currencies: { ILS: "₪ ILS", USD: "$ USD", JOD: "JD JOD" }
   },
   ar: {
-    title: "AI NetLink",
-    subtitle: "وحدة التحكم الذكية للعمليات",
+    title: "SAS NET",
+    subtitle: "النواة المتكاملة لإدارة المؤسسات الذكية",
     nav: { dashboard: "لوحة القيادة", chat: "غرفة العمليات", search: "البحث المعرفي", settings: "الإعدادات", files: "مدير الملفات", topology: "طوبولوجيا الشبكة", security: "رادار الأمان", analytics: "التحليلات والتقارير", executive: "المساعد التنفيذي (المدير)", billing: "الفوترة والمشتركين", inventory: "المخزون الذكي", crm: "إدارة العملاء", field: "الخدمة الميدانية", reports: "منشئ التقارير", portal: "بوابة الدخول", investors: "المستثمرين", suppliers: "الموردين", boi_expiry: "مركز التحكم الذكي في الاشتراكات", management: "إدارة المشتركين", network_radius: "إدارة الراديوس والشبكة" },
     roles: {
       super_admin: "مدير عام (Super Admin)",
       admin: "مدير نظام (Admin)",
-      sas4_manager: "مدير SAS4 (حدلق)",
+      sas4_manager: "مدير SAS NET (حدلق)",
       shareholder: "مساهم / مستثمر",
       user: "مستخدم عادي"
     },
@@ -546,8 +546,8 @@ export const dict = {
       selectFile: "حدد ملفاً لعرضه أو تعديل محتواه."
     },
     chat: { new: "محادثة جديدة", search: "البحث في السجل...", placeholder: "اكتب أمراً أو استعلاماً...", export: "تصدير", clear: "مسح",
-      assistantName: "مساعد AI NetLink", online: "متصل",
-      welcomeMsg: "مرحباً. أنا مساعد عمليات AI NetLink للذكاء الاصطناعي. يمكنني مساعدتك في تشخيص مشكلات الشبكة، أو الاستعلام عن قاعدة المعرفة، أو إدارة التكوينات. كيف يمكنني مساعدتك اليوم؟",
+      assistantName: "مساعد SAS NET", online: "متصل",
+      welcomeMsg: "مرحباً. أنا مساعد عمليات SAS NET للذكاء الاصطناعي. يمكنني مساعدتك في تشخيص مشكلات الشبكة، أو الاستعلام عن قاعدة المعرفة، أو إدارة التكوينات. كيف يمكنني مساعدتك اليوم؟",
       quickActions: ['تشغيل التشخيص', 'فحص السجلات', 'إعادة تشغيل العقدة', 'تحليل حركة المرور']
     },
     search: { 
@@ -583,7 +583,7 @@ export const dict = {
         shareholders: "المساهمون",
         directors: "المدراء (النظام الجديد)",
         deputies: "الموظفون والفنيون",
-        admins: "المديرون (نظام SAS 4)",
+        admins: "المديرون (نظام SAS NET)",
         iptv: "IP TV"
       },
       subscribers: {
@@ -634,7 +634,7 @@ export const dict = {
         }
       },
       admins: {
-        title: "مديرو النظام (SAS 4)",
+        title: "مديرو النظام (SAS NET)",
         add: "إضافة مدير",
         table: {
           name: "اسم المدير",
@@ -844,7 +844,7 @@ export const dict = {
           dashboard: "لوحة القيادة",
           chat: "غرفة العمليات",
           search: "البحث المعرفي",
-          management: "إدارة SAS 4",
+          management: "إدارة SAS NET",
           files: "مدير الملفات",
           network: "الشبكة والبنية التحتية",
           security: "الأمان والوصول",

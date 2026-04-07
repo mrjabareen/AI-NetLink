@@ -1,5 +1,5 @@
 /**
- * © 2026 NetLink. All Rights Reserved.
+ * © 2026 SAS NET. All Rights Reserved.
  * Developer: Muhammad Rateb Jabarin
  * Website: aljabareen.com
  * Contact: admin@aljabareen.com | +970597409040

@@ -210,7 +210,7 @@ export default function CrmTab({ state }: CrmTabProps) {
         fetch(`${BASE_URL}/email/send`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ emails: emailTargets, text: messageText, subject: isRTL ? 'إشعار من نت لينك (NetLink)' : 'Notification from NetLink' })
+          body: JSON.stringify({ emails: emailTargets, text: messageText, subject: isRTL ? 'إشعار من ساس نت (SAS NET)' : 'Notification from SAS NET' })
         }).then(r => r.json().then(data => ({ type: 'Email', ok: !data.error, data })))
           .catch(e => ({ type: 'Email', ok: false, data: { error: e.message } }))
       );
@@ -287,7 +287,7 @@ export default function CrmTab({ state }: CrmTabProps) {
             <Users className="w-10 h-10 text-blue-500" />
             {t.nav.crm}
           </h2>
-          <p className="text-xl text-slate-500 dark:text-slate-400 mt-2 font-medium">
+          <p className="text-sm md:text-xl text-slate-500 dark:text-slate-400 mt-2 font-medium max-w-2xl leading-relaxed">
             {isRTL ? 'إدارة علاقات العملاء ومشتركي الشبكة' : 'Manage Customer Relationships and Subscribers'}
           </p>
         </div>

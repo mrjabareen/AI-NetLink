@@ -1,5 +1,5 @@
 /**
- * © 2026 NetLink. All Rights Reserved.
+ * © 2026 SAS NET. All Rights Reserved.
  * Developer: Muhammad Rateb Jabarin
  * Website: aljabareen.com
  * Contact: admin@aljabareen.com | +970597409040
@@ -194,7 +194,7 @@ export default function Login({ state, setState }: LoginProps) {
         </div>
 
         <p className="mt-8 text-center text-slate-500 dark:text-slate-400 text-sm flex flex-col gap-1">
-          <span>&copy; 2026 AI NetLink. All rights reserved.</span>
+          <span>&copy; 2026 SAS NET. All rights reserved.</span>
           <span className="text-xs opacity-75">Developed & Designed by Muhammad Rateb Jabarin</span>
         </p>
       </motion.div>

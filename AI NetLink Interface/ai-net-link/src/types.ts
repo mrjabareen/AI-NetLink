@@ -2,7 +2,7 @@ export type Lang = 'en' | 'ar';
 export type Theme = 'light' | 'dark';
 export type Tab = 'dashboard' | 'chat' | 'search' | 'settings' | 'files' | 'topology' | 'security' | 'analytics' | 'executive' | 'billing' | 'inventory' | 'crm' | 'field' | 'reports' | 'portal' | 'investors' | 'suppliers' | 'boi_expiry' | 'management' | 'network_radius';
 /**
- * © 2026 NetLink. All Rights Reserved.
+ * © 2026 SAS NET. All Rights Reserved.
  * Developer: Muhammad Rateb Jabarin
  * Website: aljabareen.com
  * Contact: admin@aljabareen.com | +970597409040

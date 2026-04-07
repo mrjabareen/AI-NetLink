@@ -1,5 +1,5 @@
 /**
- * © 2026 NetLink. All Rights Reserved.
+ * © 2026 SAS NET. All Rights Reserved.
  * Developer: Muhammad Rateb Jabarin
  * Website: aljabareen.com
  * Contact: admin@aljabareen.com | +970597409040
@@ -168,7 +168,6 @@ export default function App() {
     root.classList.remove('light', 'dark');
     root.classList.add(state.theme);
     root.dir = isRTL ? 'rtl' : 'ltr';
-    root.lang = 'en'; // Force English numerals at document level
   }, [state.theme, isRTL]);
 
   // Fetch true managers on app load globally

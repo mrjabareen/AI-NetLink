@@ -223,7 +223,7 @@ export default function ChatTab({ state }: ChatTabProps) {
               <div className={`flex flex-col gap-1.5 ${msg.sender === 'user' ? 'items-end' : 'items-start'}`}>
                 <div className="flex items-center gap-2 px-1">
                   <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">
-                    {msg.sender === 'ai' ? 'AI NetLink' : (state.lang === 'en' ? 'Operator' : 'المشغل')}
+                    {msg.sender === 'ai' ? 'SAS NET' : (state.lang === 'en' ? 'Operator' : 'المشغل')}
                   </span>
                   <span className="text-[10px] text-slate-400 dark:text-slate-500 font-mono">{msg.time}</span>
                 </div>
@@ -310,7 +310,7 @@ export default function ChatTab({ state }: ChatTabProps) {
               </div>
               <div className="flex flex-col gap-1.5 items-start">
                 <div className="flex items-center gap-2 px-1">
-                  <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">AI NetLink</span>
+                  <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">SAS NET</span>
                 </div>
                 <div className="p-4 md:p-5 shadow-sm bg-white dark:bg-[#18181B] border border-slate-100 dark:border-transparent rounded-2xl rounded-tl-sm flex items-center gap-1.5 h-[52px]">
                   <span className="w-2 h-2 rounded-full bg-teal-500/60 animate-bounce" style={{ animationDelay: '0ms' }}></span>
@@ -360,7 +360,7 @@ export default function ChatTab({ state }: ChatTabProps) {
           </div>
           <div className="text-center mt-3">
             <p className="text-[10px] text-slate-400 dark:text-slate-500 font-medium">
-              {state.lang === 'en' ? 'AI NetLink can make mistakes. Verify critical network configurations.' : 'قد يخطئ AI NetLink. تحقق من تكوينات الشبكة الحرجة.'}
+              {state.lang === 'en' ? 'SAS NET can make mistakes. Verify critical network configurations.' : 'قد يخطئ SAS NET. تحقق من تكوينات الشبكة الحرجة.'}
             </p>
           </div>
         </div>

@@ -51,7 +51,9 @@ export default function DashboardTab({ state, setState }: DashboardTabProps) {
       <header className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h2 className="text-2xl md:text-3xl font-bold text-slate-900 dark:text-white">{t.nav.dashboard}</h2>
-          <p className="text-slate-500 dark:text-slate-400 mt-1">{t.subtitle}</p>
+          <p className="text-slate-500 dark:text-slate-400 mt-1 text-xs md:text-sm max-w-2xl leading-relaxed">
+            {t.subtitle}
+          </p>
         </div>
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-3 px-3 py-1.5 rounded-xl bg-blue-50 dark:bg-blue-500/10 border border-blue-100 dark:border-blue-500/20">
@@ -143,7 +145,7 @@ export default function DashboardTab({ state, setState }: DashboardTabProps) {
           <div className="flex justify-between items-start z-10 relative">
             <div>
               <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">{t.dashboard.aiStatus}</p>
-              <h3 className="text-2xl font-bold text-slate-900 dark:text-white mt-1">AI NetLink</h3>
+              <h3 className="text-2xl font-bold text-slate-900 dark:text-white mt-1">SAS NET</h3>
               <div className="flex items-center gap-1 text-emerald-500 text-xs font-bold mt-2">
                 <Zap size={14} />
                 <span>{t.dashboard.ready}</span>

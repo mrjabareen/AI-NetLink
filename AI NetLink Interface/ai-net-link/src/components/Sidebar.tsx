@@ -163,11 +163,13 @@ export default function Sidebar({ state, setState }: SidebarProps) {
           <Activity className="text-white w-6 h-6" />
         </div>
         {state.sidebarOpen && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col overflow-hidden whitespace-nowrap">
-            <h1 className="text-xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-violet-600 dark:from-blue-400 dark:to-violet-400">
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col min-w-0">
+            <h1 className="text-xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-violet-600 dark:from-blue-400 dark:to-violet-400 whitespace-nowrap">
               {t.title}
             </h1>
-            <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">{t.subtitle}</p>
+            <p className="text-[10px] text-slate-500 dark:text-slate-400 font-bold leading-tight mt-0.5 break-words">
+              {t.subtitle}
+            </p>
           </motion.div>
         )}
       </div>

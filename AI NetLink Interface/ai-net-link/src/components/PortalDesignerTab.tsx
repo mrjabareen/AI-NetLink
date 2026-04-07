@@ -13,7 +13,7 @@ export default function PortalDesignerTab({ state }: PortalDesignerTabProps) {
   const isRTL = state.lang === 'ar';
 
   const [primaryColor, setPrimaryColor] = useState('#3b82f6');
-  const [welcomeText, setWelcomeText] = useState('Welcome to NetLink Hotspot');
+  const [welcomeText, setWelcomeText] = useState('Welcome to SAS NET Hotspot');
   const [buttonText, setButtonText] = useState('Connect to Internet');
   const [viewMode, setViewMode] = useState<'mobile' | 'desktop'>('mobile');
 
@@ -162,7 +162,7 @@ export default function PortalDesignerTab({ state }: PortalDesignerTabProps) {
               {/* Form Area */}
               <div className="flex-1 px-6 py-8 flex flex-col items-center text-center relative z-10 -mt-12">
                 <div className="w-20 h-20 bg-white dark:bg-slate-800 rounded-2xl shadow-xl flex items-center justify-center mb-6 border border-slate-100 dark:border-slate-700">
-                  <span className="text-2xl font-bold" style={{ color: primaryColor }}>NL</span>
+                  <span className="text-2xl font-bold" style={{ color: primaryColor }}>SAS</span>
                 </div>
                 
                 <h1 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">{welcomeText}</h1>
@@ -192,7 +192,7 @@ export default function PortalDesignerTab({ state }: PortalDesignerTabProps) {
                 </div>
 
                 <div className="mt-auto pt-8 text-xs text-slate-400">
-                  Powered by AI NetLink
+                  Powered by SAS NET
                 </div>
               </div>
             </div>
