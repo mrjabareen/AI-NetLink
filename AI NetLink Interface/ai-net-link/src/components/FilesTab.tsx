@@ -6,6 +6,7 @@ import { dict } from '../dict';
 import { BASE_URL } from '../api';
 import Editor from 'react-simple-code-editor';
 import Prism from 'prismjs';
+import { toastError, toastSuccess } from '../utils/notify';
 import 'prismjs/components/prism-json';
 
 interface FilesTabProps {
@@ -125,8 +126,9 @@ export default function FilesTab({ state, setState }: FilesTabProps) {
       if (!res.ok) throw new Error();
       setFileContent(unsavedContent);
       setConfirmSave(false);
+      toastSuccess(isRTL ? 'تم حفظ الملف بنجاح.' : 'File saved successfully.', isRTL ? 'تم الحفظ' : 'Saved');
     } catch (e) {
-      alert("Save failed");
+      toastError(isRTL ? 'فشل حفظ الملف.' : 'Save failed.', isRTL ? 'فشل الحفظ' : 'Save Failed');
     } finally {
       setIsSaving(false);
     }
@@ -148,8 +150,9 @@ export default function FilesTab({ state, setState }: FilesTabProps) {
       });
       if (!res.ok) throw new Error();
       fetchTree(currentPath);
+      toastSuccess(isRTL ? 'تم رفع الملف بنجاح.' : 'File uploaded successfully.', isRTL ? 'تم الرفع' : 'Uploaded');
     } catch (err) {
-      alert('Upload failed');
+      toastError(isRTL ? 'فشل رفع الملف.' : 'Upload failed.', isRTL ? 'فشل الرفع' : 'Upload Failed');
     } finally {
       setIsLoading(false);
       if (fileInputRef.current) fileInputRef.current.value = '';

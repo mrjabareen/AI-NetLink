@@ -4,6 +4,9 @@ import { Server, Activity, RefreshCw, Layers, Shield, Settings, Plus, Trash2, Ch
 import { AppState } from '../types';
 import { dict } from '../dict';
 import { getNetworkConfig, saveNetworkConfig, testMikrotikConnection, fetchProfiles, addProfile, updateProfile, deleteProfile, pushProfile } from '../api';
+import { toastError, toastSuccess } from '../utils/notify';
+import AppModal from './AppModal';
+import AppConfirmDialog from './AppConfirmDialog';
 
 interface NetworkRadiusTabProps {
   state: AppState;
@@ -40,6 +43,7 @@ export default function NetworkRadiusTab({ state, setState }: NetworkRadiusTabPr
   const [selectedProfileToPush, setSelectedProfileToPush] = useState<string | null>(null);
   const [pushTarget, setPushTarget] = useState('all'); 
   const [routersList, setRoutersList] = useState<any[]>([]);
+  const [profileToDelete, setProfileToDelete] = useState<string | null>(null);
 
   useEffect(() => {
     loadConfig();
@@ -110,18 +114,22 @@ export default function NetworkRadiusTab({ state, setState }: NetworkRadiusTabPr
           await loadProfiles();
           setIsEditingProfile(false);
           setProfileForm(null);
+          toastSuccess(isRTL ? 'تم حفظ البروفايل بنجاح.' : 'The profile was saved successfully.', isRTL ? 'تم الحفظ' : 'Profile Saved');
       } catch (e) {
-          alert(isRTL ? 'فشل حفظ البروفايل' : 'Failed to save profile');
+          toastError(isRTL ? 'فشل حفظ البروفايل.' : 'Failed to save profile.', isRTL ? 'تعذر الحفظ' : 'Save Failed');
       }
   };
 
-  const handleDeleteProfile = async (id: string) => {
-      if (!confirm(isRTL ? 'هل أنت متأكد من الحذف؟' : 'Are you sure you want to delete this profile?')) return;
+  const handleDeleteProfile = async () => {
+      if (!profileToDelete) return;
       try {
-          await deleteProfile(id);
+          await deleteProfile(profileToDelete);
           await loadProfiles();
+          toastSuccess(isRTL ? 'تم حذف البروفايل بنجاح.' : 'The profile was deleted successfully.', isRTL ? 'تم الحذف' : 'Profile Deleted');
       } catch (e) {
-          alert(isRTL ? 'فشل حذف البروفايل' : 'Failed to delete profile');
+          toastError(isRTL ? 'فشل حذف البروفايل.' : 'Failed to delete profile.', isRTL ? 'تعذر الحذف' : 'Delete Failed');
+      } finally {
+          setProfileToDelete(null);
       }
   };
 
@@ -131,9 +139,13 @@ export default function NetworkRadiusTab({ state, setState }: NetworkRadiusTabPr
       setShowPushModal(false);
       try {
           const res = await pushProfile(selectedProfileToPush, pushTarget);
-          alert(isRTL ? `تم إرسال البروفايل بنجاح!\n${res.message}` : `Profile pushed successfully!\n${res.message}`);
+          toastSuccess(
+            isRTL ? `تم إرسال البروفايل بنجاح. ${res.message}` : `Profile pushed successfully. ${res.message}`,
+            isRTL ? 'اكتملت المزامنة' : 'Push Completed',
+            4500
+          );
       } catch (e: any) {
-          alert((isRTL ? 'فشل الإرسال: ' : 'Push failed: ') + e.message);
+          toastError((isRTL ? 'فشل الإرسال: ' : 'Push failed: ') + e.message, isRTL ? 'تعذر الإرسال' : 'Push Failed');
       } finally {
           setIsPushingProfile(prev => ({ ...prev, [selectedProfileToPush]: false }));
           setSelectedProfileToPush(null);
@@ -170,9 +182,9 @@ export default function NetworkRadiusTab({ state, setState }: NetworkRadiusTabPr
     setIsSaving(true);
     try {
         await saveNetworkConfig(networkConfig);
-        alert(isRTL ? 'تم حفظ التعديلات بنجاح' : 'Changes saved successfully');
+        toastSuccess(isRTL ? 'تم حفظ إعدادات الشبكة والراديوس بنجاح.' : 'Network and RADIUS settings were saved successfully.', isRTL ? 'تم الحفظ' : 'Settings Saved');
     } catch (e) {
-        alert(isRTL ? 'فشل حفظ التعديلات' : 'Failed to save changes');
+        toastError(isRTL ? 'فشل حفظ التعديلات.' : 'Failed to save changes.', isRTL ? 'تعذر الحفظ' : 'Save Failed');
     } finally {
         setIsSaving(false);
     }
@@ -661,7 +673,7 @@ export default function NetworkRadiusTab({ state, setState }: NetworkRadiusTabPr
                                                                {isPushingProfile[p.id] ? <RefreshCw size={18} className="animate-spin" /> : <Send size={18} />}
                                                            </button>
                                                            <button onClick={() => handleEditProfile(p)} className="p-2 text-blue-500 hover:bg-blue-50 rounded-lg"><Edit2 size={18}/></button>
-                                                           <button onClick={() => handleDeleteProfile(p.id)} className="p-2 text-rose-500 hover:bg-rose-50 rounded-lg"><Trash2 size={18}/></button>
+                                                           <button onClick={() => setProfileToDelete(p.id)} className="p-2 text-rose-500 hover:bg-rose-50 rounded-lg"><Trash2 size={18}/></button>
                                                        </div>
                                                    </td>
                                                </tr>
@@ -684,24 +696,41 @@ export default function NetworkRadiusTab({ state, setState }: NetworkRadiusTabPr
         )}
       </div>
 
-      {showPushModal && selectedProfileToPush && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onClick={() => { setShowPushModal(false); setSelectedProfileToPush(null); }}>
-          <div className="bg-white dark:bg-[#18181B] rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl max-w-md w-full p-6" onClick={(e) => e.stopPropagation()}>
-            <h4 className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-4">{isRTL ? 'إرسال للميكروتيك' : 'Push to MikroTik'}</h4>
-            <label className="text-sm font-bold text-slate-500 block mb-2">{isRTL ? 'الهدف' : 'Target'}</label>
-            <select value={pushTarget} onChange={(e) => setPushTarget(e.target.value)} className="w-full mb-6 bg-white dark:bg-[#18181B] border border-slate-200 rounded-xl px-4 py-2">
-              <option value="all">{isRTL ? 'جميع الراوترات' : 'All routers'}</option>
-              {routersList.map((r: any) => (
-                <option key={r.id} value={r.id}>{r.name || r.host || r.id}</option>
-              ))}
-            </select>
-            <div className="flex gap-3 justify-end">
-              <button onClick={() => { setShowPushModal(false); setSelectedProfileToPush(null); }} className="px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 font-bold">{isRTL ? 'إلغاء' : 'Cancel'}</button>
-              <button onClick={handlePushProfile} className="px-4 py-2 rounded-xl bg-emerald-500 text-white font-bold flex items-center gap-2"><Send size={18} /> {isRTL ? 'إرسال' : 'Push'}</button>
-            </div>
+      <AppModal
+        open={showPushModal && Boolean(selectedProfileToPush)}
+        onClose={() => { setShowPushModal(false); setSelectedProfileToPush(null); }}
+        title={isRTL ? 'إرسال للميكروتيك' : 'Push to MikroTik'}
+        subtitle={isRTL ? 'حدد الراوتر المستهدف ثم أرسل البروفايل ضمن نفس النمط الموحد للنوافذ.' : 'Choose the target router and push the profile using the same unified modal style.'}
+        icon={<Send size={22} />}
+        maxWidthClassName="max-w-md"
+        isRTL={isRTL}
+        footer={
+          <div className="flex gap-3 justify-end">
+            <button onClick={() => { setShowPushModal(false); setSelectedProfileToPush(null); }} className="flex-1 rounded-2xl bg-slate-200 px-4 py-3 font-black text-slate-700 transition-all hover:bg-slate-300 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700">{isRTL ? 'إلغاء' : 'Cancel'}</button>
+            <button onClick={handlePushProfile} className="flex-1 rounded-2xl bg-emerald-500 px-4 py-3 font-black text-white shadow-xl shadow-emerald-500/20 transition-all hover:bg-emerald-600 flex items-center justify-center gap-2"><Send size={18} /> {isRTL ? 'إرسال' : 'Push'}</button>
           </div>
-        </div>
-      )}
+        }
+      >
+        <label className="mb-2 block text-sm font-black text-slate-500">{isRTL ? 'الهدف' : 'Target'}</label>
+        <select value={pushTarget} onChange={(e) => setPushTarget(e.target.value)} className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 font-bold text-slate-800 outline-none transition-all focus:ring-2 focus:ring-teal-500 dark:border-slate-800 dark:bg-[#18181B] dark:text-slate-100">
+          <option value="all">{isRTL ? 'جميع الراوترات' : 'All routers'}</option>
+          {routersList.map((r: any) => (
+            <option key={r.id} value={r.id}>{r.name || r.host || r.id}</option>
+          ))}
+        </select>
+      </AppModal>
+
+      <AppConfirmDialog
+        open={Boolean(profileToDelete)}
+        onClose={() => setProfileToDelete(null)}
+        onConfirm={handleDeleteProfile}
+        title={isRTL ? 'حذف البروفايل' : 'Delete Profile'}
+        description={isRTL ? 'سيتم حذف هذا البروفايل نهائيًا من قاعدة البيانات وإعدادات الراديوس.' : 'This profile will be permanently removed from the database and RADIUS settings.'}
+        confirmLabel={isRTL ? 'تأكيد الحذف' : 'Confirm Delete'}
+        cancelLabel={isRTL ? 'إلغاء' : 'Cancel'}
+        variant="danger"
+        isRTL={isRTL}
+      />
     </motion.div>
   );
 }

@@ -7,6 +7,7 @@ import { formatCurrency } from '../utils/currency';
 import { formatNumber, normalizeDigits, parseNumericInput, formatDate } from '../utils/format';
 import NumericInput from './NumericInput';
 import { dict } from '../dict';
+import { toastError, toastSuccess } from '../utils/notify';
 
 interface InvestorsTabProps {
   state: AppState;
@@ -112,7 +113,7 @@ export default function InvestorsTab({ state, setState }: InvestorsTabProps) {
     const amount = quantity * price;
     
     if (tradeType === 'sell' && quantity > myShareholderRecord.shares) {
-      alert(isRTL ? 'رصيد أسهم غير كافٍ' : 'Insufficient shares');
+      toastError(isRTL ? 'رصيد الأسهم غير كافٍ لإتمام عملية البيع.' : 'Insufficient shares to complete the sale.', isRTL ? 'رصيد غير كافٍ' : 'Insufficient Shares');
       return;
     }
 
@@ -142,7 +143,7 @@ export default function InvestorsTab({ state, setState }: InvestorsTabProps) {
     }));
 
     setQuantity(0);
-    alert(isRTL ? 'تمت العملية بنجاح' : 'Transaction completed successfully');
+    toastSuccess(isRTL ? 'تمت العملية بنجاح.' : 'Transaction completed successfully.', isRTL ? 'تمت العملية' : 'Transaction Completed');
   };
 
   const handleDistributeDividends = () => {
@@ -175,7 +176,7 @@ export default function InvestorsTab({ state, setState }: InvestorsTabProps) {
 
     setIsDistributing(false);
     setDividendAmount(0);
-    alert(isRTL ? 'تم توزيع الأرباح بنجاح' : 'Dividends distributed successfully');
+    toastSuccess(isRTL ? 'تم توزيع الأرباح بنجاح.' : 'Dividends distributed successfully.', isRTL ? 'تم التوزيع' : 'Distribution Completed');
   };
 
   return (

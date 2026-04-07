@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion } from 'motion/react';
 import { Wallet, ArrowUpRight, ArrowDownLeft, History, Users, Settings2, Plus, ArrowRight, ShieldCheck, TrendingUp, PieChart, Landmark, Percent } from 'lucide-react';
 import { AppState, FinancialTransaction, TeamMember } from '../types';
 import { dict } from '../dict';
 import { formatCurrency } from '../utils/currency';
 import { formatNumber } from '../utils/format';
+import { toastError, toastSuccess } from '../utils/notify';
+import AppModal from './AppModal';
 
 interface FinancialDashboardProps {
   state: AppState;
@@ -23,9 +25,15 @@ export default function FinancialDashboard({ state, setState }: FinancialDashboa
   const totalAgentBalances = agents.reduce((acc, curr) => acc + curr.balance, 0);
 
   const handleTopUp = () => {
-    if (!selectedAgent || !topUpAmount) return;
+    if (!selectedAgent || !topUpAmount) {
+      toastError(isRTL ? 'يرجى اختيار الوكيل وإدخال مبلغ صحيح.' : 'Select an agent and enter a valid amount.', isRTL ? 'بيانات ناقصة' : 'Missing Data');
+      return;
+    }
     const amount = parseFloat(topUpAmount);
-    if (isNaN(amount) || amount <= 0 || amount > state.centralBalance) return;
+    if (isNaN(amount) || amount <= 0 || amount > state.centralBalance) {
+      toastError(isRTL ? 'المبلغ غير صالح أو يتجاوز الرصيد المركزي.' : 'The amount is invalid or exceeds the central balance.', isRTL ? 'فشل الشحن' : 'Top Up Failed');
+      return;
+    }
 
     const newTransaction: FinancialTransaction = {
       id: `TX-${Date.now()}`,
@@ -51,6 +59,10 @@ export default function FinancialDashboard({ state, setState }: FinancialDashboa
     setIsTopUpModalOpen(false);
     setSelectedAgent(null);
     setTopUpAmount('');
+    toastSuccess(
+      isRTL ? `تم شحن ${selectedAgent.name} بمبلغ ${formatCurrency(amount, state.currency, state.lang)}.` : `${selectedAgent.name} was topped up with ${formatCurrency(amount, state.currency, state.lang)}.`,
+      isRTL ? 'تمت العملية بنجاح' : 'Top Up Completed'
+    );
   };
 
   return (
@@ -347,71 +359,59 @@ export default function FinancialDashboard({ state, setState }: FinancialDashboa
         )}
       </div>
 
-      {/* Top Up Modal */}
-      <AnimatePresence>
-        {isTopUpModalOpen && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setIsTopUpModalOpen(false)} className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm" />
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.95, y: 20 }} 
-              animate={{ opacity: 1, scale: 1, y: 0 }} 
-              exit={{ opacity: 0, scale: 0.95, y: 20 }} 
-              className="relative w-full max-w-md bg-white dark:bg-[#09090B] rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden"
+      <AppModal
+        open={isTopUpModalOpen}
+        onClose={() => setIsTopUpModalOpen(false)}
+        title={t.financial.topUp}
+        subtitle={isRTL ? 'شحن رصيد الوكيل من الرصيد المركزي بشكل مباشر وآمن.' : 'Top up an agent from the central balance securely.'}
+        icon={<Wallet size={24} />}
+        maxWidthClassName="max-w-md"
+        isRTL={isRTL}
+        footer={
+          <div className="flex gap-3">
+            <button onClick={() => setIsTopUpModalOpen(false)} className="flex-1 rounded-2xl bg-slate-200 py-3 text-sm font-black text-slate-700 transition-all hover:bg-slate-300 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700">
+              {t.management.cancel}
+            </button>
+            <button
+              onClick={handleTopUp}
+              className="flex-1 rounded-2xl bg-teal-500 py-3 text-sm font-black text-white shadow-xl shadow-teal-500/20 transition-all hover:bg-teal-600 disabled:opacity-50"
+              disabled={!selectedAgent || !topUpAmount}
             >
-              <div className="p-8 border-b border-slate-200 dark:border-slate-800 bg-gradient-to-r from-teal-500/10 to-transparent flex justify-between items-center">
-                <h3 className="text-xl font-black text-slate-900 dark:text-white flex items-center gap-3">
-                  <Wallet size={24} className="text-teal-500" />
-                  {t.financial.topUp}
-                </h3>
-              </div>
-              <div className="p-8 space-y-6">
-                <div className="space-y-4">
-                  <div>
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block">{isRTL ? 'الوكيل المستهدف' : 'Target Agent'}</label>
-                    <select 
-                      value={selectedAgent?.id || ''}
-                      onChange={(e) => setSelectedAgent(agents.find(a => a.id === e.target.value) || null)}
-                      className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-2xl px-4 py-3 text-slate-800 dark:text-slate-200 font-bold focus:ring-2 focus:ring-teal-500 outline-none"
-                    >
-                      <option value="">{isRTL ? '-- اختر الوكيل --' : '-- Select Agent --'}</option>
-                      {agents.map(a => <option key={a.id} value={a.id}>{a.name} ({formatCurrency(a.balance, state.currency, state.lang)})</option>)}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block">{t.financial.amount}</label>
-                    <div className="relative">
-                      <input 
-                        type="number" 
-                        value={topUpAmount}
-                        onChange={(e) => setTopUpAmount(e.target.value)}
-                        placeholder="0.00"
-                        className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-2xl px-4 py-4 text-2xl font-black text-slate-900 dark:text-white focus:ring-2 focus:ring-teal-500 outline-none text-center"
-                      />
-                      <span className="absolute right-4 top-1/2 -translate-y-1/2 font-black text-slate-400 text-sm">{state.currency}</span>
-                    </div>
-                    <p className="mt-2 text-[10px] text-slate-500 italic text-center">
-                      {isRTL ? `المتاح في الخزنة: ${formatCurrency(state.centralBalance, state.currency, state.lang)}` : `Available in Pool: ${formatCurrency(state.centralBalance, state.currency, state.lang)}`}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex gap-3 pt-4">
-                  <button onClick={() => setIsTopUpModalOpen(false)} className="flex-1 py-4 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-200 rounded-2xl font-black text-sm hover:bg-slate-200 transition-all">
-                    {t.management.cancel}
-                  </button>
-                  <button 
-                    onClick={handleTopUp}
-                    className="flex-1 py-4 bg-teal-500 text-white rounded-2xl font-black text-sm shadow-xl shadow-teal-500/20 hover:scale-[1.02] transition-all disabled:opacity-50"
-                    disabled={!selectedAgent || !topUpAmount}
-                  >
-                    {isRTL ? 'تأكيد الشحن' : 'Confirm Charge'}
-                  </button>
-                </div>
-              </div>
-            </motion.div>
+              {isRTL ? 'تأكيد الشحن' : 'Confirm Top Up'}
+            </button>
           </div>
-        )}
-      </AnimatePresence>
+        }
+      >
+        <div className="space-y-4">
+          <div>
+            <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-slate-400">{isRTL ? 'الوكيل المستهدف' : 'Target Agent'}</label>
+            <select
+              value={selectedAgent?.id || ''}
+              onChange={(e) => setSelectedAgent(agents.find(a => a.id === e.target.value) || null)}
+              className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 font-bold text-slate-800 outline-none transition-all focus:ring-2 focus:ring-teal-500 dark:border-slate-800 dark:bg-[#18181B] dark:text-slate-200"
+            >
+              <option value="">{isRTL ? '-- اختر الوكيل --' : '-- Select Agent --'}</option>
+              {agents.map(a => <option key={a.id} value={a.id}>{a.name} ({formatCurrency(a.balance, state.currency, state.lang)})</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-slate-400">{t.financial.amount}</label>
+            <div className="relative">
+              <input
+                type="number"
+                value={topUpAmount}
+                onChange={(e) => setTopUpAmount(e.target.value)}
+                placeholder="0.00"
+                className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-center text-2xl font-black text-slate-900 outline-none transition-all focus:ring-2 focus:ring-teal-500 dark:border-slate-800 dark:bg-[#18181B] dark:text-white"
+              />
+              <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm font-black text-slate-400">{state.currency}</span>
+            </div>
+            <p className="mt-2 text-center text-[10px] italic text-slate-500">
+              {isRTL ? `المتاح في الخزنة: ${formatCurrency(state.centralBalance, state.currency, state.lang)}` : `Available in Pool: ${formatCurrency(state.centralBalance, state.currency, state.lang)}`}
+            </p>
+          </div>
+        </div>
+      </AppModal>
     </motion.div>
   );
 }

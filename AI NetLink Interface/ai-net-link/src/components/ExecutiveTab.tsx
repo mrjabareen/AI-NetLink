@@ -3,6 +3,8 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Briefcase, Send, Mic, Paperclip, Copy, RefreshCw, Check, Database, FileText, Bot, AlertTriangle, Layers, Download, History, Trash2, Upload, ChevronDown, ChevronUp } from 'lucide-react';
 import { AppState } from '../types';
 import { executiveChat } from '../api';
+import { toastError, toastInfo, toastSuccess } from '../utils/notify';
+import AppConfirmDialog from './AppConfirmDialog';
 
 interface ExecutiveTabProps {
   state: AppState;
@@ -82,6 +84,7 @@ export default function ExecutiveTab({ state }: ExecutiveTabProps) {
   const [copiedId, setCopiedId] = useState<number | null>(null);
   const [conversationCopied, setConversationCopied] = useState(false);
   const [expandedSources, setExpandedSources] = useState<Record<number, boolean>>({});
+  const [isClearConfirmOpen, setIsClearConfirmOpen] = useState(false);
   const [preferBriefReplies, setPreferBriefReplies] = useState<boolean>(() => {
     try {
       return localStorage.getItem(EXECUTIVE_BRIEF_MODE_KEY) === 'true';
@@ -296,37 +299,32 @@ export default function ExecutiveTab({ state }: ExecutiveTabProps) {
     try {
       const saved = localStorage.getItem(EXECUTIVE_CHAT_STORAGE_KEY);
       if (!saved) {
-        alert(state.lang === 'en' ? 'No saved conversation was found.' : 'لم يتم العثور على محادثة محفوظة.');
+        toastInfo(state.lang === 'en' ? 'No saved conversation was found.' : 'لم يتم العثور على محادثة محفوظة.', state.lang === 'en' ? 'No Saved Conversation' : 'لا توجد محادثة محفوظة');
         return;
       }
 
       const parsed = JSON.parse(saved);
       if (!Array.isArray(parsed?.messages) || parsed.messages.length === 0) {
-        alert(state.lang === 'en' ? 'Saved conversation is empty.' : 'المحادثة المحفوظة فارغة.');
+        toastInfo(state.lang === 'en' ? 'Saved conversation is empty.' : 'المحادثة المحفوظة فارغة.', state.lang === 'en' ? 'Empty Conversation' : 'المحادثة فارغة');
         return;
       }
 
       setMessages(sanitizeLoadedMessages(parsed.messages));
+      toastSuccess(state.lang === 'en' ? 'Saved conversation restored successfully.' : 'تمت استعادة المحادثة المحفوظة بنجاح.', state.lang === 'en' ? 'Conversation Restored' : 'تمت الاستعادة');
     } catch (error) {
-      alert(state.lang === 'en' ? 'Failed to restore the saved conversation.' : 'فشلت استعادة المحادثة المحفوظة.');
+      toastError(state.lang === 'en' ? 'Failed to restore the saved conversation.' : 'فشلت استعادة المحادثة المحفوظة.', state.lang === 'en' ? 'Restore Failed' : 'فشلت الاستعادة');
     }
   };
 
   const handleClearConversation = () => {
-    const confirmed = window.confirm(
-      state.lang === 'en'
-        ? 'Do you want to clear the current conversation?'
-        : 'هل تريد مسح المحادثة الحالية؟'
-    );
-
-    if (!confirmed) return;
-
     const welcome = createWelcomeMessage(state.lang);
     setMessages([welcome]);
     localStorage.setItem(EXECUTIVE_CHAT_STORAGE_KEY, JSON.stringify({
       savedAt: new Date().toISOString(),
       messages: [welcome],
     }));
+    setIsClearConfirmOpen(false);
+    toastSuccess(state.lang === 'en' ? 'The conversation was cleared.' : 'تم مسح المحادثة.', state.lang === 'en' ? 'Conversation Cleared' : 'تم المسح');
   };
 
   const handleImportConversation = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -346,8 +344,9 @@ export default function ExecutiveTab({ state }: ExecutiveTabProps) {
         savedAt: new Date().toISOString(),
         messages: sanitizedMessages,
       }));
+      toastSuccess(state.lang === 'en' ? 'Conversation imported successfully.' : 'تم استيراد المحادثة بنجاح.', state.lang === 'en' ? 'Import Completed' : 'اكتمل الاستيراد');
     } catch {
-      alert(state.lang === 'en' ? 'Failed to import the conversation file.' : 'فشل استيراد ملف المحادثة.');
+      toastError(state.lang === 'en' ? 'Failed to import the conversation file.' : 'فشل استيراد ملف المحادثة.', state.lang === 'en' ? 'Import Failed' : 'فشل الاستيراد');
     } finally {
       event.target.value = '';
     }
@@ -465,7 +464,7 @@ export default function ExecutiveTab({ state }: ExecutiveTabProps) {
                   {state.lang === 'en' ? 'Import' : 'استيراد'}
                 </button>
                 <button
-                  onClick={handleClearConversation}
+                  onClick={() => setIsClearConfirmOpen(true)}
                   className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-rose-200 dark:border-rose-900 bg-rose-50/80 dark:bg-rose-950/20 text-xs font-bold text-rose-700 dark:text-rose-300 hover:border-rose-300 dark:hover:border-rose-700 transition-colors"
                 >
                   <Trash2 size={14} />
@@ -665,6 +664,18 @@ export default function ExecutiveTab({ state }: ExecutiveTabProps) {
             </button>
           </div>
         </div>
+
+        <AppConfirmDialog
+          open={isClearConfirmOpen}
+          onClose={() => setIsClearConfirmOpen(false)}
+          onConfirm={handleClearConversation}
+          title={state.lang === 'en' ? 'Clear Conversation' : 'مسح المحادثة'}
+          description={state.lang === 'en' ? 'The current conversation will be cleared and replaced with a fresh welcome message.' : 'سيتم مسح المحادثة الحالية واستبدالها برسالة ترحيب جديدة.'}
+          confirmLabel={state.lang === 'en' ? 'Confirm Clear' : 'تأكيد المسح'}
+          cancelLabel={state.lang === 'en' ? 'Cancel' : 'إلغاء'}
+          variant="danger"
+          isRTL={isRTL}
+        />
       </div>
     </motion.div>
   );

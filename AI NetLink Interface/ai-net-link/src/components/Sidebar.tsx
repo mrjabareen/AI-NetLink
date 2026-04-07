@@ -7,12 +7,19 @@
 import React, { useMemo, useState } from 'react';
 import { motion } from 'motion/react';
 import { LayoutDashboard, MessageSquare, Search, Settings, FolderClosed, Sun, Moon, Globe, Activity, ChevronRight, ChevronLeft, ChevronDown, Network, ShieldAlert, BarChart3, Briefcase, CreditCard, Package, Users, Map, PieChart, LayoutTemplate, TrendingUp, Truck, Calendar, Coins, ShieldCheck, LogOut, Server, Landmark } from 'lucide-react';
-import { AppState, Currency, Role } from '../types';
+import { AppState, Currency, Permission, Role, Tab } from '../types';
 import { dict } from '../dict';
 
 interface SidebarProps {
   state: AppState;
   setState: React.Dispatch<React.SetStateAction<AppState>>;
+}
+
+interface NavItem {
+  id: Tab;
+  icon: React.ComponentType<{ className?: string; size?: number; strokeWidth?: number }>;
+  label: string;
+  permission: Permission;
 }
 
 export default function Sidebar({ state, setState }: SidebarProps) {
@@ -36,7 +43,7 @@ export default function Sidebar({ state, setState }: SidebarProps) {
 
   const handleMouseLeave = () => setHoveredTooltip(null);
 
-  const allNavItems = [
+  const allNavItems: NavItem[] = [
     { id: 'dashboard', icon: LayoutDashboard, label: t.nav.dashboard, permission: 'view_dashboard' },
     { id: 'executive', icon: Briefcase, label: t.nav.executive, permission: 'access_executive' },
     { id: 'crm', icon: Users, label: t.nav.crm, permission: 'view_crm' },
@@ -61,7 +68,7 @@ export default function Sidebar({ state, setState }: SidebarProps) {
   ];
 
   const userPermissions = state.currentUser?.permissions || [];
-  const hasPermission = (perm: string) => state.role === 'super_admin' || userPermissions.includes('all') || userPermissions.includes(perm);
+  const hasPermission = (perm: Permission) => state.role === 'super_admin' || userPermissions.includes('all') || userPermissions.includes(perm);
 
   const navItems = allNavItems.filter(item => {
     // Investors portal is special for shareholders
@@ -116,14 +123,14 @@ export default function Sidebar({ state, setState }: SidebarProps) {
     setState(prev => ({ ...prev, currency: currencies[nextIndex] }));
   };
 
-  const renderNavButton = (item: any) => {
+  const renderNavButton = (item: NavItem) => {
     const Icon = item.icon;
     const isActive = state.activeTab === item.id;
 
     return (
       <button
         key={item.id}
-        onClick={() => setState(prev => ({ ...prev, activeTab: item.id as any }))}
+        onClick={() => setState(prev => ({ ...prev, activeTab: item.id }))}
         onMouseEnter={(e) => handleMouseEnter(e, item.label)}
         onMouseLeave={handleMouseLeave}
         className={`w-full flex items-center gap-4 px-3 py-3 rounded-xl transition-all duration-200 group relative overflow-hidden cursor-pointer text-sm
@@ -189,7 +196,7 @@ export default function Sidebar({ state, setState }: SidebarProps) {
 
               {expandedGroups[group.id] && (
                 <div className="space-y-1.5">
-                  {group.items.map((item: any) => renderNavButton(item))}
+                  {group.items.map((item) => renderNavButton(item))}
                 </div>
               )}
             </div>

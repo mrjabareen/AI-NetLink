@@ -7,7 +7,7 @@ import {
   Wallet, Database, Wifi, WifiOff, Lock, Activity, AlertCircle, ShieldOff,
   Edit, Trash, Unlock, Power
 } from 'lucide-react';
-import { AppState } from '../types';
+import { AppState, BaseSubscriberRecord, RouterRecord } from '../types';
 import { dict as originalDict } from '../dict';
 const dict = originalDict as any;
 import { formatCurrency } from '../utils/currency';
@@ -18,8 +18,46 @@ import {
   disconnectSubscriber, deleteSecret, disableSecret, enableSecret, 
   syncSubscriberToMikrotik, fetchRoutersList
 } from '../api';
+import { toastError, toastInfo, toastSuccess } from '../utils/notify';
+import AppConfirmDialog from './AppConfirmDialog';
 
 interface BoiExpiryTabProps {
+  state: AppState;
+}
+
+type IconComponent = React.ComponentType<{ size?: number; className?: string }>;
+
+type SubscriberRecord = BaseSubscriberRecord & {
+  id: string;
+  address?: string;
+  expiration?: string;
+};
+
+type ActionVariant = 'default' | 'danger' | 'warning' | 'success';
+
+type MenuAction = {
+  id: string;
+  label: string;
+  icon: IconComponent;
+  variant?: ActionVariant;
+  onClick: (subscriber: SubscriberRecord) => void;
+  tooltip: string;
+};
+
+type SubscriberStatus = 'expired' | 'today' | '3days' | 'active';
+
+type StatCardColor = 'rose' | 'amber' | 'blue' | 'emerald';
+type MethodColor = 'emerald' | 'blue' | 'rose';
+
+interface SubscriberCardProps {
+  sub: SubscriberRecord;
+  isRTL: boolean;
+  status: SubscriberStatus;
+  onNotify: () => void;
+  onRenew: () => void;
+  openMenuId: string | null;
+  setOpenMenuId: React.Dispatch<React.SetStateAction<string | null>>;
+  actions: MenuAction[];
   state: AppState;
 }
 
@@ -27,13 +65,13 @@ export default function BoiExpiryTab({ state }: BoiExpiryTabProps) {
   const isRTL = state.lang === 'ar';
   
   // Data State
-  const [subscribers, setSubscribers] = useState<any[]>([]);
+  const [subscribers, setSubscribers] = useState<SubscriberRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [activeFilter, setActiveFilter] = useState<'all' | 'expired' | 'today' | '3days' | 'active' | 'online' | 'activeOffline' | 'suspended' | 'demands' | 'debts'>('all');
 
   // Modal State
-  const [selectedSub, setSelectedSub] = useState<any | null>(null);
+  const [selectedSub, setSelectedSub] = useState<SubscriberRecord | null>(null);
   const [isMessageModalOpen, setIsMessageModalOpen] = useState(false);
   const [isRenewModalOpen, setIsRenewModalOpen] = useState(false);
   const [isBulkNotifying, setIsBulkNotifying] = useState(false);
@@ -49,8 +87,9 @@ export default function BoiExpiryTab({ state }: BoiExpiryTabProps) {
   const [isSyncModalOpen, setIsSyncModalOpen] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncTarget, setSyncTarget] = useState('all');
-  const [routersList, setRoutersList] = useState<any[]>([]);
+  const [routersList, setRoutersList] = useState<RouterRecord[]>([]);
   const [openActionMenuId, setOpenActionMenuId] = useState<string | null>(null);
+  const [disconnectCandidate, setDisconnectCandidate] = useState<string | null>(null);
 
   // Sync Data
   const loadData = async () => {
@@ -58,7 +97,7 @@ export default function BoiExpiryTab({ state }: BoiExpiryTabProps) {
     try {
       const data = await fetchSubscribers();
       // Deduplicate by ID to prevent React "duplicate key" crashes
-      const unique = Array.from(new Map(data.map((item: any) => [item.id, item])).values());
+      const unique = Array.from(new Map((data as SubscriberRecord[]).map((item) => [item.id, item])).values());
       setSubscribers(unique);
     } catch (err) {
       console.error('Failed to load subscribers');
@@ -100,7 +139,7 @@ export default function BoiExpiryTab({ state }: BoiExpiryTabProps) {
   }, []);
 
   useEffect(() => {
-    let interval: any;
+    let interval: ReturnType<typeof setInterval> | undefined;
     if (subscribers.length > 0) {
       pollStatus();
       interval = setInterval(() => pollStatus(), refreshInterval);
@@ -131,7 +170,7 @@ export default function BoiExpiryTab({ state }: BoiExpiryTabProps) {
 
   // Memoized Stats & Filtered List
   const { filteredList, subStats } = useMemo(() => {
-    const getSubscriberSearchBlob = (subscriber: any) => [
+    const getSubscriberSearchBlob = (subscriber: SubscriberRecord) => [
       subscriber.name,
       subscriber.firstname,
       subscriber.lastname,
@@ -193,12 +232,23 @@ export default function BoiExpiryTab({ state }: BoiExpiryTabProps) {
   // Action Handlers
   const handleDisconnect = async (username: string) => {
     if (!username) return;
-    if (!window.confirm(isRTL ? `هل أنت متأكد من قطع اتصال المشترك ${username}؟` : `Disconnect ${username}?`)) return;
+    setDisconnectCandidate(username);
+  };
+
+  const confirmDisconnect = async () => {
+    if (!disconnectCandidate) return;
+    const username = disconnectCandidate;
     try {
       await disconnectSubscriber(username);
       // Wait bit then poll
       setTimeout(() => pollStatus(false), 2000);
-    } catch (err) { console.error(err); }
+      toastSuccess(isRTL ? `تم قطع اتصال ${username} بنجاح.` : `${username} disconnected successfully.`, isRTL ? 'تمت العملية' : 'Disconnected');
+    } catch (err) {
+      console.error(err);
+      toastError(isRTL ? 'فشل قطع الاتصال.' : 'Failed to disconnect subscriber.', isRTL ? 'فشل العملية' : 'Operation Failed');
+    } finally {
+      setDisconnectCandidate(null);
+    }
   };
 
   const handleLockAccount = async (username: string) => {
@@ -222,25 +272,25 @@ export default function BoiExpiryTab({ state }: BoiExpiryTabProps) {
     setRoutersList(routers || []);
   };
 
-  const [syncingSubscriber, setSyncingSubscriber] = useState<any>(null);
+  const [syncingSubscriber, setSyncingSubscriber] = useState<SubscriberRecord | null>(null);
 
   const performSync = async () => {
     if (!syncingSubscriber) return;
     setIsSyncing(true);
     try {
       await syncSubscriberToMikrotik(syncingSubscriber.id, syncTarget);
-      alert(isRTL ? 'تمت المزامنة بنجاح' : 'Sync completed successfully');
+      toastSuccess(isRTL ? 'تمت المزامنة بنجاح.' : 'Sync completed successfully.', isRTL ? 'اكتملت المزامنة' : 'Sync Completed');
       setIsSyncModalOpen(false);
-    } catch (err) { alert(isRTL ? 'فشلت المزامنة' : 'Sync failed'); }
+    } catch (err) { toastError(isRTL ? 'فشلت المزامنة.' : 'Sync failed.', isRTL ? 'فشلت المزامنة' : 'Sync Failed'); }
     finally { setIsSyncing(false); }
   };
 
-  const getActions = (sub: any): any[] => [
+  const getActions = (sub: SubscriberRecord): MenuAction[] => [
     {
       id: 'edit',
       label: isRTL ? 'تعديل البيانات' : 'Edit Details',
       icon: Edit,
-      onClick: (s: any) => alert(isRTL ? 'وظيفة التعديل ستتوفر قريباً في هذا القسم' : 'Edit function coming soon to this section'),
+      onClick: () => toastInfo(isRTL ? 'وظيفة التعديل ستتوفر قريبًا في هذا القسم.' : 'Edit function will be available in this section soon.', isRTL ? 'قريبًا' : 'Coming Soon'),
       tooltip: isRTL ? 'تعديل بيانات المشترك' : 'Modify subscriber CRM data'
     },
     {
@@ -248,14 +298,14 @@ export default function BoiExpiryTab({ state }: BoiExpiryTabProps) {
       label: isRTL ? 'تجديد / تفعيل' : 'Renew / Activate',
       icon: Zap,
       variant: 'success',
-      onClick: (s: any) => { setSelectedSub(s); setIsRenewModalOpen(true); },
+      onClick: (s: SubscriberRecord) => { setSelectedSub(s); setIsRenewModalOpen(true); },
       tooltip: isRTL ? 'تجديد الاشتراك الحالي' : 'Renew current subscription'
     },
     {
       id: 'sync',
       label: isRTL ? 'مزامنة ميكروتيك' : 'Sync MikroTik',
       icon: RefreshCw,
-      onClick: (s: any) => handleSyncToMikrotik(s.id),
+      onClick: (s: SubscriberRecord) => handleSyncToMikrotik(s.id),
       tooltip: isRTL ? 'تحديث البيانات على الرواتر' : 'Push CRM data to router'
     },
     {
@@ -263,7 +313,7 @@ export default function BoiExpiryTab({ state }: BoiExpiryTabProps) {
       label: isRTL ? 'قطع الاتصال (طرد)' : 'Force Disconnect',
       icon: Power,
       variant: 'danger',
-      onClick: (s: any) => handleDisconnect(s.username),
+      onClick: (s: SubscriberRecord) => handleDisconnect(s.username || ''),
       tooltip: isRTL ? 'إغلاق الجلسة النشطة' : 'Kill active session'
     },
     {
@@ -271,7 +321,7 @@ export default function BoiExpiryTab({ state }: BoiExpiryTabProps) {
       label: isRTL ? 'قفل الحساب' : 'Lock Account',
       icon: Lock,
       variant: 'warning',
-      onClick: (s: any) => handleLockAccount(s.username),
+      onClick: (s: SubscriberRecord) => handleLockAccount(s.username || ''),
       tooltip: isRTL ? 'تعطيل الدخول مؤقتاً' : 'Suspend router access'
     },
     {
@@ -279,7 +329,7 @@ export default function BoiExpiryTab({ state }: BoiExpiryTabProps) {
       label: isRTL ? 'فتح الحساب' : 'Unlock Account',
       icon: Unlock,
       variant: 'success',
-      onClick: (s: any) => handleUnlockAccount(s.username),
+      onClick: (s: SubscriberRecord) => handleUnlockAccount(s.username || ''),
       tooltip: isRTL ? 'إعادة تفعيل الدخول' : 'Restore router access'
     }
   ];
@@ -289,7 +339,7 @@ export default function BoiExpiryTab({ state }: BoiExpiryTabProps) {
     setIsBulkNotifying(true);
     await new Promise(r => setTimeout(r, 2000));
     setIsBulkNotifying(false);
-    alert(isRTL ? 'تم إرسال التنبيهات لجميع المستحقين بنجاح!' : 'Notifications sent to all eligible subscribers successfully!');
+    toastSuccess(isRTL ? 'تم إرسال التنبيهات لجميع المستحقين بنجاح.' : 'Notifications sent to all eligible subscribers successfully.', isRTL ? 'اكتمل الإرسال' : 'Notifications Sent');
   };
 
   // Close menus on click outside
@@ -522,6 +572,18 @@ export default function BoiExpiryTab({ state }: BoiExpiryTabProps) {
         )}
       </AnimatePresence>
 
+      <AppConfirmDialog
+        open={Boolean(disconnectCandidate)}
+        onClose={() => setDisconnectCandidate(null)}
+        onConfirm={confirmDisconnect}
+        title={isRTL ? 'قطع اتصال المشترك' : 'Disconnect Subscriber'}
+        description={isRTL ? `سيتم قطع اتصال ${disconnectCandidate || ''} مؤقتًا وإجباره على إعادة الاتصال.` : `${disconnectCandidate || ''} will be disconnected temporarily and forced to reconnect.`}
+        confirmLabel={isRTL ? 'تأكيد قطع الاتصال' : 'Confirm Disconnect'}
+        cancelLabel={isRTL ? 'إلغاء' : 'Cancel'}
+        variant="warning"
+        isRTL={isRTL}
+      />
+
       {/* Messaging Modal */}
       <AnimatePresence>
         {isMessageModalOpen && selectedSub && (
@@ -546,7 +608,17 @@ const StatCardV2 = ({
   description,
   active, 
   onClick 
-}: any) => {
+}: {
+  icon: IconComponent;
+  label: string;
+  value: string | number;
+  color: string;
+  delay?: number;
+  isRTL: boolean;
+  description?: string;
+  active: boolean;
+  onClick: () => void;
+}) => {
   // Adaptive font size for large values
   const valueLength = String(value).length;
   const valueSize = valueLength > 12 ? 'text-lg md:text-xl' : valueLength > 8 ? 'text-xl md:text-2xl' : 'text-2xl md:text-3xl';
@@ -584,8 +656,15 @@ const StatCardV2 = ({
   );
 };
 
-function StatCard({ label, value, icon: Icon, color, active, onClick }: any) {
-  const colorMap: any = {
+function StatCard({ label, value, icon: Icon, color, active, onClick }: {
+  label: string;
+  value: string | number;
+  icon: IconComponent;
+  color: StatCardColor;
+  active: boolean;
+  onClick: () => void;
+}) {
+  const colorMap: Record<StatCardColor, string> = {
     rose: 'border-rose-500 text-rose-500 bg-rose-500/5 shadow-rose-500/10',
     amber: 'border-amber-500 text-amber-500 bg-amber-500/5 shadow-amber-500/10',
     blue: 'border-blue-500 text-blue-500 bg-blue-500/5 shadow-blue-500/10',
@@ -610,19 +689,19 @@ function StatCard({ label, value, icon: Icon, color, active, onClick }: any) {
   );
 }
 
-function SubscriberCard({ sub, isRTL, status, onNotify, onRenew, openMenuId, setOpenMenuId, actions, state }: any) {
+const SubscriberCard: React.FC<SubscriberCardProps> = ({ sub, isRTL, status, onNotify, onRenew, openMenuId, setOpenMenuId, actions, state }) => {
   const currentBalance = parseFloat(String(sub['الرصيد المتبقي له'] || 0)) || 0;
   const currentDebt = parseFloat(String(sub['عليه دين'] || 0)) || 0;
   const balanceValue = currentBalance - currentDebt;
 
-  const statusColors: any = {
+  const statusColors: Record<SubscriberStatus, string> = {
     expired: 'border-l-rose-600 bg-rose-500/5 ring-rose-500/20',
     today: 'border-l-amber-500 bg-amber-500/5 ring-amber-500/20',
     '3days': 'border-l-blue-500 bg-blue-500/5 ring-blue-500/20',
     active: 'border-l-emerald-500 bg-emerald-500/5 ring-emerald-500/20',
   };
 
-  const statusLabels: any = {
+  const statusLabels: Record<SubscriberStatus, string> = {
     expired: isRTL ? 'منتهي الصلاحية' : 'Expired',
     today: isRTL ? 'ينتهي اليوم' : 'Ends Today',
     '3days': isRTL ? 'ينتهي قريباً' : 'Ends Soon',
@@ -716,9 +795,15 @@ function SubscriberCard({ sub, isRTL, status, onNotify, onRenew, openMenuId, set
       </div>
     </motion.div>
   );
-}
+};
 
-const SmartActionMenu = ({ item, actions, isOpen, onToggle, isRTL }: any) => {
+const SmartActionMenu = ({ item, actions, isOpen, onToggle, isRTL }: {
+  item: SubscriberRecord;
+  actions: MenuAction[];
+  isOpen: boolean;
+  onToggle: () => void;
+  isRTL: boolean;
+}) => {
   return (
     <div className="relative inline-block" onClick={(e) => e.stopPropagation()}>
       <button 
@@ -737,7 +822,7 @@ const SmartActionMenu = ({ item, actions, isOpen, onToggle, isRTL }: any) => {
             className={`absolute ${isRTL ? 'left-0' : 'right-0'} top-full mt-2 w-56 bg-white dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl z-[100] overflow-hidden`}
           >
             <div className="p-2 space-y-1">
-              {actions.map((action: any) => (
+              {actions.map((action) => (
                 <button 
                   key={action.id}
                   onClick={() => { action.onClick(item); onToggle(); }}
@@ -760,7 +845,11 @@ const SmartActionMenu = ({ item, actions, isOpen, onToggle, isRTL }: any) => {
   );
 };
 
-function SimpleMessageModal({ sub, isRTL, onClose }: any) {
+function SimpleMessageModal({ sub, isRTL, onClose }: {
+  sub: SubscriberRecord;
+  isRTL: boolean;
+  onClose: () => void;
+}) {
   const [method, setMethod] = useState<'whatsapp' | 'sms' | 'email'>('whatsapp');
   const [sending, setSending] = useState(false);
 
@@ -835,8 +924,14 @@ function SimpleMessageModal({ sub, isRTL, onClose }: any) {
   );
 }
 
-function MethodButton({ active, icon: Icon, label, onClick, color }: any) {
-  const colorMap: any = {
+function MethodButton({ active, icon: Icon, label, onClick, color }: {
+  active: boolean;
+  icon: IconComponent;
+  label: string;
+  onClick: () => void;
+  color: MethodColor;
+}) {
+  const colorMap: Record<MethodColor, string> = {
     emerald: 'bg-emerald-500/10 text-emerald-600',
     blue: 'bg-blue-500/10 text-blue-600',
     rose: 'bg-rose-500/10 text-rose-600',

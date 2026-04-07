@@ -1,13 +1,16 @@
 import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Users, Truck, ShieldCheck, Search, Plus, Edit2, Trash2, X, Save, CheckCircle2, AlertCircle, UserPlus, Filter, Briefcase, UserCog, PieChart, RefreshCw, Activity, Globe, Wifi, WifiOff, Router, Zap, LogOut, Power, MoreVertical, Lock, Unlock, ShieldOff, Edit, Trash, Calendar, Send, Smartphone, Mail, MessageSquare, CreditCard, Coins, Wallet } from 'lucide-react';
-import { AppState, Permission, FinancialTransaction } from '../types';
+import { AppState, BaseEntityRecord, Permission, FinancialTransaction, MessageTemplate, NetworkProfile, RouterRecord } from '../types';
 import { dict } from '../dict';
 import { formatNumber, normalizeDigits } from '../utils/format';
 import { formatCurrency } from '../utils/currency';
 import { fetchSubscribers, fetchSuppliers, fetchInvestors, addSubscriber, updateSubscriber, deleteSubscriber, addSupplier, updateSupplier, deleteSupplier, fetchManagersRaw, addManager, updateManager, deleteManager, addInvestor, updateInvestor, deleteInvestor, directorsApi, deputiesApi, iptvApi, getMikrotikStatus, getMikrotikStatusBatch, disconnectSubscriber, disconnectAllSubscribers, deleteSecret, disableSecret, enableSecret, syncSubscriberToMikrotik, fetchRoutersList, fetchProfiles, activateSubscriber, extendSubscriber, getMessageData, saveMessageData, BASE_URL, topUpManager, updateManagerTxLimit } from '../api';
 import { getSmartMatchScore, smartMatch } from '../utils/search';
+import { toastError, toastInfo, toastSuccess } from '../utils/notify';
 import SecurityGroupsTab from './SecurityGroupsTab';
+import AppConfirmDialog from './AppConfirmDialog';
+import AppPromptDialog from './AppPromptDialog';
 
 interface ManagementTabProps {
   state: AppState;
@@ -16,11 +19,45 @@ interface ManagementTabProps {
 
 type ManagementSubTab = 'subscribers' | 'suppliers' | 'shareholders' | 'managers' | 'iptv' | 'groups';
 
+type IconComponent = React.ComponentType<{ size?: number; className?: string }>;
+
+type DynamicItem = BaseEntityRecord & {
+  firstName?: string;
+  lastName?: string;
+  role?: string;
+};
+
+type SyncResultDetail = {
+  routerId?: string;
+  routerName?: string;
+  router?: string;
+  action?: string;
+  profile?: string;
+  success?: boolean;
+  message?: string;
+  error?: string;
+  [key: string]: unknown;
+};
+
+type RouterDiagnostic = {
+  name?: string;
+  routerName?: string;
+  host?: string;
+  online?: boolean;
+  usersCount?: number;
+  connectionError?: string;
+  pppCount?: number;
+  hotspotCount?: number;
+  rawSample?: unknown;
+  error?: string;
+  [key: string]: unknown;
+};
+
 interface MenuAction {
   id: string;
   label: string;
-  icon: any;
-  onClick: (item: any) => void;
+  icon: IconComponent;
+  onClick: (item: DynamicItem) => void;
   variant?: 'default' | 'danger' | 'warning' | 'success';
   tooltip: string;
 }
@@ -33,7 +70,7 @@ const SmartActionMenu = ({
   isRTL, 
   isLastRows 
 }: { 
-  item: any; 
+  item: DynamicItem; 
   actions: MenuAction[]; 
   isOpen: boolean; 
   onToggle: () => void; 
@@ -110,31 +147,31 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
     if (state.role === 'super_admin') return true;
     
     // Check individual permissions
-    if (userPermissions.includes(perm as any)) return true;
+    if (userPermissions.includes(perm)) return true;
     
     // Check group permissions
     if (state.currentUser?.groupId) {
       const group = state.securityGroups.find(g => g.id === state.currentUser?.groupId);
-      if (group?.permissions.includes(perm as any)) return true;
+      if (group?.permissions.includes(perm)) return true;
     }
     
     return false;
   };
 
-  const getSupplierFieldValue = (item: any, key: string) => String(item?.[key] ?? '').trim();
-  const getSupplierCode = (item: any) => getSupplierFieldValue(item, 'كود');
-  const getSupplierName = (item: any) => getSupplierFieldValue(item, 'اسم المورد') || String(item?.id || '');
-  const getSupplierNotes = (item: any) => getSupplierFieldValue(item, 'ملاحظات');
-  const getSubscriberDisplayName = (item: any) => item.name || item.firstname || item['الاسم الأول'] || item.username || '-';
-  const getSubscriberStatusLabel = (item: any) => t.management.subscribers.statuses[item.status] || item['حالة الحساب'] || item.status || '-';
-  const isSubscriberActive = (item: any) => item.status === 'active' || item['حالة الحساب'] === 'مفعل';
-  const getInvestorName = (item: any) => item.name || '-';
-  const getManagerName = (item: any) => item.name || `${item['الاسم الاول'] || item.firstName || ''} ${item['الاسم الثاني'] || item.lastName || ''}`.trim() || item.username || item['اسم الدخول'] || '-';
-  const getManagerRole = (item: any) => item.role || item['الصلاحية'] || (isRTL ? 'موظف' : 'Staff');
-  const isManagerActive = (item: any) => item.status === 'active' || item['الحالة'] === 'نشط' || !item.status;
-  const getIptvName = (item: any) => item.name || '-';
-  const getIptvStatusLabel = (item: any) => t.management.iptv.statuses[item.status] || item.status || '-';
-  const getIptvStatusClass = (item: any) => (
+  const getSupplierFieldValue = (item: DynamicItem, key: string) => String(item?.[key] ?? '').trim();
+  const getSupplierCode = (item: DynamicItem) => getSupplierFieldValue(item, 'كود');
+  const getSupplierName = (item: DynamicItem) => getSupplierFieldValue(item, 'اسم المورد') || String(item?.id || '');
+  const getSupplierNotes = (item: DynamicItem) => getSupplierFieldValue(item, 'ملاحظات');
+  const getSubscriberDisplayName = (item: DynamicItem) => String(item.name || item.firstname || item['الاسم الأول'] || item.username || '-');
+  const getSubscriberStatusLabel = (item: DynamicItem) => t.management.subscribers.statuses[String(item.status || '')] || String(item['حالة الحساب'] || item.status || '-');
+  const isSubscriberActive = (item: DynamicItem) => item.status === 'active' || item['حالة الحساب'] === 'مفعل';
+  const getInvestorName = (item: DynamicItem) => String(item.name || '-');
+  const getManagerName = (item: DynamicItem) => String(item.name || `${item['الاسم الاول'] || item.firstName || ''} ${item['الاسم الثاني'] || item.lastName || ''}`.trim() || item.username || item['اسم الدخول'] || '-');
+  const getManagerRole = (item: DynamicItem) => String(item.role || item['الصلاحية'] || (isRTL ? 'موظف' : 'Staff'));
+  const isManagerActive = (item: DynamicItem) => item.status === 'active' || item['الحالة'] === 'نشط' || !item.status;
+  const getIptvName = (item: DynamicItem) => String(item.name || '-');
+  const getIptvStatusLabel = (item: DynamicItem) => t.management.iptv.statuses[String(item.status || '')] || String(item.status || '-');
+  const getIptvStatusClass = (item: DynamicItem) => (
     item.status === 'active'
       ? 'bg-emerald-100 dark:bg-emerald-500/10 text-emerald-600'
       : item.status === 'suspended'
@@ -180,7 +217,7 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
     }
   };
 
-  const parseSupplierAmount = (value: any) => {
+  const parseSupplierAmount = (value: unknown) => {
     const raw = String(value ?? '').trim();
     if (!raw || raw === '-') return 0;
     const isNegative = raw.includes('(') && raw.includes(')');
@@ -188,10 +225,20 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
     return isNegative ? -numeric : numeric;
   };
 
-  const formatSupplierAmount = (value: any) => {
+  const formatSupplierAmount = (value: unknown) => {
     const raw = String(value ?? '').trim();
     if (!raw || raw === '-') return '-';
     return formatCurrency(parseSupplierAmount(raw), state.currency, state.lang, 2);
+  };
+  const getStringValue = (value: unknown, fallback = '') => {
+    if (typeof value === 'string') return value;
+    if (typeof value === 'number') return String(value);
+    return fallback;
+  };
+  const getNumberValue = (value: unknown) => {
+    if (typeof value === 'number') return value;
+    if (typeof value === 'string') return parseFloat(value) || 0;
+    return 0;
   };
 
   const [activeSubTab, setActiveSubTab] = useState<ManagementSubTab>(() => {
@@ -199,12 +246,12 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
     if (saved) return saved as ManagementSubTab;
     
     if (state.role === 'super_admin') return 'subscribers';
-    if (hasPermission('view_subscribers' as any)) return 'subscribers';
-    if (hasPermission('view_iptv' as any)) return 'iptv';
-    if (hasPermission('view_suppliers' as any)) return 'suppliers';
-    if (hasPermission('view_shareholders' as any)) return 'shareholders';
-    if (hasPermission('view_admins' as any)) return 'managers';
-    if (hasPermission('manage_security_groups' as any)) return 'groups';
+    if (hasPermission('view_subscribers')) return 'subscribers';
+    if (hasPermission('view_iptv')) return 'iptv';
+    if (hasPermission('view_suppliers')) return 'suppliers';
+    if (hasPermission('view_shareholders')) return 'shareholders';
+    if (hasPermission('view_admins')) return 'managers';
+    if (hasPermission('manage_security_groups')) return 'groups';
     return 'subscribers';
   });
 
@@ -214,8 +261,8 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [editingItem, setEditingItem] = useState<any>(null);
-  const [newItem, setNewItem] = useState<any>({});
+  const [editingItem, setEditingItem] = useState<DynamicItem | null>(null);
+  const [newItem, setNewItem] = useState<Record<string, unknown>>({});
   const [showSuccess, setShowSuccess] = useState(false);
   const [statusFilter, setStatusFilter] = useState('all');
   const [showFilters, setShowFilters] = useState(false);
@@ -234,15 +281,21 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
   const [isActivateModalOpen, setIsActivateModalOpen] = useState(false);
   const [activationOption, setActivationOption] = useState<'today' | 'first_of_month'>('today');
   const [isActivating, setIsActivating] = useState(false);
-  const [subToActivate, setSubToActivate] = useState<any>(null);
+  const [subToActivate, setSubToActivate] = useState<DynamicItem | null>(null);
   const [activationTarget, setActivationTarget] = useState('all');
   const [isTopUpModalOpen, setIsTopUpModalOpen] = useState(false);
-  const [topUpTarget, setTopUpTarget] = useState<any>(null);
+  const [topUpTarget, setTopUpTarget] = useState<DynamicItem | null>(null);
   const [topUpAmount, setTopUpAmount] = useState('');
+  const [disconnectCandidate, setDisconnectCandidate] = useState<string | null>(null);
+  const [deleteSecretCandidate, setDeleteSecretCandidate] = useState<string | null>(null);
+  const [bulkDisconnectConfirmOpen, setBulkDisconnectConfirmOpen] = useState(false);
+  const [deleteCandidateId, setDeleteCandidateId] = useState<string | null>(null);
+  const [templateDraftName, setTemplateDraftName] = useState('');
+  const [isTemplatePromptOpen, setIsTemplatePromptOpen] = useState(false);
 
   // ─── MIKROTIK SYNC STATE ────────────────────────────────────────────────────
   // ─── NETWORK PROFILES (for plan dropdown) ─────────────────────────────────
-  const [networkProfiles, setNetworkProfiles] = useState<any[]>([]);
+  const [networkProfiles, setNetworkProfiles] = useState<NetworkProfile[]>([]);
 
   const loadNetworkProfiles = async () => {
     try {
@@ -254,11 +307,11 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
   };
 
   const [isSyncModalOpen, setIsSyncModalOpen] = useState(false);
-  const [syncingSubscriber, setSyncingSubscriber] = useState<any>(null);
+  const [syncingSubscriber, setSyncingSubscriber] = useState<DynamicItem | null>(null);
   const [syncTarget, setSyncTarget] = useState('all');
-  const [routersList, setRoutersList] = useState<any[]>([]);
+  const [routersList, setRoutersList] = useState<RouterRecord[]>([]);
   const [isSyncing, setIsSyncing] = useState(false);
-  const [syncResult, setSyncResult] = useState<{ success: boolean; message: string; details?: any[] } | null>(null);
+  const [syncResult, setSyncResult] = useState<{ success: boolean; message: string; details?: SyncResultDetail[] } | null>(null);
 
   const SUBSCRIBER_COLUMNS = [
     { id: 'id', label: isRTL ? 'المعرف' : 'ID', defaultVisible: true },
@@ -368,11 +421,11 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
   }, [visibleColumns]);
 
   // ─── LIVE DATA FROM API ─────────────────────────────────────────────────────
-  const [subscribers, setSubscribers] = useState<any[]>([]);
-  const [suppliers, setSuppliers] = useState<any[]>([]);
-  const [shareholders, setShareholders] = useState<any[]>([]);
-  const [managers, setManagers] = useState<any[]>([]);
-  const [iptvSubscribers, setIptvSubscribers] = useState<any[]>([]);
+  const [subscribers, setSubscribers] = useState<DynamicItem[]>([]);
+  const [suppliers, setSuppliers] = useState<DynamicItem[]>([]);
+  const [shareholders, setShareholders] = useState<DynamicItem[]>([]);
+  const [managers, setManagers] = useState<DynamicItem[]>([]);
+  const [iptvSubscribers, setIptvSubscribers] = useState<DynamicItem[]>([]);
   const [onlineStatuses, setOnlineStatuses] = useState<Record<string, boolean>>({});
 
   const supplierSummary = useMemo(() => {
@@ -421,42 +474,42 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
   }, [iptvSubscribers]);
 
   // Directors, Deputies, IPTV — Now live via API
-  const [directors, setDirectors] = useState<any[]>([]);
-  const [deputies, setDeputies] = useState<any[]>([]);
+  const [directors, setDirectors] = useState<DynamicItem[]>([]);
+  const [deputies, setDeputies] = useState<DynamicItem[]>([]);
   const [lastStatusUpdate, setLastStatusUpdate] = useState<string | null>(null);
   const [refreshInterval, setRefreshInterval] = useState<number>(30000); // Default 30s
   const [isStatusLoading, setIsStatusLoading] = useState(false);
   const [failedRouters, setFailedRouters] = useState<string[]>([]);
   const [onlineNamesList, setOnlineNamesList] = useState<string[]>([]);
-  const [routerDiagnostics, setRouterDiagnostics] = useState<Record<string, any>>({});
+  const [routerDiagnostics, setRouterDiagnostics] = useState<Record<string, RouterDiagnostic>>({});
   const [isDebugModalOpen, setIsDebugModalOpen] = useState(false);
   const [debugSearchTerm, setDebugSearchTerm] = useState('');
   const [isDisconnecting, setIsDisconnecting] = useState<Record<string, boolean>>({});
   const [openActionMenuId, setOpenActionMenuId] = useState<string | null>(null);
   const [isExtendModalOpen, setIsExtendModalOpen] = useState(false);
-  const [extendingSub, setExtendingSub] = useState<any>(null);
+  const [extendingSub, setExtendingSub] = useState<DynamicItem | null>(null);
   const [extensionTarget, setExtensionTarget] = useState<string>('all');
   const [selectedDuration, setSelectedDuration] = useState<{unit: 'hours' | 'days', value: number} | null>(null);
 
   // Messaging System
   const [isMessageModalOpen, setIsMessageModalOpen] = useState(false);
-  const [messagingSub, setMessagingSub] = useState<any>(null);
+  const [messagingSub, setMessagingSub] = useState<DynamicItem | null>(null);
   const [messageTypes, setMessageTypes] = useState<Set<string>>(new Set(['whatsapp']));
   const [messageText, setMessageText] = useState('');
   const [isSendingMessage, setIsSendingMessage] = useState(false);
-  const [templates, setTemplates] = useState<any[]>([]);
+  const [templates, setTemplates] = useState<MessageTemplate[]>([]);
   const [selectedTemplate, setSelectedTemplate] = useState('');
 
-  const getActions = (item: any): MenuAction[] => {
+  const getActions = (item: DynamicItem): MenuAction[] => {
     const actions: MenuAction[] = [];
     
     // Check main edit permission
     const canManageTabs = 
-      (activeSubTab === 'subscribers' && hasPermission('manage_subscribers' as any)) ||
-      (activeSubTab === 'iptv' && hasPermission('manage_iptv' as any)) ||
-      (activeSubTab === 'suppliers' && hasPermission('manage_suppliers' as any)) ||
-      (activeSubTab === 'shareholders' && hasPermission('manage_shareholders' as any)) ||
-      (activeSubTab === 'managers' && hasPermission('manage_admins' as any));
+      (activeSubTab === 'subscribers' && hasPermission('manage_subscribers')) ||
+      (activeSubTab === 'iptv' && hasPermission('manage_iptv')) ||
+      (activeSubTab === 'suppliers' && hasPermission('manage_suppliers')) ||
+      (activeSubTab === 'shareholders' && hasPermission('manage_shareholders')) ||
+      (activeSubTab === 'managers' && hasPermission('manage_admins'));
 
     if (!canManageTabs) return [];
 
@@ -577,8 +630,10 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
           label: isRTL ? 'إدارة القيود المالية' : 'Manage Limits',
           icon: Lock,
           onClick: (item) => {
-            // Modal for Transaction Limits
-            alert(isRTL ? 'ستتوفر واجهة إدارة القيود المالية قريبًا.' : 'Financial limits management UI will be available soon.');
+            toastInfo(
+              isRTL ? 'ستتوفر واجهة إدارة القيود المالية قريبًا.' : 'Financial limits management UI will be available soon.',
+              isRTL ? 'قريبًا' : 'Coming Soon'
+            );
           },
           tooltip: isRTL ? 'تحديد الحد الأقصى لكل عملية شحن' : 'Set the maximum amount allowed per transaction.'
         }
@@ -591,7 +646,7 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
       label: isRTL ? 'حذف من النظام' : 'Delete from System',
       icon: Trash,
       variant: 'danger',
-      onClick: (item) => handleDelete(item.id),
+      onClick: (item) => setDeleteCandidateId(item.id),
       tooltip: isRTL ? `حذف ${getTabEntityLabel()} نهائيًا من قاعدة البيانات` : `Permanently remove this ${getTabEntityLabel()} from the database.`
     });
 
@@ -632,7 +687,7 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
           if (data && data.length > 0) setIptvSubscribers(data);
           else setApiError('لم يتم العثور على اشتراكات IPTV.');
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error('Failed to load data', err);
         setApiError('فشل الاتصال بالخادم. يرجى التأكد من تشغيل npm run api');
       } finally {
@@ -683,7 +738,7 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
   };
 
   React.useEffect(() => {
-    let interval: any;
+    let interval: ReturnType<typeof setInterval> | undefined;
 
     if (activeSubTab === 'subscribers' && refreshInterval > 0) {
       // Initial poll
@@ -699,35 +754,57 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
 
   const handleDisconnect = async (username: string) => {
     if (!username) return;
-    if (!window.confirm(isRTL ? `هل أنت متأكد من قطع اتصال المشترك ${username}؟ سيؤدي ذلك لإعادة اتصاله من جديد.` : `Are you sure you want to disconnect ${username}? This will force them to reconnect.`)) return;
+    setDisconnectCandidate(username);
+  };
 
+  const confirmDisconnect = async () => {
+    if (!disconnectCandidate) return;
+    const username = disconnectCandidate;
     setIsDisconnecting(prev => ({ ...prev, [username]: true }));
     try {
       const result = await disconnectSubscriber(username);
       if (result && result.itemsRemoved > 0) {
+        toastSuccess(
+          isRTL ? `تم قطع اتصال ${username} بنجاح.` : `${username} was disconnected successfully.`,
+          isRTL ? 'تمت العملية' : 'Disconnected'
+        );
         // Immediate poll to update status
         setTimeout(() => pollStatus(false), 2000); // Wait 2s for router to clear
       } else {
-        alert(isRTL ? 'لم يتم العثور على جلسة نشطة لهذا المشترك.' : result.message);
+        toastInfo(isRTL ? 'لم يتم العثور على جلسة نشطة لهذا المشترك.' : result.message, isRTL ? 'لا توجد جلسة' : 'No Active Session');
       }
     } catch (err) {
       console.error('Disconnect failed', err);
+      toastError(isRTL ? 'فشل قطع الاتصال.' : 'Failed to disconnect the subscriber.', isRTL ? 'فشل العملية' : 'Disconnect Failed');
     } finally {
       setIsDisconnecting(prev => ({ ...prev, [username]: false }));
+      setDisconnectCandidate(null);
     }
   };
 
   const handleDeleteSecret = async (username: string) => {
     if (!username) return;
-    if (!window.confirm(isRTL ? `هل أنت متأكد من حذف حساب المشترك ${username} من المايكروتيك فقط؟ (سيبقى في النظام)` : `Delete ${username} from MikroTik only? (Will stay in CRM)`)) return;
-    
+    setDeleteSecretCandidate(username);
+  };
+
+  const confirmDeleteSecret = async () => {
+    if (!deleteSecretCandidate) return;
+    const username = deleteSecretCandidate;
     setIsStatusLoading(true);
     try {
       const res = await deleteSecret(username);
-      alert(isRTL ? `تم حذف ${res.itemsRemoved} سيكريت.` : `Deleted ${res.itemsRemoved} secret(s).`);
+      toastSuccess(
+        isRTL ? `تم حذف ${res.itemsRemoved} من بيانات المايكروتيك.` : `Deleted ${res.itemsRemoved} router secret(s).`,
+        isRTL ? 'تم الحذف' : 'Deleted'
+      );
       setTimeout(() => pollStatus(false), 2000);
-    } catch (err) { console.error(err); }
-    finally { setIsStatusLoading(false); }
+    } catch (err) {
+      console.error(err);
+      toastError(isRTL ? 'فشل حذف بيانات المشترك من الراوتر.' : 'Failed to delete subscriber credentials from the router.', isRTL ? 'فشل الحذف' : 'Delete Failed');
+    } finally {
+      setIsStatusLoading(false);
+      setDeleteSecretCandidate(null);
+    }
   };
 
   const handleDisableSecret = async (username: string) => {
@@ -764,7 +841,10 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
       const costToAgent = price - commissionAmount;
 
       if (agent.balance < costToAgent && state.role !== 'super_admin') {
-        alert(isRTL ? `رصيد الوكيل (${agent.name}) غير كافٍ. المطلوب: ${costToAgent} شيكل` : `Agent (${agent.name}) has insufficient balance. Required: ${costToAgent} ILS`);
+        toastError(
+          isRTL ? `رصيد الوكيل (${agent.name}) غير كافٍ. المطلوب: ${costToAgent} شيكل` : `Agent (${agent.name}) has insufficient balance. Required: ${costToAgent} ILS`,
+          isRTL ? 'رصيد غير كافٍ' : 'Insufficient Balance'
+        );
         return;
       }
 
@@ -797,37 +877,40 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
     try {
       const data = await activateSubscriber(subToActivate.id, activationOption, activationTarget);
       if (data.success) {
-        alert(data.message || (isRTL ? `تم تفعيل المشترك بنجاح حتى: ${data.displayExpiry}` : `Activated successfully until: ${data.displayExpiry}`));
+        toastSuccess(
+          data.message || (isRTL ? `تم تفعيل المشترك بنجاح حتى: ${data.displayExpiry}` : `Activated successfully until: ${data.displayExpiry}`),
+          isRTL ? 'تم التفعيل' : 'Activation Completed'
+        );
         setIsActivateModalOpen(false);
         window.location.reload(); 
       }
-    } catch (e: any) {
-      alert(e.message);
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : (isRTL ? 'فشل التفعيل' : 'Activation failed');
+      toastError(message, isRTL ? 'فشل التفعيل' : 'Activation Failed');
     } finally {
       setIsActivating(false);
     }
   };
 
   const handleDisconnectAll = async () => {
-    const confirm1 = window.confirm(isRTL 
-      ? 'هل أنت متأكد من قطع الاتصال عن جميع المشتركين النشطين حالياً؟' 
-      : 'Are you sure you want to disconnect ALL currently active subscribers?');
-    if (!confirm1) return;
+    setBulkDisconnectConfirmOpen(true);
+  };
 
-    const confirm2 = window.confirm(isRTL 
-      ? 'تحذير: هذا الإجراء سيقطع الإنترنت عن الجميع مؤقتاً. هل تود المتابعة؟' 
-      : 'WARNING: This will disconnect everyone temporarily. Do you want to proceed?');
-    if (!confirm2) return;
-
+  const confirmDisconnectAll = async () => {
     setIsStatusLoading(true);
     try {
       const result = await disconnectAllSubscribers();
-      alert(isRTL ? `تم تنفيذ العملية. تم طرد ${result.itemsRemoved} جلسة.` : `Operation complete. ${result.itemsRemoved} sessions disconnected.`);
+      toastSuccess(
+        isRTL ? `تم تنفيذ العملية. تم طرد ${result.itemsRemoved} جلسة.` : `Operation complete. ${result.itemsRemoved} sessions disconnected.`,
+        isRTL ? 'اكتملت العملية' : 'Operation Completed'
+      );
       setTimeout(() => pollStatus(false), 2000);
     } catch (err) {
       console.error('Bulk disconnect failed', err);
+      toastError(isRTL ? 'فشل قطع الاتصال الجماعي.' : 'Bulk disconnect failed.', isRTL ? 'فشل العملية' : 'Operation Failed');
     } finally {
       setIsStatusLoading(false);
+      setBulkDisconnectConfirmOpen(false);
     }
   };
 
@@ -839,7 +922,7 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
     }
   };
 
-  const openSyncModal = async (item: any) => {
+  const openSyncModal = async (item: DynamicItem) => {
     setSyncingSubscriber(item);
     setSyncTarget('all');
     setSyncResult(null);
@@ -856,12 +939,16 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
     try {
       const res = await syncSubscriberToMikrotik(syncingSubscriber.id, syncTarget);
       setSyncResult({ success: true, message: res.message, details: res.data });
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : (isRTL ? 'فشلت المزامنة' : 'Sync failed');
+      const details = typeof err === 'object' && err !== null && 'details' in err && Array.isArray((err as { details?: unknown[] }).details)
+        ? ((err as { details?: SyncResultDetail[] }).details || [])
+        : [];
       // err.details contains per-router error breakdown from the server
       setSyncResult({
         success: false,
-        message: err.message || (isRTL ? 'فشلت المزامنة' : 'Sync failed'),
-        details: err.details || []
+        message,
+        details
       });
     } finally {
       setIsSyncing(false);
@@ -878,7 +965,7 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
   const handleSendMessage = async () => {
     if (!messagingSub || !messageText.trim()) return;
     if (messageTypes.size === 0) {
-      alert(isRTL ? 'يجب تفعيل قناة إرسال واحدة على الأقل' : 'Please enable at least one gateway');
+      toastError(isRTL ? 'يجب تفعيل قناة إرسال واحدة على الأقل' : 'Please enable at least one gateway', isRTL ? 'بيانات ناقصة' : 'Missing Channel');
       return;
     }
 
@@ -919,10 +1006,10 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
 
     try {
       await Promise.all(promises);
-      alert(isRTL ? 'تم إرسال الرسالة بنجاح عبر القنوات المحددة' : 'Message dispatched successfully');
+      toastSuccess(isRTL ? 'تم إرسال الرسالة بنجاح عبر القنوات المحددة' : 'Message dispatched successfully', isRTL ? 'اكتمل الإرسال' : 'Dispatch Completed');
       setIsMessageModalOpen(false);
     } catch (e) {
-      alert(isRTL ? 'حدث خطأ أثناء الإرسال' : 'Error sending message');
+      toastError(isRTL ? 'حدث خطأ أثناء الإرسال' : 'Error sending message', isRTL ? 'فشل الإرسال' : 'Send Failed');
     } finally {
       setIsSendingMessage(false);
     }
@@ -931,22 +1018,22 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
 
   const admins = managers;
   const buildEmptyFromFields = (fields: { key: string }[]) => {
-    const result: Record<string, any> = {};
+    const result: Record<string, string> = {};
     fields.forEach(field => {
       result[field.key] = '';
     });
     return result;
   };
 
-  const handleEdit = (item: any) => {
+  const handleEdit = (item: DynamicItem) => {
     let editObj = { ...item };
     
     if (activeSubTab === 'managers') {
       editObj = {
         ...editObj,
-        firstName: item.firstName || item['الاسم الاول'] || '',
-        lastName: item.lastName || item['الاسم الثاني'] || '',
-        username: item.username || item['اسم الدخول'] || ''
+        firstName: String(item.firstName || item['الاسم الاول'] || ''),
+        lastName: String(item.lastName || item['الاسم الثاني'] || ''),
+        username: String(item.username || item['اسم الدخول'] || '')
       };
     } else if (activeSubTab === 'suppliers') {
       editObj = {
@@ -976,7 +1063,7 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
   };
 
   const handleAdd = () => {
-    let item: any = { id: `${activeSubTab === 'shareholders' ? 'SH' : activeSubTab.substring(0, 3).toUpperCase()}-${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}` };
+    let item: DynamicItem = { id: `${activeSubTab === 'shareholders' ? 'SH' : activeSubTab.substring(0, 3).toUpperCase()}-${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}` };
     if (activeSubTab === 'subscribers') {
       item = { ...item, name: '', plan: '', status: 'active', expiry: new Date().toISOString().split('T')[0], balance: 0 };
       loadNetworkProfiles();
@@ -1075,7 +1162,6 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
   };
 
   const handleDelete = async (id: string) => {
-    if (confirm(isRTL ? `هل أنت متأكد من حذف ${getTabEntityLabel()} نهائيًا؟` : `Are you sure you want to delete this ${getTabEntityLabel()} permanently?`)) {
       if (activeSubTab === 'subscribers') {
         try {
           setIsLoading(true);
@@ -1123,7 +1209,17 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
       } else if (activeSubTab === 'iptv') {
         try { setIsLoading(true); await iptvApi.remove(id); const data = await iptvApi.fetch(); if(data) setIptvSubscribers(data); } catch(err) { setApiError('Failed to delete IPTV sub'); } finally { setIsLoading(false); }
       }
-    }
+      setDeleteCandidateId(null);
+  };
+
+  const handleSaveMessageTemplate = async () => {
+    if (!messageText.trim() || !templateDraftName.trim()) return;
+    const newTpl = { id: Math.random().toString(36).substr(2,9), name: templateDraftName, text: messageText };
+    await saveMessageData({ templates: [...templates, newTpl], groups: [] });
+    loadMsgTemplates();
+    setTemplateDraftName('');
+    setIsTemplatePromptOpen(false);
+    toastSuccess(isRTL ? 'تم حفظ القالب بنجاح' : 'Saved successfully', isRTL ? 'تم الحفظ' : 'Saved');
   };
 
   const handleTopUpManager = async () => {
@@ -1232,8 +1328,8 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
   };
 
   const filteredData = () => {
-    let data: any[] = [];
-    const getSubscriberSearchBlob = (subscriber: any) => [
+    let data: DynamicItem[] = [];
+    const getSubscriberSearchBlob = (subscriber: DynamicItem) => [
       subscriber.name,
       subscriber.firstname,
       subscriber.lastname,
@@ -1257,7 +1353,7 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
         data = data.filter(s => s.status === statusFilter);
       }
     } else if (activeSubTab === 'suppliers') {
-      data = suppliers.filter((s: any) => {
+      data = suppliers.filter((s) => {
         const values = SUPPLIER_FIELDS.map(f => String(s[f.key] || '')).join(' ');
         return smartMatch(searchTerm, values) || smartMatch(searchTerm, String(s.id));
       });
@@ -1272,14 +1368,14 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
     } else if (activeSubTab === 'iptv') {
       data = iptvSubscribers.filter(s => smartMatch(searchTerm, s.name) || smartMatch(searchTerm, s.username));
     } else {
-      data = admins.filter((a: any) => {
+      data = admins.filter((a) => {
         const values = MANAGER_FIELDS.map(f => String(a[f.key] || '')).join(' ');
         return smartMatch(searchTerm, values) || smartMatch(searchTerm, String(a.id));
       });
     }
     if (!searchTerm.trim()) return data;
 
-    const getItemScore = (item: any) => {
+    const getItemScore = (item: DynamicItem) => {
       if (activeSubTab === 'subscribers') {
         const searchBlob = getSubscriberSearchBlob(item);
         return Math.max(getSmartMatchScore(searchTerm, searchBlob), getSmartMatchScore(searchTerm, String(item.id)));
@@ -1293,9 +1389,9 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
       }
       if (activeSubTab === 'managers') {
         return Math.max(
-          getSmartMatchScore(searchTerm, item.name || item['الاسم الاول'] || item['الاسم الثاني'] || ''), 
-          getSmartMatchScore(searchTerm, item.username || item['اسم الدخول'] || ''),
-          getSmartMatchScore(searchTerm, item.role || item['الصلاحية'] || '')
+          getSmartMatchScore(searchTerm, String(item.name || item['الاسم الاول'] || item['الاسم الثاني'] || '')), 
+          getSmartMatchScore(searchTerm, String(item.username || item['اسم الدخول'] || '')),
+          getSmartMatchScore(searchTerm, String(item.role || item['الصلاحية'] || ''))
         );
       }
       if (activeSubTab === 'iptv') {
@@ -1479,7 +1575,7 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
             {isRTL ? 'المستثمرون' : 'Investors'}
           </button>
         )}
-        {(hasPermission('view_admins' as any) || state.role === 'super_admin') && (
+        {(hasPermission('view_admins') || state.role === 'super_admin') && (
           <button 
             onClick={() => setActiveSubTab('managers')}
             className={`whitespace-nowrap shrink-0 flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all ${activeSubTab === 'managers' ? 'bg-white dark:bg-slate-800 text-teal-600 dark:text-teal-400 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
@@ -1488,7 +1584,7 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
             {isRTL ? 'الطاقم الإداري' : 'Administrative Team'}
           </button>
         )}
-        {(hasPermission('manage_security_groups' as any) || state.role === 'super_admin') && (
+        {(hasPermission('manage_security_groups') || state.role === 'super_admin') && (
           <button 
             onClick={() => setActiveSubTab('groups')}
             className={`whitespace-nowrap shrink-0 flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all ${activeSubTab === 'groups' ? 'bg-white dark:bg-slate-800 text-teal-600 dark:text-teal-400 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
@@ -1513,8 +1609,8 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
           {(activeSubTab === 'subscribers' && hasPermission('manage_subscribers')) ||
            (activeSubTab === 'iptv' && hasPermission('manage_iptv')) ||
            (activeSubTab === 'suppliers' && hasPermission('manage_suppliers')) ||
-           (activeSubTab === 'shareholders' && (hasPermission('manage_shareholders' as any) || state.role === 'super_admin')) ||
-           (activeSubTab === 'managers' && (hasPermission('manage_admins' as any) || state.role === 'super_admin')) ? (
+           (activeSubTab === 'shareholders' && (hasPermission('manage_shareholders') || state.role === 'super_admin')) ||
+           (activeSubTab === 'managers' && (hasPermission('manage_admins') || state.role === 'super_admin')) ? (
             <div className="flex items-center gap-2">
               {activeSubTab === 'subscribers' && (
                 <button
@@ -1839,7 +1935,7 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
             )}
             {activeSubTab === 'subscribers' && (
               <div className="md:hidden p-4 space-y-3">
-                {filteredItems.map((item: any, index: number, items: any[]) => (
+                {filteredItems.map((item: DynamicItem, index: number, items: DynamicItem[]) => (
                   <div key={item.id} className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#101014] p-4 space-y-4">
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex items-center gap-3 min-w-0">
@@ -1860,7 +1956,7 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
                       </div>
                       <div className="rounded-xl bg-blue-500/5 border border-blue-500/10 p-3">
                         <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{isRTL ? 'الرصيد' : 'Balance'}</p>
-                        <p className="mt-2 text-xs font-black text-blue-600 dark:text-blue-400">{formatCurrency(parseFloat(item.balance || item['الرصيد المتبقي له'] || 0), state.currency, state.lang, 2)}</p>
+                        <p className="mt-2 text-xs font-black text-blue-600 dark:text-blue-400">{formatCurrency(getNumberValue(item.balance ?? item['الرصيد المتبقي له']), state.currency, state.lang, 2)}</p>
                       </div>
                       <div className="rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 p-3">
                         <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{isRTL ? 'الباقة' : 'Plan'}</p>
@@ -1877,7 +1973,7 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
             )}
             {activeSubTab === 'iptv' && (
               <div className="md:hidden p-4 space-y-3">
-                {filteredItems.map((item: any, index: number, items: any[]) => (
+                {filteredItems.map((item: DynamicItem, index: number, items: DynamicItem[]) => (
                   <div key={item.id} className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#101014] p-4 space-y-4">
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex items-center gap-3 min-w-0">
@@ -1898,7 +1994,7 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
                       </div>
                       <div className="rounded-xl bg-blue-500/5 border border-blue-500/10 p-3">
                         <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{isRTL ? 'السعر' : 'Price'}</p>
-                        <p className="mt-2 text-xs font-black text-blue-600 dark:text-blue-400">{formatCurrency(item.price || 0, state.currency, state.lang, 2)}</p>
+                        <p className="mt-2 text-xs font-black text-blue-600 dark:text-blue-400">{formatCurrency(getNumberValue(item.price), state.currency, state.lang, 2)}</p>
                       </div>
                       <div className="rounded-xl bg-amber-500/5 border border-amber-500/10 p-3">
                         <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{isRTL ? 'الانتهاء' : 'Expiry'}</p>
@@ -1915,7 +2011,7 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
             )}
             {activeSubTab === 'suppliers' && (
               <div className="md:hidden p-4 space-y-3">
-                {filteredItems.map((item: any, index: number, items: any[]) => {
+                {filteredItems.map((item: DynamicItem, index: number, items: DynamicItem[]) => {
                   const balanceValue = parseSupplierAmount(item['الرصيد']);
                   const balanceClass = balanceValue < 0
                     ? 'text-amber-600 dark:text-amber-400'
@@ -1978,7 +2074,7 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
             )}
             {activeSubTab === 'shareholders' && (
               <div className="md:hidden p-4 space-y-3">
-                {filteredItems.map((item: any, index: number, items: any[]) => (
+                {filteredItems.map((item: DynamicItem, index: number, items: DynamicItem[]) => (
                   <div key={item.id} className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#101014] p-4 space-y-4">
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex items-center gap-3 min-w-0">
@@ -1995,19 +2091,19 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
                     <div className="grid grid-cols-2 gap-3">
                       <div className="rounded-xl bg-blue-500/5 border border-blue-500/10 p-3">
                         <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{isRTL ? 'الأسهم' : 'Shares'}</p>
-                        <p className="mt-2 text-xs font-black text-blue-600 dark:text-blue-400">{formatNumber(item.shares || 0)}</p>
+                        <p className="mt-2 text-xs font-black text-blue-600 dark:text-blue-400">{formatNumber(getNumberValue(item.shares))}</p>
                       </div>
                       <div className="rounded-xl bg-amber-500/5 border border-amber-500/10 p-3">
                         <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{isRTL ? 'سعر الشراء' : 'Buy Price'}</p>
-                        <p className="mt-2 text-xs font-black text-amber-600 dark:text-amber-400">{formatCurrency(item.buyPrice || 0, state.currency, state.lang, 2)}</p>
+                        <p className="mt-2 text-xs font-black text-amber-600 dark:text-amber-400">{formatCurrency(getNumberValue(item.buyPrice), state.currency, state.lang, 2)}</p>
                       </div>
                       <div className="rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 p-3">
                         <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{isRTL ? 'الاستثمار' : 'Investment'}</p>
-                        <p className="mt-2 text-xs font-black text-slate-700 dark:text-slate-300">{formatCurrency(item.investment || 0, state.currency, state.lang, 2)}</p>
+                        <p className="mt-2 text-xs font-black text-slate-700 dark:text-slate-300">{formatCurrency(getNumberValue(item.investment), state.currency, state.lang, 2)}</p>
                       </div>
                       <div className="rounded-xl bg-emerald-500/5 border border-emerald-500/10 p-3">
                         <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{isRTL ? 'الأرباح' : 'Dividends'}</p>
-                        <p className="mt-2 text-xs font-black text-emerald-600 dark:text-emerald-400">{formatCurrency(item.dividends || 0, state.currency, state.lang, 2)}</p>
+                        <p className="mt-2 text-xs font-black text-emerald-600 dark:text-emerald-400">{formatCurrency(getNumberValue(item.dividends), state.currency, state.lang, 2)}</p>
                       </div>
                     </div>
                   </div>
@@ -2016,7 +2112,7 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
             )}
             {activeSubTab === 'managers' && (
               <div className="md:hidden p-4 space-y-3">
-                {filteredItems.map((item: any, index: number, items: any[]) => (
+                {filteredItems.map((item: DynamicItem, index: number, items: DynamicItem[]) => (
                   <div key={item.id} className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#101014] p-4 space-y-4">
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex items-center gap-3 min-w-0">
@@ -2037,11 +2133,11 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
                       </div>
                       <div className="rounded-xl bg-blue-500/5 border border-blue-500/10 p-3">
                         <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{isRTL ? 'الرصيد' : 'Balance'}</p>
-                        <p className="mt-2 text-xs font-black text-blue-600 dark:text-blue-400">{formatCurrency(item.balance || item['الرصيد'] || 0, state.currency, state.lang, 2)}</p>
+                        <p className="mt-2 text-xs font-black text-blue-600 dark:text-blue-400">{formatCurrency(getNumberValue(item.balance ?? item['الرصيد']), state.currency, state.lang, 2)}</p>
                       </div>
                       <div className="rounded-xl bg-amber-500/5 border border-amber-500/10 p-3">
                         <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{isRTL ? 'الحد المالي' : 'Tx Limit'}</p>
-                        <p className="mt-2 text-xs font-black text-amber-600 dark:text-amber-400">{(item.maxTxLimit || item['الحد المالي']) ? formatCurrency(item.maxTxLimit || item['الحد المالي'], state.currency, state.lang, 2) : (isRTL ? 'بدون قيود' : 'No Limit')}</p>
+                        <p className="mt-2 text-xs font-black text-amber-600 dark:text-amber-400">{(item.maxTxLimit || item['الحد المالي']) ? formatCurrency(getNumberValue(item.maxTxLimit ?? item['الحد المالي']), state.currency, state.lang, 2) : (isRTL ? 'بدون قيود' : 'No Limit')}</p>
                       </div>
                       <div className="rounded-xl bg-emerald-500/5 border border-emerald-500/10 p-3">
                         <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{isRTL ? 'الحالة' : 'Status'}</p>
@@ -2103,7 +2199,7 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                {filteredItems.map((item: any, index: number, items: any[]) => (
+                {filteredItems.map((item: DynamicItem, index: number, items: DynamicItem[]) => (
                   <tr key={item.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors group">
                     {activeSubTab === 'subscribers' && (
                     <>
@@ -2122,14 +2218,14 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
                               <span className={`px-2 py-1 rounded-lg text-[10px] font-bold uppercase ${
                                 item.status === 'active' || item['حالة الحساب'] === 'مفعل' ? 'bg-emerald-100 dark:bg-emerald-500/10 text-emerald-600' : 'bg-rose-100 dark:bg-rose-500/10 text-rose-600'
                               }`}>
-                                {t.management.subscribers.statuses[item.status] || item['حالة الحساب'] || item.status}
+                                {t.management.subscribers.statuses[getStringValue(item.status)] || getStringValue(item['حالة الحساب']) || getStringValue(item.status)}
                               </span>
                             </td>
                           );
                           case 'plan': return <td key={col.id} className="px-4 py-4 text-xs font-medium text-slate-600 dark:text-slate-400 truncate max-w-[120px]">{item.plan || item['سرعة الخط'] || '-'}</td>;
-                          case 'balance': return <td key={col.id} className="px-4 py-4 text-sm font-black text-emerald-600 dark:text-emerald-400 whitespace-nowrap">{formatCurrency(parseFloat(item.balance || item['الرصيد المتبقي له'] || 0), state.currency, state.lang)}</td>;
-                          case 'debt': return <td key={col.id} className="px-4 py-4 text-sm font-black text-rose-600 dark:text-rose-400 whitespace-nowrap">{formatCurrency(parseFloat(item['عليه دين'] || 0), state.currency, state.lang)}</td>;
-                          case 'paid': return <td key={col.id} className="px-4 py-4 text-sm font-black text-teal-600 dark:text-teal-400 whitespace-nowrap">{formatCurrency(parseFloat(item['قام بتسديد'] || 0), state.currency, state.lang)}</td>;
+                          case 'balance': return <td key={col.id} className="px-4 py-4 text-sm font-black text-emerald-600 dark:text-emerald-400 whitespace-nowrap">{formatCurrency(getNumberValue(item.balance ?? item['الرصيد المتبقي له']), state.currency, state.lang)}</td>;
+                          case 'debt': return <td key={col.id} className="px-4 py-4 text-sm font-black text-rose-600 dark:text-rose-400 whitespace-nowrap">{formatCurrency(getNumberValue(item['عليه دين']), state.currency, state.lang)}</td>;
+                          case 'paid': return <td key={col.id} className="px-4 py-4 text-sm font-black text-teal-600 dark:text-teal-400 whitespace-nowrap">{formatCurrency(getNumberValue(item['قام بتسديد']), state.currency, state.lang)}</td>;
                           case 'bill': return <td key={col.id} className="px-4 py-4 text-xs font-medium text-slate-600 dark:text-slate-400">{item['قيمة الفاتورة'] || '-'}</td>;
                           case 'agent': return <td key={col.id} className="px-4 py-4 text-xs font-medium text-slate-700 dark:text-slate-300 line-clamp-1">{item.agent || item['الوكيل المسؤل'] || '-'}</td>;
                           case 'subType': return <td key={col.id} className="px-4 py-4 text-xs text-slate-600 dark:text-slate-400 line-clamp-1">{item['نوع الاشتراك'] || '-'}</td>;
@@ -2238,9 +2334,9 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
                               <td key={col.id} className="px-4 py-4">
                                 <div className="flex items-center gap-3">
                                   <div className="w-8 h-8 rounded-full bg-amber-500/10 flex items-center justify-center text-amber-600 font-bold text-xs shrink-0">
-                                    {(item.name || '?').charAt(0)}
+                                    {getStringValue(item.name, '?').charAt(0)}
                                   </div>
-                                  <p className="text-sm font-bold text-slate-800 dark:text-slate-200 line-clamp-1">{item.name}</p>
+                                  <p className="text-sm font-bold text-slate-800 dark:text-slate-200 line-clamp-1">{getStringValue(item.name, '-')}</p>
                                 </div>
                               </td>
                             );
@@ -2250,7 +2346,7 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
                                 <div className="flex items-center gap-2">
                                   <button 
                                     onClick={() => {
-                                      const newShares = Math.max(0, (item.shares || 0) - 10);
+                                      const newShares = Math.max(0, getNumberValue(item.shares) - 10);
                                       setShareholders(prev => prev.map(s => s.id === item.id ? { ...s, shares: newShares } : s));
                                     }}
                                     className="w-6 h-6 flex items-center justify-center bg-rose-500/10 text-rose-600 rounded hover:bg-rose-500/20 transition-colors text-xs"
@@ -2258,11 +2354,11 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
                                     -
                                   </button>
                                   <span className="text-xs font-bold text-slate-800 dark:text-slate-200 min-w-[50px] text-center">
-                                    {formatNumber(item.shares || 0)}
+                                    {formatNumber(getNumberValue(item.shares))}
                                   </span>
                                   <button 
                                     onClick={() => {
-                                      const newShares = (item.shares || 0) + 10;
+                                      const newShares = getNumberValue(item.shares) + 10;
                                       setShareholders(prev => prev.map(s => s.id === item.id ? { ...s, shares: newShares } : s));
                                     }}
                                     className="w-6 h-6 flex items-center justify-center bg-emerald-500/10 text-emerald-600 rounded hover:bg-emerald-500/20 transition-colors text-xs"
@@ -2273,13 +2369,13 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
                               </td>
                             );
                           case 'buyPrice':
-                            return <td key={col.id} className="hidden md:table-cell px-4 py-4 text-xs font-black text-slate-600 dark:text-slate-400">{formatCurrency(item.buyPrice || 0, state.currency, state.lang)}</td>;
+                            return <td key={col.id} className="hidden md:table-cell px-4 py-4 text-xs font-black text-slate-600 dark:text-slate-400">{formatCurrency(getNumberValue(item.buyPrice), state.currency, state.lang)}</td>;
                           case 'ownership':
                             return <td key={col.id} className="hidden md:table-cell px-4 py-4 text-xs font-bold text-slate-600 dark:text-slate-400">{item.ownership || '0%'}</td>;
                           case 'investment':
-                            return <td key={col.id} className="px-4 py-4 text-sm font-black text-slate-800 dark:text-slate-200">{formatCurrency(item.investment || 0, state.currency, state.lang)}</td>;
+                            return <td key={col.id} className="px-4 py-4 text-sm font-black text-slate-800 dark:text-slate-200">{formatCurrency(getNumberValue(item.investment), state.currency, state.lang)}</td>;
                           case 'dividends':
-                            return <td key={col.id} className="hidden lg:table-cell px-4 py-4 text-sm font-bold text-emerald-600 dark:text-emerald-400">{formatCurrency(item.dividends || 0, state.currency, state.lang)}</td>;
+                            return <td key={col.id} className="hidden lg:table-cell px-4 py-4 text-sm font-bold text-emerald-600 dark:text-emerald-400">{formatCurrency(getNumberValue(item.dividends), state.currency, state.lang)}</td>;
                           default:
                             return <td key={col.id} className="px-4 py-4 text-xs text-slate-600 dark:text-slate-400">{item[col.id] || '-'}</td>;
                         }
@@ -2298,7 +2394,7 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
                                   <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs shrink-0 ${
                                     (item.role === 'super_admin' || item['الصلاحية'] === 'Super Admin') ? 'bg-amber-500/10 text-amber-600' : 'bg-teal-500/10 text-teal-600'
                                   }`}>
-                                    {(item.name || item.username || item['اسم الدخول'] || '?').charAt(0)}
+                                    {getStringValue(item.name || item.username || item['اسم الدخول'], '?').charAt(0)}
                                   </div>
                                   <p className="text-sm font-bold text-slate-800 dark:text-slate-200 line-clamp-1">
                                       {item.name || `${item['الاسم الاول'] || item.firstName || ''} ${item['الاسم الثاني'] || item.lastName || ''}`.trim() || item.username || item['اسم الدخول']}
@@ -2321,7 +2417,7 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
                           case 'balance':
                             return (
                               <td key={col.id} className="px-4 py-4 text-sm font-black text-slate-800 dark:text-slate-200 whitespace-nowrap">
-                                {formatCurrency(item.balance || item['الرصيد'] || 0, state.currency, state.lang)}
+                                {formatCurrency(getNumberValue(item.balance ?? item['الرصيد']), state.currency, state.lang)}
                               </td>
                             );
                           case 'maxTxLimit':
@@ -2330,7 +2426,7 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
                                 {(item.maxTxLimit || item['الحد المالي']) ? (
                                   <div className="flex flex-col">
                                     <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                                      {formatCurrency(item.maxTxLimit || item['الحد المالي'], state.currency, state.lang)}
+                                      {formatCurrency(getNumberValue(item.maxTxLimit ?? item['الحد المالي']), state.currency, state.lang)}
                                     </span>
                                     <span className="text-[8px] text-emerald-500 uppercase font-black">Limit ON</span>
                                   </div>
@@ -2361,9 +2457,9 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
                         <td className="px-4 py-4">
                           <div className="flex items-center gap-3">
                             <div className="w-8 h-8 rounded-full bg-teal-500/10 flex items-center justify-center text-teal-600 font-bold text-xs shrink-0">
-                              {(item.name || '?').charAt(0)}
+                                    {getStringValue(item.name, '?').charAt(0)}
                             </div>
-                            <p className="text-sm font-bold text-slate-800 dark:text-slate-200 line-clamp-1">{item.name}</p>
+                                  <p className="text-sm font-bold text-slate-800 dark:text-slate-200 line-clamp-1">{getStringValue(item.name, '-')}</p>
                           </div>
                         </td>
                       )}
@@ -2377,7 +2473,7 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
                       <td className="hidden lg:table-cell px-4 py-4 text-xs font-mono text-slate-600 dark:text-slate-400">{item.username}</td>
                       <td className="px-4 py-4 text-xs font-mono text-slate-500">{item.expiry}</td>
                       <td className="px-4 py-4 text-sm font-black text-slate-800 dark:text-slate-200">
-                        {formatCurrency(item.price, state.currency, state.lang)}
+                        {formatCurrency(getNumberValue(item.price), state.currency, state.lang)}
                       </td>
                       <td className="px-4 py-4">
                         <span className={`px-2 py-1 rounded-lg text-[10px] font-bold uppercase ${
@@ -2450,7 +2546,7 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
                         {isRTL ? 'حالة الروترات الفنية' : 'Router Technical Status'}
                       </h4>
                       <div className="grid grid-cols-1 gap-2">
-                        {Object.values(routerDiagnostics).map((rd: any, idx) => (
+                        {Object.values(routerDiagnostics).map((rd: RouterDiagnostic, idx) => (
                           <div key={idx} className="p-3 bg-white dark:bg-[#111114] border border-slate-200 dark:border-slate-800 rounded-xl">
                             <div className="flex justify-between items-center mb-2">
                               <span className="font-bold text-teal-600 dark:text-teal-400">{rd.name}</span>
@@ -2594,7 +2690,7 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
                     <option value="all">
                       {isRTL ? '⚡ مزامنة مع جميع الأجهزة دفعة واحدة' : '⚡ Sync to All Devices at Once'}
                     </option>
-                    {routersList.map((router: any) => (
+                    {routersList.map((router: RouterRecord) => (
                       <option key={router.id} value={router.id}>
                         {router.name || router.host || router.id}
                         {router.host && router.name ? ` — ${router.host}` : ''}
@@ -2635,7 +2731,7 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
                     {/* Per-router details */}
                     {syncResult.details && syncResult.details.length > 0 && (
                       <div className="border-t border-slate-200/50 dark:border-slate-700/50 divide-y divide-slate-200/40 dark:divide-slate-700/40">
-                        {syncResult.details.map((d: any, i: number) => (
+                        {syncResult.details.map((d: SyncResultDetail, i: number) => (
                           <div key={i} className="px-4 py-3">
                             <div className={`flex items-center gap-2 text-xs font-bold ${d.success ? 'text-emerald-700 dark:text-emerald-400' : 'text-rose-700 dark:text-rose-400'}`}>
                               {d.success ? <CheckCircle2 size={13} /> : <AlertCircle size={13} />}
@@ -2856,7 +2952,7 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
                                   className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all font-medium"
                                 >
                                   <option value="">{isRTL ? '-- اختر الباقة --' : '-- Select Plan --'}</option>
-                                  {networkProfiles.map((p: any) => (
+                                  {networkProfiles.map((p: NetworkProfile) => (
                                     <option key={p.id} value={p.name}>
                                       {p.name}{p.downloadSpeed && p.uploadSpeed ? ` (↓${p.downloadSpeed} / ↑${p.uploadSpeed})` : ''}{p.price ? ` — ${p.price} ILS` : ''}
                                     </option>
@@ -2878,7 +2974,7 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
                               lang="en"
                               value={newItem[col.id] || newItem[col.key || ''] || (['balance', 'debt', 'paid', 'bill'].includes(col.id) ? 0 : '')}
                               onChange={(e) => {
-                                let val: any = e.target.value;
+                                let val = e.target.value;
                                 if (['balance', 'debt', 'paid', 'bill'].includes(col.id)) {
                                   val = val.replace(/[^0-9.]/g, '');
                                 }
@@ -3396,7 +3492,7 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
                                  <select
                                    value={editingItem.plan || editingItem['سرعة الخط'] || ''}
                                    onChange={(e) => {
-                                     const selected = networkProfiles.find((p: any) => p.name === e.target.value);
+                                     const selected = networkProfiles.find((p: NetworkProfile) => p.name === e.target.value);
                                      let subType = 'pppoe';
                                      if (selected && (selected.type === 'hotspot' || selected.type === 'both')) subType = 'hotspot';
 
@@ -3412,7 +3508,7 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
                                    className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all font-medium"
                                  >
                                    <option value="">{isRTL ? '-- اختر الباقة --' : '-- Select Plan --'}</option>
-                                   {networkProfiles.map((p: any) => (
+                                   {networkProfiles.map((p: NetworkProfile) => (
                                      <option key={p.id} value={p.name}>
                                        {p.name}{p.downloadSpeed && p.uploadSpeed ? ` (↓${p.downloadSpeed} / ↑${p.uploadSpeed})` : ''}{p.price ? ` — ${p.price} ILS` : ''}
                                      </option>
@@ -3434,7 +3530,7 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
                                 lang="en"
                                 value={editingItem[col.id] || editingItem[col.key || ''] || (['balance', 'debt', 'paid', 'bill'].includes(col.id) ? 0 : '')}
                                 onChange={(e) => {
-                                  let val: any = e.target.value;
+                                  let val = e.target.value;
                                   if (['balance', 'debt', 'paid', 'bill'].includes(col.id)) {
                                     val = val.replace(/[^0-9.]/g, '');
                                   }
@@ -3819,15 +3915,7 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
                   </div>
                   <textarea value={messageText} onChange={e => setMessageText(e.target.value)} rows={4} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl px-5 py-4 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none font-medium" placeholder={isRTL ? 'اكتب رسالتك هنا...' : 'Type message here...'}></textarea>
                   <div className="flex justify-end">
-                     <button onClick={async () => {
-                       if(!messageText.trim()) return;
-                       const name = prompt(isRTL ? 'اسم القالب الجديد:' : 'New template name:');
-                       if(!name) return;
-                       const newTpl = { id: Math.random().toString(36).substr(2,9), name, text: messageText };
-                       await saveMessageData({ templates: [...templates, newTpl], groups: [] });
-                       loadMsgTemplates();
-                       alert(isRTL ? 'تم الحفظ بنجاح' : 'Saved successfully');
-                     }} className="text-[10px] font-bold text-slate-400 hover:text-blue-500 transition-colors uppercase tracking-tighter">
+                     <button onClick={() => setIsTemplatePromptOpen(true)} className="text-[10px] font-bold text-slate-400 hover:text-blue-500 transition-colors uppercase tracking-tighter">
                        + {isRTL ? 'حفظ كقالب جديد' : 'Save as new template'}
                      </button>
                   </div>
@@ -3892,6 +3980,69 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
             </motion.div>
           </div>
         )}
+
+        <AppConfirmDialog
+          open={Boolean(disconnectCandidate)}
+          onClose={() => setDisconnectCandidate(null)}
+          onConfirm={confirmDisconnect}
+          title={isRTL ? 'قطع اتصال المشترك' : 'Disconnect Subscriber'}
+          description={isRTL ? `سيتم قطع اتصال ${disconnectCandidate || ''} مؤقتًا وإجباره على إعادة الاتصال.` : `${disconnectCandidate || ''} will be disconnected temporarily and forced to reconnect.`}
+          confirmLabel={isRTL ? 'تأكيد قطع الاتصال' : 'Confirm Disconnect'}
+          cancelLabel={isRTL ? 'إلغاء' : 'Cancel'}
+          variant="warning"
+          isRTL={isRTL}
+        />
+
+        <AppConfirmDialog
+          open={Boolean(deleteSecretCandidate)}
+          onClose={() => setDeleteSecretCandidate(null)}
+          onConfirm={confirmDeleteSecret}
+          title={isRTL ? 'حذف من الراوتر فقط' : 'Delete from Router Only'}
+          description={isRTL ? `سيتم حذف بيانات ${deleteSecretCandidate || ''} من المايكروتيك فقط مع الإبقاء عليه داخل النظام.` : `${deleteSecretCandidate || ''} will be removed from MikroTik only and kept in the CRM.`}
+          confirmLabel={isRTL ? 'تأكيد الحذف' : 'Confirm Delete'}
+          cancelLabel={isRTL ? 'إلغاء' : 'Cancel'}
+          variant="danger"
+          isRTL={isRTL}
+        />
+
+        <AppConfirmDialog
+          open={bulkDisconnectConfirmOpen}
+          onClose={() => setBulkDisconnectConfirmOpen(false)}
+          onConfirm={confirmDisconnectAll}
+          title={isRTL ? 'قطع الاتصال عن الجميع' : 'Disconnect Everyone'}
+          description={isRTL ? 'سيتم قطع الاتصال عن جميع المشتركين النشطين حاليًا بشكل مؤقت، وسيلزمهم إعادة الاتصال من جديد.' : 'All currently active subscribers will be temporarily disconnected and will need to reconnect again.'}
+          confirmLabel={isRTL ? 'تنفيذ العملية' : 'Run Operation'}
+          cancelLabel={isRTL ? 'إلغاء' : 'Cancel'}
+          variant="warning"
+          isRTL={isRTL}
+        />
+
+        <AppConfirmDialog
+          open={Boolean(deleteCandidateId)}
+          onClose={() => setDeleteCandidateId(null)}
+          onConfirm={() => deleteCandidateId && handleDelete(deleteCandidateId)}
+          title={isRTL ? 'حذف من النظام' : 'Delete from System'}
+          description={isRTL ? `سيتم حذف ${getTabEntityLabel()} نهائيًا من قاعدة البيانات.` : `This ${getTabEntityLabel()} will be permanently removed from the database.`}
+          confirmLabel={isRTL ? 'تأكيد الحذف' : 'Confirm Delete'}
+          cancelLabel={isRTL ? 'إلغاء' : 'Cancel'}
+          variant="danger"
+          isRTL={isRTL}
+        />
+
+        <AppPromptDialog
+          open={isTemplatePromptOpen}
+          onClose={() => { setIsTemplatePromptOpen(false); setTemplateDraftName(''); }}
+          onConfirm={handleSaveMessageTemplate}
+          title={isRTL ? 'حفظ قالب جديد' : 'Save New Template'}
+          description={isRTL ? 'أدخل اسمًا للقالب الحالي حتى تتمكن من استخدامه لاحقًا بسرعة.' : 'Enter a name for the current template so you can reuse it quickly later.'}
+          label={isRTL ? 'اسم القالب' : 'Template Name'}
+          value={templateDraftName}
+          onChange={setTemplateDraftName}
+          placeholder={isRTL ? 'مثال: إشعار رصيد أو متابعة' : 'Example: Balance or follow-up notice'}
+          confirmLabel={isRTL ? 'حفظ القالب' : 'Save Template'}
+          cancelLabel={isRTL ? 'إلغاء' : 'Cancel'}
+          isRTL={isRTL}
+        />
       </AnimatePresence>
 
     </motion.div>

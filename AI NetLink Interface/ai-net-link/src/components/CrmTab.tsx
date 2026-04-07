@@ -1,22 +1,45 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Users, Search, Filter, MoreVertical, Phone, Mail, MapPin, Activity, Wifi, ShieldCheck, AlertCircle, Send, Plus, X, MessageSquare, CheckSquare, Square, MinusSquare, Smartphone, Zap, CheckCircle2, Calendar, WifiOff, RefreshCw } from 'lucide-react';
-import { AppState } from '../types';
+import { AppState, BaseSubscriberRecord, ContactEntry, MessageTemplate, RouterRecord } from '../types';
 import { dict } from '../dict';
 import { fetchSubscribers, BASE_URL, getMessageData, saveMessageData, activateSubscriber, fetchRoutersList, extendSubscriber } from '../api';
 import { getSmartMatchScore, smartMatch } from '../utils/search';
+import { toastError, toastInfo, toastSuccess } from '../utils/notify';
+import AppConfirmDialog from './AppConfirmDialog';
+import AppPromptDialog from './AppPromptDialog';
 
 interface CrmTabProps {
   state: AppState;
 }
 
+type CustomerRecord = BaseSubscriberRecord & {
+  id: string;
+  name: string;
+  phone: string;
+  email: string;
+  location: string;
+  plan: string;
+  status: 'active' | 'inactive';
+  health: 'good' | 'offline';
+  type?: string;
+  subType?: string;
+  balance?: number | string;
+};
+
+type MessageGroup = {
+  id: string;
+  name: string;
+  numbers: Array<string | ContactEntry>;
+};
+
 export default function CrmTab({ state }: CrmTabProps) {
   const t = dict[state.lang];
   const isRTL = state.lang === 'ar';
   
-  const [customers, setCustomers] = useState<any[]>([]);
+  const [customers, setCustomers] = useState<CustomerRecord[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedCustomer, setSelectedCustomer] = useState<any>(null);
+  const [selectedCustomer, setSelectedCustomer] = useState<CustomerRecord | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   
   // Bulk selection state (Set of customer IDs)
@@ -32,18 +55,23 @@ export default function CrmTab({ state }: CrmTabProps) {
   const [activationOption, setActivationOption] = useState<'today' | 'first_of_month'>('today');
   const [isActivating, setIsActivating] = useState(false);
   const [activationTarget, setActivationTarget] = useState('all');
-  const [routersList, setRoutersList] = useState<any[]>([]);
-  const [adHocList, setAdHocList] = useState<{name: string, phone: string, email: string}[]>([{name: '', phone: '', email: ''}]);
+  const [routersList, setRoutersList] = useState<RouterRecord[]>([]);
+  const [adHocList, setAdHocList] = useState<ContactEntry[]>([{name: '', phone: '', email: ''}]);
   const [isManagerModalOpen, setIsManagerModalOpen] = useState(false);
   const [isExtendModalOpen, setIsExtendModalOpen] = useState(false);
   const [extensionTarget, setExtensionTarget] = useState('all');
   const [selectedDuration, setSelectedDuration] = useState<{unit: 'hours' | 'days', value: number} | null>(null);
   const [isExtending, setIsExtending] = useState(false);
   const [managerTab, setManagerTab] = useState<'templates'|'groups'>('templates');
+  const [disconnectCandidate, setDisconnectCandidate] = useState<CustomerRecord | null>(null);
+  const [groupDraftName, setGroupDraftName] = useState('');
+  const [templateDraftName, setTemplateDraftName] = useState('');
+  const [isGroupPromptOpen, setIsGroupPromptOpen] = useState(false);
+  const [isTemplatePromptOpen, setIsTemplatePromptOpen] = useState(false);
   
   // Message Data Data
-  const [templates, setTemplates] = useState<any[]>([]);
-  const [groups, setGroups] = useState<any[]>([]);
+  const [templates, setTemplates] = useState<MessageTemplate[]>([]);
+  const [groups, setGroups] = useState<MessageGroup[]>([]);
   const [selectedTemplate, setSelectedTemplate] = useState('');
   const [selectedGroup, setSelectedGroup] = useState('');
 
@@ -72,7 +100,7 @@ export default function CrmTab({ state }: CrmTabProps) {
     setIsLoading(true);
     try {
       const data = await fetchSubscribers();
-      const mapped = (data || []).map((item: any) => {
+      const mapped: CustomerRecord[] = (data || []).map((item: Record<string, unknown>) => {
         const name = item.firstname || item.name || 'Unknown';
         const phone = item.phone || item['رقم الموبايل'] || '';
         const statusRaw = item.status || item['حالة الحساب'] || 'unknown';
@@ -156,7 +184,7 @@ export default function CrmTab({ state }: CrmTabProps) {
     } else if (selectedGroup) {
       const g = groups.find(g => g.id === selectedGroup);
       if (g) {
-         mobileTargets = g.numbers.map((n:any) => typeof n === 'string' ? n : n.phone).filter(Boolean);
+         mobileTargets = g.numbers.map((n) => typeof n === 'string' ? n : n.phone).filter(Boolean);
       }
     } else if (selectedBulk.size > 0) {
       const selected = customers.filter(c => selectedBulk.has(c.id));
@@ -168,12 +196,12 @@ export default function CrmTab({ state }: CrmTabProps) {
     }
     
     if (!messageText) {
-      alert(isRTL ? 'الرجاء إدخال نص الرسالة' : 'Please enter a message text');
+      toastError(isRTL ? 'الرجاء إدخال نص الرسالة.' : 'Please enter a message text.', isRTL ? 'بيانات ناقصة' : 'Missing Content');
       return;
     }
     
     if (messageTypes.size === 0) {
-      alert(isRTL ? 'يجب تفعيل قناة إرسال واحدة على الأقل' : 'Please enable at least one gateway');
+      toastError(isRTL ? 'يجب تفعيل قناة إرسال واحدة على الأقل.' : 'Please enable at least one gateway.', isRTL ? 'بيانات ناقصة' : 'Missing Channel');
       return;
     }
     
@@ -217,7 +245,7 @@ export default function CrmTab({ state }: CrmTabProps) {
     }
     
     if (promises.length === 0) {
-      alert(isRTL ? 'لا يوجد جهات اتصال تناسب القنوات المفعلة (أرقام أو إيميلات مفقودة)' : 'No valid contacts found for the selected gateways');
+      toastInfo(isRTL ? 'لا يوجد جهات اتصال تناسب القنوات المفعلة حاليًا.' : 'No valid contacts found for the selected gateways.', isRTL ? 'لا توجد نتائج' : 'No Valid Contacts');
       setIsSending(false);
       return;
     }
@@ -232,15 +260,20 @@ export default function CrmTab({ state }: CrmTabProps) {
          else finalMessage += `❌ ${r.type}: ${isRTL?'فشل':'Failed'} (${r.data?.error || 'Unknown'})\n`;
       });
       
-      alert(finalMessage);
+      if (errors.length === 0) {
+        toastSuccess(isRTL ? 'تم إرسال الرسائل بنجاح عبر القنوات المحددة.' : 'Messages were sent successfully through the selected channels.', isRTL ? 'اكتمل الإرسال' : 'Dispatch Completed', 4500);
+      } else {
+        toastInfo(finalMessage.replace(/\n/g, ' '), isRTL ? 'نتائج الإرسال' : 'Dispatch Results', 5000);
+      }
       
       if (errors.length === 0) {
         setIsSmsModalOpen(false);
         setMessageText('');
         setSelectedBulk(new Set());
       }
-    } catch (e: any) {
-      alert(isRTL ? `حدث خطأ غير متوقع: ${e.message}` : `Unexpected error: ${e.message}`);
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : (isRTL ? 'خطأ غير معروف' : 'Unknown error');
+      toastError(isRTL ? `حدث خطأ غير متوقع: ${message}` : `Unexpected error: ${message}`, isRTL ? 'خطأ غير متوقع' : 'Unexpected Error');
     } finally {
       setIsSending(false);
     }
@@ -252,12 +285,13 @@ export default function CrmTab({ state }: CrmTabProps) {
     try {
       const data = await activateSubscriber(selectedCustomer.id, activationOption, activationTarget);
       if (data.success) {
-        alert(data.message || (isRTL ? `تم تفعيل المشترك بنجاح حتى: ${data.displayExpiry}` : `Activated successfully until: ${data.displayExpiry}`));
+        toastSuccess(data.message || (isRTL ? `تم تفعيل المشترك بنجاح حتى: ${data.displayExpiry}` : `Activated successfully until: ${data.displayExpiry}`), isRTL ? 'تم التفعيل' : 'Activation Completed');
         setIsActivateModalOpen(false);
         loadCustomers(); 
       }
-    } catch (e: any) {
-      alert(e.message);
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : (isRTL ? 'فشل التفعيل' : 'Activation failed');
+      toastError(message, isRTL ? 'فشل التفعيل' : 'Activation Failed');
     } finally {
       setIsActivating(false);
     }
@@ -268,15 +302,61 @@ export default function CrmTab({ state }: CrmTabProps) {
     setIsExtending(true);
     try {
       await extendSubscriber(selectedCustomer.id, duration, extensionTarget);
-      alert(isRTL ? 'تم تمديد الصلاحية بنجاح' : 'Service extended successfully');
+      toastSuccess(isRTL ? 'تم تمديد الصلاحية بنجاح.' : 'Service extended successfully.', isRTL ? 'تم التمديد' : 'Extension Completed');
       setIsExtendModalOpen(false);
       loadCustomers();
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : (isRTL ? 'فشل التمديد' : 'Extension failed');
       console.error(err);
-      alert(err.message || (isRTL ? 'فشل التمديد' : 'Extension failed'));
+      toastError(message, isRTL ? 'فشل التمديد' : 'Extension Failed');
     } finally {
       setIsExtending(false);
     }
+  };
+
+  const handleDisconnectCustomer = async () => {
+    if (!disconnectCandidate) return;
+    try {
+      const res = await fetch(`${BASE_URL}/network/disconnect/${disconnectCandidate.username || disconnectCandidate.id}`, { method: 'POST' });
+      const data = await res.json();
+      toastInfo(data.message, isRTL ? 'نتيجة العملية' : 'Operation Result');
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : (isRTL ? 'فشل العملية' : 'Operation failed');
+      toastError(message, isRTL ? 'فشل العملية' : 'Operation Failed');
+    } finally {
+      setDisconnectCandidate(null);
+    }
+  };
+
+  const handleSaveAdHocGroup = async () => {
+    if (!groupDraftName.trim()) return;
+    const validItems = adHocList.filter(n => n.phone.trim() !== '' || n.email.trim() !== '');
+    if (validItems.length === 0) {
+      toastInfo(isRTL ? 'لا توجد أرقام أو عناوين بريد صالحة للحفظ كمجموعة.' : 'There are no valid contacts to save as a group.', isRTL ? 'لا توجد بيانات' : 'No Valid Contacts');
+      return;
+    }
+    const newGrp = { id: Math.random().toString(36).substr(2,9), name: groupDraftName, numbers: validItems };
+    const newData = { templates, groups: [...groups, newGrp] };
+    await saveMessageData(newData);
+    setGroups(newData.groups);
+    setGroupDraftName('');
+    setIsGroupPromptOpen(false);
+    toastSuccess(isRTL ? 'تم حفظ المجموعة بنجاح.' : 'Group saved successfully.', isRTL ? 'تم الحفظ' : 'Group Saved');
+  };
+
+  const handleSaveTemplatePrompt = async () => {
+    if (!templateDraftName.trim()) return;
+    if (!messageText.trim()) {
+      toastError(isRTL ? 'أدخل نص الرسالة أولًا قبل حفظها كقالب.' : 'Enter the message text before saving it as a template.', isRTL ? 'بيانات ناقصة' : 'Missing Content');
+      return;
+    }
+    const newTpl = { id: Math.random().toString(36).substr(2,9), name: templateDraftName, text: messageText };
+    const newData = { templates: [...templates, newTpl], groups };
+    await saveMessageData(newData);
+    setTemplates(newData.templates);
+    setTemplateDraftName('');
+    setIsTemplatePromptOpen(false);
+    toastSuccess(isRTL ? 'تم حفظ القالب بنجاح.' : 'Template saved successfully.', isRTL ? 'تم الحفظ' : 'Template Saved');
   };
 
   return (
@@ -476,12 +556,7 @@ export default function CrmTab({ state }: CrmTabProps) {
                     <button 
                       onClick={async () => {
                         if (!selectedCustomer) return;
-                        if (!confirm(isRTL ? `هل أنت متأكد من قطع الاتصال عن ${selectedCustomer.name}؟` : `Are you sure you want to disconnect ${selectedCustomer.name}?`)) return;
-                        try {
-                          const res = await fetch(`${BASE_URL}/network/disconnect/${selectedCustomer.username || selectedCustomer.id}`, { method: 'POST' });
-                          const data = await res.json();
-                          alert(data.message);
-                        } catch (e: any) { alert(e.message); }
+                        setDisconnectCandidate(selectedCustomer);
                       }}
                       className="p-5 flex flex-col gap-3 rounded-2xl bg-rose-50 dark:bg-rose-500/10 text-rose-600 dark:text-rose-400 font-bold text-lg hover:bg-rose-100 dark:hover:bg-rose-500/20 transition-all border border-rose-100/50 dark:border-rose-500/20 items-center justify-center font-black"
                     >
@@ -638,17 +713,7 @@ export default function CrmTab({ state }: CrmTabProps) {
                        
                        {adHocList.some(i => i.phone.trim() !== '' || i.email.trim() !== '') && (
                          <div className="flex justify-end">
-                           <button onClick={async () => {
-                             const name = prompt(isRTL ? 'اسم المجموعة:' : 'Group Name:');
-                             if(!name) return;
-                             const validItems = adHocList.filter(n => n.phone.trim() !== '' || n.email.trim() !== '');
-                             if(validItems.length === 0) return;
-                             const newGrp = { id: Math.random().toString(36).substr(2,9), name, numbers: validItems };
-                             const newData = { templates, groups: [...groups, newGrp] };
-                             await saveMessageData(newData);
-                             setGroups(newData.groups);
-                             alert(isRTL ? 'تم حفظ المجموعة' : 'Group Saved');
-                           }} className="text-[10px] uppercase font-bold text-slate-400 hover:text-indigo-500 transition-colors">
+                          <button onClick={() => setIsGroupPromptOpen(true)} className="text-[10px] uppercase font-bold text-slate-400 hover:text-indigo-500 transition-colors">
                              + {isRTL ? 'حفظ الأرقام كمجموعة جديدة' : 'Save numbers as new Group'}
                            </button>
                          </div>
@@ -712,16 +777,7 @@ export default function CrmTab({ state }: CrmTabProps) {
                   <textarea value={messageText} onChange={e => setMessageText(e.target.value)} rows={4} className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none font-medium" placeholder={isRTL ? 'عزيزي المشترك، نود تذكيرك بأن اشتراك الإنترنت...' : 'Type message here...'}></textarea>
                   
                   <div className="flex justify-end mt-2">
-                     <button onClick={async () => {
-                       if(!messageText.trim()) return;
-                       const name = prompt(isRTL ? 'اسم القالب:' : 'Template Name:');
-                       if(!name) return;
-                       const newTpl = { id: Math.random().toString(36).substr(2,9), name, text: messageText };
-                       const newData = { templates: [...templates, newTpl], groups };
-                       await saveMessageData(newData);
-                       setTemplates(newData.templates);
-                       alert(isRTL ? 'تم حفظ القالب' : 'Template Saved');
-                     }} className="text-[10px] uppercase font-bold text-slate-400 hover:text-teal-500 transition-colors">
+                     <button onClick={() => setIsTemplatePromptOpen(true)} className="text-[10px] uppercase font-bold text-slate-400 hover:text-teal-500 transition-colors">
                        + {isRTL ? 'حفظ كقالب جديد' : 'Save as new Template'}
                      </button>
                   </div>
@@ -995,7 +1051,7 @@ export default function CrmTab({ state }: CrmTabProps) {
                           />
                         </div>
                         <div className="space-y-2">
-                           {grp.numbers.map((numItem: any, nIdx: number) => {
+                           {grp.numbers.map((numItem: string | ContactEntry, nIdx: number) => {
                              const isObj = typeof numItem === 'object';
                              const name = isObj ? numItem.name : '';
                              const phone = isObj ? numItem.phone : numItem;
@@ -1040,7 +1096,7 @@ export default function CrmTab({ state }: CrmTabProps) {
                                   />
                                   <button onClick={() => {
                                       const ng = [...groups];
-                                      ng[idx].numbers = ng[idx].numbers.filter((_:any, i:number) => i !== nIdx);
+                                      ng[idx].numbers = ng[idx].numbers.filter((_, i:number) => i !== nIdx);
                                       setGroups(ng);
                                   }} className="text-slate-400 hover:text-rose-500 p-2"><X size={14} /></button>
                                </div>
@@ -1066,7 +1122,7 @@ export default function CrmTab({ state }: CrmTabProps) {
                  <button onClick={async () => {
                    await saveMessageData({templates, groups});
                    setIsManagerModalOpen(false);
-                   alert(isRTL ? 'تم حفظ التحديثات بنجاح!' : 'Changes saved successfully!');
+                   toastSuccess(isRTL ? 'تم حفظ التحديثات بنجاح.' : 'Changes saved successfully.', isRTL ? 'تم الحفظ' : 'Saved');
                  }} className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold shadow-lg shadow-indigo-500/20 transition-all flex justify-center gap-2">
                    {isRTL ? 'تأكيد وحفظ التعديلات' : 'Confirm & Save Changes'}
                  </button>
@@ -1075,6 +1131,48 @@ export default function CrmTab({ state }: CrmTabProps) {
           </div>
         )}
       </AnimatePresence>
+
+      <AppConfirmDialog
+        open={Boolean(disconnectCandidate)}
+        onClose={() => setDisconnectCandidate(null)}
+        onConfirm={handleDisconnectCustomer}
+        title={isRTL ? 'قطع اتصال المشترك' : 'Disconnect Subscriber'}
+        description={isRTL ? `سيتم قطع اتصال ${disconnectCandidate?.name || ''} من الراوتر، وسيحتاج إلى إعادة الاتصال.` : `${disconnectCandidate?.name || ''} will be disconnected from the router and will need to reconnect.`}
+        confirmLabel={isRTL ? 'تأكيد قطع الاتصال' : 'Confirm Disconnect'}
+        cancelLabel={isRTL ? 'إلغاء' : 'Cancel'}
+        variant="warning"
+        isRTL={isRTL}
+      />
+
+      <AppPromptDialog
+        open={isGroupPromptOpen}
+        onClose={() => { setIsGroupPromptOpen(false); setGroupDraftName(''); }}
+        onConfirm={handleSaveAdHocGroup}
+        title={isRTL ? 'حفظ مجموعة جديدة' : 'Save New Group'}
+        description={isRTL ? 'أدخل اسمًا واضحًا لهذه المجموعة ليتم استخدامها لاحقًا في الإرسال الجماعي.' : 'Enter a clear name for this group so it can be reused in bulk messaging.'}
+        label={isRTL ? 'اسم المجموعة' : 'Group Name'}
+        value={groupDraftName}
+        onChange={setGroupDraftName}
+        placeholder={isRTL ? 'مثال: عملاء المنطقة الشمالية' : 'Example: Northern Region Customers'}
+        confirmLabel={isRTL ? 'حفظ المجموعة' : 'Save Group'}
+        cancelLabel={isRTL ? 'إلغاء' : 'Cancel'}
+        isRTL={isRTL}
+      />
+
+      <AppPromptDialog
+        open={isTemplatePromptOpen}
+        onClose={() => { setIsTemplatePromptOpen(false); setTemplateDraftName(''); }}
+        onConfirm={handleSaveTemplatePrompt}
+        title={isRTL ? 'حفظ قالب جديد' : 'Save New Template'}
+        description={isRTL ? 'أدخل اسمًا للقالب ليسهل الرجوع إليه في الرسائل اللاحقة.' : 'Enter a template name so it can be reused later.'}
+        label={isRTL ? 'اسم القالب' : 'Template Name'}
+        value={templateDraftName}
+        onChange={setTemplateDraftName}
+        placeholder={isRTL ? 'مثال: تذكير تجديد الاشتراك' : 'Example: Renewal Reminder'}
+        confirmLabel={isRTL ? 'حفظ القالب' : 'Save Template'}
+        cancelLabel={isRTL ? 'إلغاء' : 'Cancel'}
+        isRTL={isRTL}
+      />
     </motion.div>
   );
 }

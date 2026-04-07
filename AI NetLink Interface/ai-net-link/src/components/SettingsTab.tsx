@@ -7,35 +7,49 @@
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
 import { Settings, User, Network, Cpu, CreditCard, Users, Shield, Save, Key, Database, Server, Lock, Bell, Globe, Moon, Sun, Plus, Trash2, TrendingUp, RefreshCw, Clock, CheckCircle2, XCircle, DollarSign, Calendar, Percent, Eye, EyeOff, Mail, Send, Smartphone, ScanLine, Activity, MessageSquare, QrCode, ShieldCheck, Search, Download } from 'lucide-react';
-import { AppState } from '../types';
+import { AppState, Currency, GatewayConfig, Permission, Role, TeamMember, WhatsAppStatus } from '../types';
 import { dict } from '../dict';
 import { formatNumber, normalizeDigits, parseNumericInput } from '../utils/format';
 import { getGatewaysConfig, saveGatewaysConfig, getWhatsappStatus, restartWhatsappEngine, getNetworkConfig, saveNetworkConfig, testMikrotikConnection, BASE_URL, checkSystemUpdate, startSystemUpdate, testAiProvider } from '../api';
-import { showAppToast } from '../utils/notify';
+import { showAppToast, toastError, toastInfo, toastSuccess } from '../utils/notify';
 import NumericInput from './NumericInput';
 import DateInput from './DateInput';
+import AppConfirmDialog from './AppConfirmDialog';
+import AppPromptDialog from './AppPromptDialog';
 
 interface SettingsTabProps {
   state: AppState;
   setState: React.Dispatch<React.SetStateAction<AppState>>;
 }
 
+type SettingsCategory = {
+  id: string;
+  icon: React.ComponentType<{ size?: number; className?: string }>;
+  label: string;
+  permission?: Permission;
+};
+
 export default function SettingsTab({ state, setState }: SettingsTabProps) {
   const t = dict[state.lang];
   const isRTL = state.lang === 'ar';
   
   const userPermissions = state.currentUser?.permissions || [];
-  const hasPermission = (perm: string) => state.role === 'super_admin' || userPermissions.includes('all') || userPermissions.includes(perm);
+  const hasPermission = (perm: Permission) => state.role === 'super_admin' || userPermissions.includes('all') || userPermissions.includes(perm);
 
   const [activeCategory, setActiveCategory] = useState('profile');
   const [pin, setPin] = useState('');
   const [showPin, setShowPin] = useState(false);
   const [pinError, setPinError] = useState(false);
-  const [editingMember, setEditingMember] = useState<any>(null);
+  const [editingMember, setEditingMember] = useState<TeamMember | null>(null);
   const [isAddingMember, setIsAddingMember] = useState(false);
-  const [gateways, setGateways] = useState<any>(null);
-  const [waStatus, setWaStatus] = useState<any>(null);
+  const [gateways, setGateways] = useState<GatewayConfig | null>(null);
+  const [waStatus, setWaStatus] = useState<WhatsAppStatus | null>(null);
   const [aiTestingProviderId, setAiTestingProviderId] = useState<string | null>(null);
+  const [smsTestNumber, setSmsTestNumber] = useState('');
+  const [emailTestAddress, setEmailTestAddress] = useState('');
+  const [isSmsPromptOpen, setIsSmsPromptOpen] = useState(false);
+  const [isEmailPromptOpen, setIsEmailPromptOpen] = useState(false);
+  const [memberToDelete, setMemberToDelete] = useState<TeamMember | null>(null);
 
   React.useEffect(() => {
     if (activeCategory === 'gateways') {
@@ -122,11 +136,12 @@ export default function SettingsTab({ state, setState }: SettingsTabProps) {
           ? `تم الاتصال بنجاح: ${result.provider?.name || providerId}`
           : `Connected successfully: ${result.provider?.name || providerId}`,
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : (isRTL ? 'خطأ غير معروف' : 'Unknown error');
       showAppToast({
         type: 'error',
         title: isRTL ? 'فشل الاتصال' : 'Connection Failed',
-        message: isRTL ? `فشل الاتصال: ${error.message}` : `Connection failed: ${error.message}`,
+        message: isRTL ? `فشل الاتصال: ${message}` : `Connection failed: ${message}`,
       });
     } finally {
       setAiTestingProviderId(null);
@@ -167,10 +182,11 @@ export default function SettingsTab({ state, setState }: SettingsTabProps) {
           message: t.settings.update.upToDate,
         });
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : (isRTL ? 'فشل التحقق من التحديثات' : 'Failed to check for updates');
       setState(prev => ({ 
         ...prev, 
-        updateStatus: { ...prev.updateStatus, checking: false, error: err?.message || (isRTL ? 'فشل التحقق من التحديثات' : 'Failed to check for updates') } 
+        updateStatus: { ...prev.updateStatus, checking: false, error: message } 
       }));
     }
   };
@@ -190,25 +206,87 @@ export default function SettingsTab({ state, setState }: SettingsTabProps) {
         duration: 4500,
       });
       waitForUpdatedVersionAndReload(targetVersion);
-    } catch (err: any) {
-      setState(prev => ({ ...prev, updateStatus: { ...prev.updateStatus, checking: false, error: err?.message || 'Update failed' } }));
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Update failed';
+      setState(prev => ({ ...prev, updateStatus: { ...prev.updateStatus, checking: false, error: message } }));
       showAppToast({
         type: 'error',
         title: isRTL ? 'فشل التحديث' : 'Update Failed',
-        message: err?.message || (isRTL ? 'فشلت عملية التحديث.' : 'The update process failed.'),
+        message: message || (isRTL ? 'فشلت عملية التحديث.' : 'The update process failed.'),
       });
     }
   };
 
-  const categories = [
+  const handleSaveGateways = async () => {
+    const success = await saveGatewaysConfig(gateways);
+    if (success) {
+      toastSuccess(isRTL ? 'تم حفظ إعدادات البوابات بنجاح.' : 'Gateway settings were saved successfully.', isRTL ? 'تم الحفظ' : 'Saved');
+    } else {
+      toastError(isRTL ? 'تعذر حفظ إعدادات البوابات.' : 'Failed to save gateway settings.', isRTL ? 'فشل الحفظ' : 'Save Failed');
+    }
+  };
+
+  const handleSmsGatewayTest = async () => {
+    if (!smsTestNumber.trim()) return;
+    try {
+      const res = await fetch(`${BASE_URL}/sms/send`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mobile: smsTestNumber, text: 'Test NetLink API' })
+      });
+      if (res.ok) {
+        toastSuccess(isRTL ? 'تم إرسال رسالة الاختبار بنجاح.' : 'Test SMS sent successfully.', isRTL ? 'نجح الاختبار' : 'Test Sent');
+        setIsSmsPromptOpen(false);
+        setSmsTestNumber('');
+      } else {
+        toastError(isRTL ? 'فشل اختبار بوابة SMS.' : 'SMS gateway test failed.', isRTL ? 'تعذر الاختبار' : 'Test Failed');
+      }
+    } catch {
+      toastError(isRTL ? 'حدث خطأ أثناء الاتصال ببوابة SMS.' : 'An error occurred while connecting to the SMS gateway.', isRTL ? 'خطأ في الاتصال' : 'Connection Error');
+    }
+  };
+
+  const handleEmailGatewayTest = async () => {
+    if (!emailTestAddress.trim()) return;
+    try {
+      const res = await fetch(`${BASE_URL}/email/send`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ emails: [emailTestAddress], text: 'Test Email from NetLink API', subject: 'NetLink Connectivity Test' })
+      });
+      if (res.ok) {
+        toastSuccess(isRTL ? 'تم إرسال رسالة البريد التجريبية بنجاح.' : 'Test email sent successfully.', isRTL ? 'نجح الاختبار' : 'Test Sent');
+        setIsEmailPromptOpen(false);
+        setEmailTestAddress('');
+      } else {
+        const data = await res.json();
+        toastError(isRTL ? `فشل الإرسال: ${data.error || 'تأكد من صحة إعدادات البوابة'}` : `Failed: ${data.error || 'Check gateway configs'}`, isRTL ? 'تعذر الإرسال' : 'Send Failed');
+      }
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : (isRTL ? 'خطأ غير معروف' : 'Unknown error');
+      toastError(isRTL ? `خطأ في الاتصال: ${message}` : `Connection error: ${message}`, isRTL ? 'خطأ في الاتصال' : 'Connection Error');
+    }
+  };
+
+  const handleDeleteTeamMember = () => {
+    if (!memberToDelete) return;
+    setState(prev => ({
+      ...prev,
+      teamMembers: prev.teamMembers.filter(m => m.id !== memberToDelete.id)
+    }));
+    setMemberToDelete(null);
+    toastSuccess(isRTL ? 'تم حذف المستخدم من الفريق.' : 'The user was removed from the team.', isRTL ? 'تم الحذف' : 'User Removed');
+  };
+
+  const categories: SettingsCategory[] = [
     { id: 'profile', icon: User, label: t.settings.categories.profile },
-    { id: 'gateways', icon: Send, label: isRTL ? 'إدارة البوابات' : 'Gateways', permission: 'manage_team' },
-    { id: 'ai', icon: Cpu, label: t.settings.categories.ai, permission: 'manage_ai' },
-    { id: 'billing', icon: CreditCard, label: t.settings.categories.billing, permission: 'view_billing' },
-    { id: 'investors', icon: TrendingUp, label: t.settings.categories.investors, permission: 'view_investors' },
-    { id: 'backup', icon: Database, label: t.settings.categories.backup, permission: 'perform_backup' },
-    { id: 'team', icon: Users, label: t.settings.categories.team, permission: 'manage_team' },
-    { id: 'security', icon: Shield, label: t.settings.categories.security, permission: 'view_security' },
+    { id: 'gateways', icon: Send, label: isRTL ? 'إدارة البوابات' : 'Gateways', permission: 'manage_team' as Permission },
+    { id: 'ai', icon: Cpu, label: t.settings.categories.ai, permission: 'manage_ai' as Permission },
+    { id: 'billing', icon: CreditCard, label: t.settings.categories.billing, permission: 'view_billing' as Permission },
+    { id: 'investors', icon: TrendingUp, label: t.settings.categories.investors, permission: 'view_investors' as Permission },
+    { id: 'backup', icon: Database, label: t.settings.categories.backup, permission: 'perform_backup' as Permission },
+    { id: 'team', icon: Users, label: t.settings.categories.team, permission: 'manage_team' as Permission },
+    { id: 'security', icon: Shield, label: t.settings.categories.security, permission: 'view_security' as Permission },
     { id: 'about', icon: Activity, label: t.settings.categories.about },
   ].filter(cat => !cat.permission || hasPermission(cat.permission));
 
@@ -283,10 +361,7 @@ export default function SettingsTab({ state, setState }: SettingsTabProps) {
                 <Send className="text-teal-500" />
                 {isRTL ? 'بوابات الإرسال والربط' : 'Gateways & Integrations'}
               </h3>
-              <button onClick={async () => {
-                const success = await saveGatewaysConfig(gateways);
-                alert(success ? (isRTL?'تم الحفظ':'Saved') : (isRTL?'فشل':'Failed'));
-              }} className="px-6 py-2 bg-teal-500 hover:bg-teal-600 text-white rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all shadow-lg shadow-teal-500/20">
+              <button onClick={handleSaveGateways} className="px-6 py-2 bg-teal-500 hover:bg-teal-600 text-white rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all shadow-lg shadow-teal-500/20">
                 <Save size={16}/> {isRTL ? 'حفظ إعدادات البوابات' : 'Save Configurations'}
               </button>
             </div>
@@ -318,15 +393,7 @@ export default function SettingsTab({ state, setState }: SettingsTabProps) {
                       <input type="text" value={gateways.sms?.sender || ''} onChange={(e) => setGateways({...gateways, sms: {...gateways.sms, sender: e.target.value}})} className="w-full mt-1 bg-white dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2 text-sm text-slate-800 dark:text-slate-200 focus:outline-none focus:border-teal-500" />
                     </div>
                     <div className="flex gap-2 mt-4 pt-4 border-t border-slate-200 dark:border-slate-800">
-                      <button onClick={async () => {
-                         const testNum = prompt(isRTL ? 'أدخل رقم هاتف للتجربة' : 'Enter mobile to test');
-                         if(!testNum) return;
-                         try {
-                           const res = await fetch(`${BASE_URL}/sms/send`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({mobile: testNum, text: 'Test NetLink API'}) });
-                           if(res.ok) alert(isRTL ? 'تم الإرسال بنجاح' : 'Test message sent');
-                           else alert('Error testing');
-                         } catch(e) { alert('Error testing API'); }
-                      }} className="flex-1 py-2.5 bg-slate-200 dark:bg-slate-700 hover:bg-blue-500 hover:text-white dark:hover:bg-blue-600 text-slate-700 dark:text-slate-200 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all">
+                      <button onClick={() => setIsSmsPromptOpen(true)} className="flex-1 py-2.5 bg-slate-200 dark:bg-slate-700 hover:bg-blue-500 hover:text-white dark:hover:bg-blue-600 text-slate-700 dark:text-slate-200 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all">
                         <Activity size={16}/> {isRTL ? 'فحص بوابة الـ SMS' : 'Test SMS Engine'}
                       </button>
                     </div>
@@ -379,7 +446,7 @@ export default function SettingsTab({ state, setState }: SettingsTabProps) {
                     
                     <button onClick={async () => {
                        await restartWhatsappEngine();
-                       alert(isRTL ? 'تم إرسال أمر إعادة التشغيل' : 'Restart signal sent');
+                       toastInfo(isRTL ? 'تم إرسال أمر إعادة تشغيل محرك واتساب.' : 'WhatsApp engine restart signal sent.', isRTL ? 'تم إرسال الأمر' : 'Restart Signal Sent');
                     }} className="w-full py-2 bg-slate-200 dark:bg-slate-700 hover:bg-emerald-500 hover:text-white dark:hover:bg-emerald-600 text-slate-700 dark:text-slate-200 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all mt-auto">
                       <RefreshCw size={16}/> {isRTL ? 'إعادة الإقناع (Restart Engine)' : 'Restart Engine'}
                     </button>
@@ -415,19 +482,7 @@ export default function SettingsTab({ state, setState }: SettingsTabProps) {
                         <input type="text" value={gateways.email?.from || ''} onChange={(e) => setGateways({...gateways, email: {...gateways.email, from: e.target.value}})} placeholder="info@netlinkps.top" className="w-full mt-1 bg-white dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2 text-sm text-slate-800 dark:text-slate-200 focus:outline-none focus:border-violet-500 font-mono" />
                       </div>
                       <div className="flex gap-2 mt-4 pt-4 border-t border-slate-200 dark:border-slate-800">
-                        <button onClick={async () => {
-                           const testMail = prompt(isRTL ? 'أدخل إيميل للتجربة' : 'Enter email to test');
-                           if(!testMail) return;
-                           try {
-                             const res = await fetch(`${BASE_URL}/email/send`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({emails: [testMail], text: 'Test Email from NetLink API', subject: 'NetLink Connectivity Test'}) });
-                             if(res.ok) {
-                               alert(isRTL ? 'تم الإرسال بنجاح' : 'Test message sent');
-                             } else {
-                               const data = await res.json();
-                               alert(isRTL ? `فشل الإرسال: ${data.error || 'تأكد من صحة إعدادات البوابة'}` : `Failed: ${data.error || 'Check gateway configs'}`);
-                             }
-                           } catch(e: any) { alert(isRTL ? `خطأ في الاتصال: ${e.message}` : `Connection error: ${e.message}`); }
-                        }} className="flex-1 py-2.5 bg-slate-200 dark:bg-slate-700 hover:bg-violet-500 hover:text-white dark:hover:bg-violet-600 text-slate-700 dark:text-slate-200 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all">
+                        <button onClick={() => setIsEmailPromptOpen(true)} className="flex-1 py-2.5 bg-slate-200 dark:bg-slate-700 hover:bg-violet-500 hover:text-white dark:hover:bg-violet-600 text-slate-700 dark:text-slate-200 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all">
                           <Activity size={16}/> {isRTL ? 'فحص بوابة البريد' : 'Test Email Engine'}
                         </button>
                       </div>
@@ -592,7 +647,7 @@ export default function SettingsTab({ state, setState }: SettingsTabProps) {
                 <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">{t.settings.billing.currency}</label>
                 <select 
                   value={state.currency}
-                  onChange={(e) => setState(prev => ({ ...prev, currency: e.target.value as any }))}
+                  onChange={(e) => setState(prev => ({ ...prev, currency: e.target.value as Currency }))}
                   className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2.5 text-slate-800 dark:text-slate-200 focus:outline-none focus:border-teal-500 transition-all"
                 >
                   <option value="ILS">{t.currencies.ILS}</option>
@@ -778,7 +833,7 @@ export default function SettingsTab({ state, setState }: SettingsTabProps) {
                 <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">{t.settings.backup.frequency}</label>
                 <select 
                   value={state.backupSettings.frequency}
-                  onChange={(e) => setState(prev => ({ ...prev, backupSettings: { ...prev.backupSettings, frequency: e.target.value as any } }))}
+                  onChange={(e) => setState(prev => ({ ...prev, backupSettings: { ...prev.backupSettings, frequency: e.target.value as AppState['backupSettings']['frequency'] } }))}
                   className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2.5 text-slate-800 dark:text-slate-200 focus:outline-none focus:border-teal-500 transition-all"
                 >
                   <option value="daily">{isRTL ? 'يومي' : 'Daily'}</option>
@@ -826,7 +881,7 @@ export default function SettingsTab({ state, setState }: SettingsTabProps) {
                 <button 
                   onClick={() => {
                     const newId = Math.random().toString(36).substr(2, 9);
-                    const newMember: any = { id: newId, name: '', email: '', username: '', role: 'user', permissions: [], status: 'active', joinDate: new Date().toISOString().split('T')[0] };
+                    const newMember: TeamMember = { id: newId, name: '', email: '', username: '', role: 'user', permissions: [], status: 'active', joinDate: new Date().toISOString().split('T')[0], groupId: '', balance: 0, commissionRate: 0, maxTxLimit: 0, isLimitEnabled: false };
                     setEditingMember(newMember);
                     setIsAddingMember(true);
                   }}
@@ -886,14 +941,7 @@ export default function SettingsTab({ state, setState }: SettingsTabProps) {
                           </button>
                           {member.role !== 'super_admin' && (
                             <button 
-                              onClick={() => {
-                                if (window.confirm(isRTL ? 'هل أنت متأكد من حذف هذا المستخدم؟' : 'Are you sure you want to delete this user?')) {
-                                  setState(prev => ({
-                                    ...prev,
-                                    teamMembers: prev.teamMembers.filter(m => m.id !== member.id)
-                                  }));
-                                }
-                              }}
+                              onClick={() => setMemberToDelete(member)}
                               className="p-2 bg-slate-100 dark:bg-slate-800 hover:bg-rose-500 hover:text-white text-slate-600 dark:text-slate-400 rounded-xl transition-all"
                             >
                               <Trash2 size={18} />
@@ -965,8 +1013,8 @@ export default function SettingsTab({ state, setState }: SettingsTabProps) {
                         <select 
                           value={editingMember.role}
                           onChange={(e) => {
-                            const newRole = e.target.value as any;
-                            let defaultPerms: string[] = [];
+                            const newRole = e.target.value as Role;
+                            let defaultPerms: Permission[] = [];
                             if (newRole === 'super_admin') defaultPerms = ['all'];
                             else if (newRole === 'admin') defaultPerms = ['view_dashboard', 'access_chat', 'perform_search', 'view_subscribers', 'view_suppliers', 'view_shareholders', 'view_directors', 'view_deputies', 'view_admins', 'access_files', 'view_topology', 'view_security', 'access_executive', 'view_billing', 'view_inventory', 'view_crm', 'view_field_service', 'view_reports', 'view_investors', 'view_boi'];
                             else if (newRole === 'sas4_manager') defaultPerms = ['view_dashboard', 'perform_search', 'view_subscribers', 'manage_subscribers', 'view_suppliers', 'manage_suppliers', 'view_shareholders', 'manage_shareholders', 'view_directors', 'manage_directors', 'view_deputies', 'manage_deputies', 'view_admins', 'manage_admins'];
@@ -1106,7 +1154,7 @@ export default function SettingsTab({ state, setState }: SettingsTabProps) {
                     <button 
                       onClick={() => {
                         if (!editingMember.name || !editingMember.email || !editingMember.username) {
-                          alert(isRTL ? 'يرجى ملء جميع الحقول المطلوبة' : 'Please fill all required fields');
+                          toastError(isRTL ? 'يرجى ملء جميع الحقول المطلوبة.' : 'Please fill all required fields.', isRTL ? 'بيانات ناقصة' : 'Missing Fields');
                           return;
                         }
                         
@@ -1119,6 +1167,7 @@ export default function SettingsTab({ state, setState }: SettingsTabProps) {
                           return { ...prev, teamMembers: newTeam };
                         });
                         setEditingMember(null);
+                        toastSuccess(isRTL ? 'تم حفظ بيانات المستخدم بنجاح.' : 'User details were saved successfully.', isRTL ? 'تم الحفظ' : 'User Saved');
                       }}
                       className="px-8 py-2.5 bg-teal-500 hover:bg-teal-600 text-white rounded-xl text-sm font-bold transition-all shadow-lg shadow-teal-500/20 flex items-center gap-2"
                     >
@@ -1424,6 +1473,50 @@ export default function SettingsTab({ state, setState }: SettingsTabProps) {
         </div>
 
       </div>
+
+      <AppPromptDialog
+        open={isSmsPromptOpen}
+        onClose={() => { setIsSmsPromptOpen(false); setSmsTestNumber(''); }}
+        onConfirm={handleSmsGatewayTest}
+        title={isRTL ? 'اختبار بوابة SMS' : 'Test SMS Gateway'}
+        description={isRTL ? 'أدخل رقم الهاتف الذي تريد إرسال رسالة تجريبية إليه.' : 'Enter the phone number that should receive the test SMS.'}
+        label={isRTL ? 'رقم الهاتف' : 'Mobile Number'}
+        value={smsTestNumber}
+        onChange={setSmsTestNumber}
+        placeholder={isRTL ? 'مثال: 0597000000' : 'Example: 0597000000'}
+        confirmLabel={isRTL ? 'إرسال الاختبار' : 'Send Test'}
+        cancelLabel={isRTL ? 'إلغاء' : 'Cancel'}
+        type="tel"
+        isRTL={isRTL}
+      />
+
+      <AppPromptDialog
+        open={isEmailPromptOpen}
+        onClose={() => { setIsEmailPromptOpen(false); setEmailTestAddress(''); }}
+        onConfirm={handleEmailGatewayTest}
+        title={isRTL ? 'اختبار بوابة البريد' : 'Test Email Gateway'}
+        description={isRTL ? 'أدخل البريد الإلكتروني الذي تريد إرسال رسالة تجريبية إليه.' : 'Enter the email address that should receive the test message.'}
+        label={isRTL ? 'البريد الإلكتروني' : 'Email Address'}
+        value={emailTestAddress}
+        onChange={setEmailTestAddress}
+        placeholder="example@domain.com"
+        confirmLabel={isRTL ? 'إرسال الاختبار' : 'Send Test'}
+        cancelLabel={isRTL ? 'إلغاء' : 'Cancel'}
+        type="email"
+        isRTL={isRTL}
+      />
+
+      <AppConfirmDialog
+        open={Boolean(memberToDelete)}
+        onClose={() => setMemberToDelete(null)}
+        onConfirm={handleDeleteTeamMember}
+        title={isRTL ? 'حذف المستخدم' : 'Delete User'}
+        description={isRTL ? `سيتم حذف المستخدم ${memberToDelete?.name || ''} من الفريق نهائيًا.` : `The user ${memberToDelete?.name || ''} will be permanently removed from the team.`}
+        confirmLabel={isRTL ? 'تأكيد الحذف' : 'Confirm Delete'}
+        cancelLabel={isRTL ? 'إلغاء' : 'Cancel'}
+        variant="danger"
+        isRTL={isRTL}
+      />
     </motion.div>
   );
 }

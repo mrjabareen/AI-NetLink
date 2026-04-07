@@ -9,6 +9,8 @@ export type Tab = 'dashboard' | 'chat' | 'search' | 'settings' | 'files' | 'topo
  */
 export type Role = 
   | 'super_admin' 
+  | 'admin'
+  | 'sas4_manager'
   | 'system_manager' 
   | 'manager' 
   | 'agent' 
@@ -18,9 +20,11 @@ export type Role =
   | 'technician' 
   | 'investor' 
   | 'supplier'
+  | 'shareholder'
   | 'user';
 
 export type Permission = 
+  | 'all'
   | 'view_dashboard'
   | 'access_executive'
   | 'view_crm'
@@ -30,6 +34,10 @@ export type Permission =
   | 'manage_investors'
   | 'view_shareholders'
   | 'manage_shareholders'
+  | 'view_directors'
+  | 'manage_directors'
+  | 'view_deputies'
+  | 'manage_deputies'
   | 'view_suppliers'
   | 'manage_suppliers'
   | 'view_admins'
@@ -43,13 +51,25 @@ export type Permission =
   | 'view_field_service'
   | 'access_chat'
   | 'view_security'
+  | 'manage_security'
+  | 'view_audit_logs'
   | 'view_reports'
   | 'create_reports'
+  | 'manage_widgets'
   | 'manage_portal'
   | 'manage_security_groups'
+  | 'manage_team'
+  | 'manage_ai'
+  | 'perform_backup'
   | 'perform_search'
   | 'access_files'
   | 'edit_settings'
+  | 'manage_topology'
+  | 'manage_billing'
+  | 'manage_inventory'
+  | 'manage_crm'
+  | 'manage_field_service'
+  | 'manage_boi'
   | 'wallet_deposit'
   | 'wallet_withdraw'
   | 'manage_tx_limits'
@@ -57,7 +77,8 @@ export type Permission =
   | 'sub_activate'
   | 'sub_edit'
   | 'sub_delete'
-  | 'iptv_manage';
+  | 'iptv_manage'
+  | 'view_financial';
 
 export interface SecurityGroup {
   id: string;
@@ -69,6 +90,72 @@ export interface SecurityGroup {
 }
 
 export type Currency = 'ILS' | 'USD' | 'JOD';
+
+export interface RouterRecord {
+  id: string;
+  name?: string;
+  host?: string;
+  [key: string]: unknown;
+}
+
+export interface MessageTemplate {
+  id: string;
+  name: string;
+  text: string;
+}
+
+export interface ContactEntry {
+  name: string;
+  phone: string;
+  email: string;
+}
+
+export interface BaseEntityRecord {
+  id: string;
+  name?: string;
+  username?: string;
+  status?: string;
+  [key: string]: unknown;
+}
+
+export interface BaseSubscriberRecord extends BaseEntityRecord {
+  phone?: string;
+  email?: string;
+  location?: string;
+  plan?: string;
+  expiry?: string;
+}
+
+export interface NetworkProfile {
+  id?: string;
+  name?: string;
+  price?: number | string;
+  [key: string]: unknown;
+}
+
+export interface GatewayConfig {
+  sms?: {
+    url?: string;
+    user_name?: string;
+    user_pass?: string;
+    sender?: string;
+  };
+  whatsapp?: {
+    delay?: number;
+  };
+  email?: {
+    host?: string;
+    user?: string;
+    port?: number;
+    pass?: string;
+    from?: string;
+  };
+}
+
+export interface WhatsAppStatus {
+  ready?: boolean;
+  status?: string;
+}
 
 export interface VersionInfo {
   version: string;

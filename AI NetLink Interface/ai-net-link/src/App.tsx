@@ -5,8 +5,9 @@
  * Contact: admin@aljabareen.com | +970597409040
  */
 import React, { useState, useEffect } from 'react';
-import { AnimatePresence } from 'motion/react';
-import { AppState } from './types';
+import { AnimatePresence, motion } from 'motion/react';
+import { AlertCircle, CheckCircle2, Info } from 'lucide-react';
+import { AppState, Permission } from './types';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
 import DashboardTab from './components/DashboardTab';
@@ -345,7 +346,7 @@ export default function App() {
   }, []);
 
   const userPermissions = state.currentUser?.permissions || [];
-  const hasPermission = (perm: string) => state.role === 'super_admin' || userPermissions.includes('all') || userPermissions.includes(perm);
+  const hasPermission = (perm: Permission) => state.role === 'super_admin' || userPermissions.includes('all') || userPermissions.includes(perm);
 
   if (!state.isAuthenticated) {
     return <Login state={state} setState={setState} />;
@@ -360,19 +361,42 @@ export default function App() {
       <div className={`fixed top-5 z-[100] flex flex-col gap-3 ${state.lang === 'ar' ? 'left-5' : 'right-5'}`}>
         <AnimatePresence>
           {toasts.map((toast) => (
-            <div
+            <motion.div
               key={toast.id}
-              className={`min-w-[280px] max-w-[360px] rounded-2xl border shadow-2xl backdrop-blur-xl px-4 py-3 ${
+              initial={{ opacity: 0, y: -12, scale: 0.96 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -8, scale: 0.96 }}
+              className={`min-w-[300px] max-w-[380px] overflow-hidden rounded-[1.75rem] border shadow-2xl backdrop-blur-xl ${
                 toast.type === 'success'
-                  ? 'bg-emerald-500/10 border-emerald-400/30 text-emerald-100'
+                  ? 'border-emerald-400/30 bg-white/90 text-slate-900 dark:bg-emerald-500/10 dark:text-emerald-50'
                   : toast.type === 'error'
-                    ? 'bg-rose-500/10 border-rose-400/30 text-rose-100'
-                    : 'bg-slate-900/90 border-slate-700 text-slate-100'
+                    ? 'border-rose-400/30 bg-white/90 text-slate-900 dark:bg-rose-500/10 dark:text-rose-50'
+                    : 'border-slate-300/60 bg-white/90 text-slate-900 dark:border-slate-700 dark:bg-slate-900/90 dark:text-slate-100'
               }`}
             >
-              {toast.title && <div className="text-sm font-bold mb-1">{toast.title}</div>}
-              <div className="text-sm leading-6">{toast.message}</div>
-            </div>
+              <div className="flex items-start gap-3 px-4 py-4">
+                <div className={`mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl ${
+                  toast.type === 'success'
+                    ? 'bg-emerald-500/15 text-emerald-500'
+                    : toast.type === 'error'
+                      ? 'bg-rose-500/15 text-rose-500'
+                      : 'bg-blue-500/15 text-blue-500'
+                }`}>
+                  {toast.type === 'success' ? <CheckCircle2 size={18} /> : toast.type === 'error' ? <AlertCircle size={18} /> : <Info size={18} />}
+                </div>
+                <div className="min-w-0 flex-1">
+                  {toast.title ? <div className="mb-1 text-sm font-black">{toast.title}</div> : null}
+                  <div className="text-sm leading-6 text-slate-600 dark:text-slate-200">{toast.message}</div>
+                </div>
+              </div>
+              <div className={`h-1 w-full ${
+                toast.type === 'success'
+                  ? 'bg-emerald-500/70'
+                  : toast.type === 'error'
+                    ? 'bg-rose-500/70'
+                    : 'bg-blue-500/70'
+              }`} />
+            </motion.div>
           ))}
         </AnimatePresence>
       </div>
