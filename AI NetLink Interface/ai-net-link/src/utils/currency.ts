@@ -27,7 +27,8 @@ export function formatCurrency(amountInILS: number, currency: Currency, lang: La
   
   const formattedValue = converted.toLocaleString('en-US', { 
     minimumFractionDigits: decimalPlaces, 
-    maximumFractionDigits: decimalPlaces 
+    maximumFractionDigits: decimalPlaces,
+    useGrouping: true
   });
 
   if (lang === 'ar') {

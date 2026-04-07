@@ -2415,15 +2415,17 @@ app.get('/api/investors', (req, res) => {
       return res.status(404).json({ error: 'Investors directory not found' });
     }
     const files = fs.readdirSync(dirPath).filter(f => f.endsWith('.json'));
-    const investors = files.map((file, index) => {
+    const investors = files.map((file) => {
       const content = fs.readFileSync(getSafePath(dirPath, file), 'utf-8');
       const inv = JSON.parse(content);
+      const fileIdMatch = file.match(/^(\d+)_/);
+      const stableInvestorId = fileIdMatch ? `SH-${fileIdMatch[1]}` : file.replace('.json', '');
       const totalShares = inv['كمية الأسهم الكاملة'] || 0;
       const ownedShares = inv['رصيد الأسهم'] || 0;
       const totalSharesAll = 200000; // approximation for ownership %
       const ownershipPct = totalShares > 0 ? ((ownedShares / totalSharesAll) * 100).toFixed(1) + '%' : '0%';
       return {
-        id: `SH-${String(100 + index)}`,
+        id: stableInvestorId,
         name: inv['اسم المستثمر'] || file.replace('.json', ''),
         shares: ownedShares,
         ownership: ownershipPct,
@@ -2431,6 +2433,7 @@ app.get('/api/investors', (req, res) => {
         joinDate: inv['تاريخ الانضمام'] || '2024-01-01',
         investment: inv['سعر الأسهم'] || 0,
         dividends: inv['صافي الربح'] || 0,
+        buyPrice: inv['سعر السهم الواحد'] || 10,
         sharePrice: inv['سعر السهم الواحد'] || 10,
         availableShares: inv['كمية الأسهم المتوفرة للبيع'] || 0,
         totalShares: totalShares,

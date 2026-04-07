@@ -368,7 +368,7 @@ export default function SettingsTab({ state, setState }: SettingsTabProps) {
                     <div className="space-y-1">
                       <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{isRTL ? 'تأخير الرسائل الجماعية (ملي ثانية)' : 'Bulk Delay (ms)'}</label>
                       <input 
-                        type="number" 
+                        type="number" lang="en" 
                         min="1500" 
                         value={gateways.whatsapp?.delay || 1500} 
                         onChange={(e) => setGateways({...gateways, whatsapp: {...gateways.whatsapp, delay: Math.max(1500, parseInt(e.target.value) || 1500)}})} 

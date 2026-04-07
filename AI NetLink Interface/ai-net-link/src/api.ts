@@ -319,6 +319,36 @@ export const deleteManager = async (id: string) => {
   }
 };
 
+export const topUpManager = async (id: string, amount: number) => {
+  try {
+    const res = await fetch(`${BASE_URL}/managers/${encodeURIComponent(id)}/topup`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ amount }),
+    });
+    if (!res.ok) throw new Error('Failed to top up manager');
+    return await res.json();
+  } catch (error) {
+    console.error(error);
+    throw error;
+  }
+};
+
+export const updateManagerTxLimit = async (id: string, limit: number, enabled: boolean) => {
+  try {
+    const res = await fetch(`${BASE_URL}/managers/${encodeURIComponent(id)}/limit`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ limit, enabled }),
+    });
+    if (!res.ok) throw new Error('Failed to update manager tx limit');
+    return await res.json();
+  } catch (error) {
+    console.error(error);
+    throw error;
+  }
+};
+
 // Generic CRUD factory for simple endpoints
 const createCrudEndpoints = (resourceName: string) => {
   return {

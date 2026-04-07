@@ -6,7 +6,7 @@
  */
 import React, { useMemo, useState } from 'react';
 import { motion } from 'motion/react';
-import { LayoutDashboard, MessageSquare, Search, Settings, FolderClosed, Sun, Moon, Globe, Activity, ChevronRight, ChevronLeft, ChevronDown, Network, ShieldAlert, BarChart3, Briefcase, CreditCard, Package, Users, Map, PieChart, LayoutTemplate, TrendingUp, Truck, Calendar, Coins, ShieldCheck, LogOut, Server } from 'lucide-react';
+import { LayoutDashboard, MessageSquare, Search, Settings, FolderClosed, Sun, Moon, Globe, Activity, ChevronRight, ChevronLeft, ChevronDown, Network, ShieldAlert, BarChart3, Briefcase, CreditCard, Package, Users, Map, PieChart, LayoutTemplate, TrendingUp, Truck, Calendar, Coins, ShieldCheck, LogOut, Server, Landmark } from 'lucide-react';
 import { AppState, Currency, Role } from '../types';
 import { dict } from '../dict';
 
@@ -20,11 +20,11 @@ export default function Sidebar({ state, setState }: SidebarProps) {
   const isRTL = state.lang === 'ar';
   const [hoveredTooltip, setHoveredTooltip] = useState<{label: string, top: number, right: number, left: number} | null>(null);
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({
-    operations: true,
-    customers: true,
-    network: true,
+    operations: false,
+    customers: false,
+    network: false,
     insights: false,
-    system: true,
+    system: false,
   });
 
   const handleMouseEnter = (e: React.MouseEvent, label: string) => {
@@ -55,6 +55,7 @@ export default function Sidebar({ state, setState }: SidebarProps) {
     { id: 'management', icon: ShieldCheck, label: t.nav.management, permission: 'view_admins' },
     { id: 'network_radius', icon: Server, label: t.nav.network_radius, permission: 'view_admins' },
     { id: 'search', icon: Search, label: t.nav.search, permission: 'perform_search' },
+    { id: 'financial', icon: Landmark, label: t.nav.financial, permission: 'view_admins' },
     { id: 'files', icon: FolderClosed, label: t.nav.files, permission: 'access_files' },
     { id: 'settings', icon: Settings, label: t.nav.settings, permission: 'edit_settings' },
   ];
@@ -77,7 +78,7 @@ export default function Sidebar({ state, setState }: SidebarProps) {
     {
       id: 'customers',
       label: isRTL ? 'العملاء والإدارة' : 'Customers & Management',
-      items: ['crm', 'management', 'suppliers', 'investors', 'billing', 'boi_expiry'],
+      items: ['crm', 'management', 'financial', 'suppliers', 'investors', 'billing', 'boi_expiry'],
     },
     {
       id: 'network',
@@ -150,7 +151,7 @@ export default function Sidebar({ state, setState }: SidebarProps) {
   };
 
   return (
-    <aside className={`hidden md:flex flex-col glass-panel z-20 transition-all duration-300 ${state.sidebarOpen ? 'w-72' : 'w-20'} border-e border-slate-200/50 dark:border-slate-800/50 relative`}>
+    <aside className={`hidden md:flex flex-col glass-panel z-20 transition-all duration-300 ${state.sidebarOpen ? 'w-56' : 'w-20'} border-e border-slate-200/50 dark:border-slate-800/50 relative`}>
       <button 
         onClick={() => setState(prev => ({ ...prev, sidebarOpen: !prev.sidebarOpen }))}
         className={`absolute top-6 ${isRTL ? '-left-3' : '-right-3'} w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center shadow-md z-30 hover:bg-blue-700 transition-colors cursor-pointer`}
@@ -158,13 +159,13 @@ export default function Sidebar({ state, setState }: SidebarProps) {
         {state.sidebarOpen ? (isRTL ? <ChevronRight size={14} /> : <ChevronLeft size={14} />) : (isRTL ? <ChevronLeft size={14} /> : <ChevronRight size={14} />)}
       </button>
 
-      <div className="p-6 flex items-center gap-4 h-24">
-        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-violet-600 flex items-center justify-center shrink-0 shadow-lg shadow-blue-500/20">
-          <Activity className="text-white w-6 h-6" />
+      <div className="p-4 flex items-center gap-3 h-20">
+        <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-500 to-violet-600 flex items-center justify-center shrink-0 shadow-lg shadow-blue-500/20">
+          <Activity className="text-white w-5 h-5" />
         </div>
         {state.sidebarOpen && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col min-w-0">
-            <h1 className="text-xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-violet-600 dark:from-blue-400 dark:to-violet-400 whitespace-nowrap">
+            <h1 className="text-lg font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-violet-600 dark:from-blue-400 dark:to-violet-400 whitespace-nowrap">
               {t.title}
             </h1>
             <p className="text-[10px] text-slate-500 dark:text-slate-400 font-bold leading-tight mt-0.5 break-words">
@@ -174,7 +175,7 @@ export default function Sidebar({ state, setState }: SidebarProps) {
         )}
       </div>
 
-      <nav className="flex-1 px-4 py-6 space-y-4 overflow-y-auto custom-scrollbar">
+      <nav className="flex-1 px-2 py-4 space-y-3 overflow-y-auto custom-scrollbar">
         {state.sidebarOpen ? (
           navGroups.map((group) => (
             <div key={group.id} className="space-y-2">
@@ -198,7 +199,7 @@ export default function Sidebar({ state, setState }: SidebarProps) {
         )}
       </nav>
 
-      <div className="p-4 border-t border-slate-200/50 dark:border-slate-800/50 space-y-4">
+      <div className="p-3 border-t border-slate-200/50 dark:border-slate-800/50 space-y-3">
         <div className={`flex items-center ${state.sidebarOpen ? 'justify-between' : 'justify-center flex-col gap-4'}`}>
           <button 
              onClick={toggleTheme} 

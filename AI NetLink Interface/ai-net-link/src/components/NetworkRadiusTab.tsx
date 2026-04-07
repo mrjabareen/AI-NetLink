@@ -335,7 +335,7 @@ export default function NetworkRadiusTab({ state, setState }: NetworkRadiusTabPr
                                     </div>
                                     <div>
                                         <label className="text-xs font-bold text-slate-500">{isRTL ? 'المنفذ' : 'Port'}</label>
-                                        <input type="number" value={router.port} onChange={(e) => updateRouter(router.id, 'port', parseInt(e.target.value))} className="w-full mt-1 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2 text-sm font-mono" />
+                                        <input type="number" lang="en" value={router.port} onChange={(e) => updateRouter(router.id, 'port', parseInt(e.target.value))} className="w-full mt-1 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2 text-sm font-mono" />
                                     </div>
                                 </div>
                                 <div className="grid grid-cols-2 gap-3">

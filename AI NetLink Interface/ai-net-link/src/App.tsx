@@ -29,6 +29,7 @@ import SuppliersTab from './components/SuppliersTab';
 import BoiExpiryTab from './components/BoiExpiryTab';
 import ManagementTab from './components/ManagementTab';
 import NetworkRadiusTab from './components/NetworkRadiusTab';
+import FinancialDashboard from './components/FinancialDashboard';
 import Login from './components/Login';
 import { fetchManagers } from './api';
 import { AppToastPayload } from './utils/notify';
@@ -72,14 +73,74 @@ export default function App() {
     lang: 'ar',
     theme: 'dark',
     activeTab: localStorage.getItem('sas4_active_tab') || 'dashboard',
-    sidebarOpen: true,
+    sidebarOpen: false,
     mobileMenuOpen: false,
     role: 'user',
     currentUser: null,
     isAuthenticated: false,
     currency: 'ILS',
+    centralBalance: 50000,
+    financialTransactions: [
+      { id: 'TX-001', date: '2026-04-01 10:00', type: 'topup_agent', amount: 5000, fromId: 'aljabareen', fromName: 'Super Admin', toId: 'admin_1', toName: 'Branch Manager A', status: 'completed', note: 'Initial allocation' },
+      { id: 'TX-002', date: '2026-04-02 14:30', type: 'topup_sub', amount: 100, fromId: 'admin_1', fromName: 'Branch Manager A', toId: 'sub_441', toName: 'User 441', status: 'completed', metadata: { agentCommission: 10 } },
+    ],
     teamMembers: [
-      { id: '0', name: 'المدير العام (Super Admin)', email: 'mrjabarin@gmail.com', username: 'aljabareen', role: 'super_admin', permissions: ['all'], status: 'active', joinDate: '2026-01-01' },
+      { 
+        id: '0', 
+        name: 'المدير العام (Super Admin)', 
+        email: 'mrjabarin@gmail.com', 
+        username: 'aljabareen', 
+        role: 'super_admin', 
+        groupId: 'grp_admin',
+        permissions: ['view_dashboard', 'access_executive', 'view_central_balance', 'manage_security_groups', 'manage_admins'], 
+        status: 'active', 
+        joinDate: '2026-01-01', 
+        balance: 50000, 
+        commissionRate: 0,
+        maxTxLimit: 0,
+        isLimitEnabled: false
+      },
+      { 
+        id: '5', 
+        name: 'مدير فرع الشمال', 
+        email: 'north_mgr@sasnet.ps', 
+        username: 'north_agent', 
+        role: 'manager', 
+        groupId: 'grp_mgr',
+        permissions: ['view_dashboard', 'view_admins', 'wallet_deposit'], 
+        status: 'active', 
+        joinDate: '2026-02-15', 
+        balance: 2450, 
+        commissionRate: 10,
+        maxTxLimit: 1000,
+        isLimitEnabled: true
+      },
+    ],
+    securityGroups: [
+      { 
+        id: 'grp_admin', 
+        name: 'كبار المسؤولين (Administrator)', 
+        description: 'صلاحيات كاملة لإدارة النظام والمالية', 
+        permissions: ['view_dashboard', 'access_executive', 'view_central_balance', 'manage_admins', 'manage_security_groups', 'wallet_deposit', 'wallet_withdraw'], 
+        memberCount: 1, 
+        createdAt: '2026-01-01' 
+      },
+      { 
+        id: 'grp_mgr', 
+        name: 'مدراء الفروع (Managers)', 
+        description: 'إدارة المشتركين والعمليات المالية المحدودة', 
+        permissions: ['view_dashboard', 'view_admins', 'wallet_deposit'], 
+        memberCount: 1, 
+        createdAt: '2026-01-10' 
+      },
+      { 
+        id: 'grp_tech', 
+        name: 'الفنيون (Technicians)', 
+        description: 'صلاحيات الدعم الفني والميداني فقط', 
+        permissions: ['view_field_service', 'view_topology', 'access_chat'], 
+        memberCount: 0, 
+        createdAt: '2026-02-01' 
+      }
     ],
     shareholders: [
       { 
@@ -339,6 +400,7 @@ export default function App() {
             {state.activeTab === 'boi_expiry' && hasPermission('view_boi') && <BoiExpiryTab state={state} />}
             {state.activeTab === 'management' && hasPermission('view_admins') && <ManagementTab state={state} setState={setState} />}
             {state.activeTab === 'network_radius' && hasPermission('view_admins') && <NetworkRadiusTab state={state} setState={setState} />}
+            {state.activeTab === 'financial' && hasPermission('view_financial') && <FinancialDashboard state={state} setState={setState} />}
             {state.activeTab === 'chat' && hasPermission('access_chat') && <ChatTab state={state} />}
             {state.activeTab === 'security' && hasPermission('view_security') && <SecurityTab state={state} />}
             {state.activeTab === 'analytics' && hasPermission('view_reports') && <AnalyticsTab state={state} />}

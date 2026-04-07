@@ -48,9 +48,57 @@
   }
 }
 
+@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@200;300;400;500;600;700;800;900;1000&family=Inter:wght@100;200;300;400;500;600;700;800;900&display=swap');
+
+/* 
+   THE ULTIMATE FIX FOR NUMERALS:
+   Create a font-face that ONLY contains Western digits (0-9) 
+   and force it globally.
+*/
+@font-face {
+  font-family: 'EnglishDigits';
+  src: local('Arial'), local('Helvetica'), local('sans-serif');
+  unicode-range: U+0030-0039; /* Range for 0-9 */
+}
+
+:root {
+  font-family: 'EnglishDigits', 'Inter', 'Cairo', system-ui, -apple-system, sans-serif;
+}
+
 body {
   @apply bg-slate-50 dark:bg-[#09090B] text-slate-900 dark:text-slate-100 transition-colors duration-300;
-  overflow: hidden; /* Prevent body scroll, handle scrolling in main content */
+  overflow: hidden; 
+  user-select: none;
+  font-family: 'EnglishDigits', 'Inter', 'Cairo', sans-serif !important;
+  font-variant-numeric: tabular-nums lining-nums !important;
+}
+
+/* Force English digits on EVERYTHING */
+* {
+  font-family: 'EnglishDigits', 'Inter', 'Cairo', sans-serif !important;
+  font-variant-numeric: lining-nums tabular-nums !important;
+  -moz-font-feature-settings: "lnum" 1, "tnum" 1 !important;
+  -webkit-font-feature-settings: "lnum" 1, "tnum" 1 !important;
+  font-feature-settings: "lnum" 1, "tnum" 1 !important;
+}
+
+/* Prevent any automatic numeral translation in RTL */
+[dir="rtl"] {
+  unicode-bidi: plaintext !important;
+}
+
+input, select, textarea {
+  direction: ltr !important; /* Force inputs to stay LTR for numbers */
+  text-align: right !important; /* Visual alignment for RTL */
+}
+
+/* Ensure mono fonts also use the EnglishDigits fix */
+.font-mono, code, pre {
+  font-family: 'EnglishDigits', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
+}
+
+input, textarea, [contenteditable="true"], .allow-select {
+  user-select: text; /* Re-enable selection for inputs and specifically marked areas */
 }
 
 /* Custom Scrollbar for a premium feel */

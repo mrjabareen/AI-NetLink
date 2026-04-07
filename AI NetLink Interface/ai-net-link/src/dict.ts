@@ -8,7 +8,7 @@ export const dict = {
   en: {
     title: "SAS NET",
     subtitle: "Integrated Smart Enterprise Core",
-    nav: { dashboard: "Dashboard", chat: "Operations Room", search: "Knowledge Search", settings: "Settings", files: "File Manager", topology: "Network Topology", security: "Security Radar", analytics: "Analytics & SLA", executive: "Executive AI (CEO)", billing: "Billing & Churn", inventory: "Smart Inventory", crm: "CRM", field: "Field Service", reports: "Report Builder", portal: "Portal Designer", investors: "Investors", suppliers: "Suppliers", boi_expiry: "Smart Subscription Control", management: "Subscribers Management", network_radius: "Network & RADIUS" },
+    nav: { dashboard: "Dashboard", chat: "Operations Room", search: "Knowledge Search", settings: "Settings", files: "File Manager", topology: "Network Topology", security: "Security Radar", analytics: "Analytics & SLA", executive: "Executive AI (CEO)", billing: "Billing & Churn", inventory: "Smart Inventory", crm: "CRM", field: "Field Service", reports: "Report Builder", portal: "Portal Designer", investors: "Investors", suppliers: "Suppliers", boi_expiry: "Smart Subscription Control", management: "Operations & Administration", network_radius: "Network & RADIUS", financial: "Financial Center" },
     roles: {
       super_admin: "Super Administrator",
       admin: "Administrator",
@@ -119,13 +119,13 @@ export const dict = {
       result3: { title: "Incident Report: Database Desync", desc: "Post-mortem analysis of the database desynchronization event on 2026-03-15. Root cause and preventative measures.", tags: ["Report", "Database"] }
     },
     management: {
-      title: "Subscribers Management",
-      subtitle: "Manage subscribers, suppliers, and system administrators.",
+      title: "Operations & Administration Center",
+      subtitle: "Manage subscribers, IPTV, suppliers, investors, administrative staff, and security groups from one unified workspace.",
       tabs: {
         subscribers: "Subscribers",
         suppliers: "Suppliers",
-        shareholders: "Shareholders",
-        directors: "Directors",
+        shareholders: "Investors",
+        directors: "Directors (New)",
         deputies: "Staff & Technicians",
         admins: "Administrators",
         iptv: "IP TV"
@@ -154,7 +154,7 @@ export const dict = {
           }
         },
         table: {
-          name: "Name",
+          name: "Full Name",
           plan: "Plan",
           status: "Status",
           expiry: "Expiry Date",
@@ -165,6 +165,18 @@ export const dict = {
           active: "Active",
           suspended: "Suspended",
           expired: "Expired"
+        }
+      },
+      investors: {
+        title: "Investors List",
+        add: "Add Investor",
+        table: {
+          name: "Full Name",
+          shares: "Owned Shares",
+          buyPrice: "Buy Price",
+          ownership: "Ownership %",
+          investment: "Total Investment",
+          dividends: "Dividends Paid"
         }
       },
       suppliers: {
@@ -459,12 +471,38 @@ export const dict = {
       operational: "Operational", syncing: "Syncing", offlineStatus: "Offline", active: "Active"
     },
 
+    financial: {
+      title: "Financial Center",
+      subtitle: "Manage central balances, agent commissions, and transaction history.",
+      masterBalance: "Master Pool (Super Admin)",
+      totalLiquidity: "Total System Liquidity",
+      agentBalances: "Active Agent Funds",
+      transactions: "Transactions Ledger",
+      commissions: "Commission Settings",
+      topUp: "Top-Up Balance",
+      transfer: "Transfer Funds",
+      commissionRate: "Commission Rate",
+      profitMargin: "Profit Margin",
+      from: "Source",
+      to: "Recipient",
+      type: "Type",
+      amount: "Amount",
+      date: "Date",
+      status: "Status",
+      types: {
+        topup_agent: "Agent Top-up",
+        topup_sub: "Subscriber Charge",
+        commission: "Commission Earned",
+        transfer: "Internal Transfer",
+        withdraw: "Withdrawal"
+      }
+    },
     currencies: { ILS: "₪ ILS", USD: "$ USD", JOD: "JD JOD" }
   },
   ar: {
     title: "SAS NET",
     subtitle: "النواة المتكاملة لإدارة المؤسسات الذكية",
-    nav: { dashboard: "لوحة القيادة", chat: "غرفة العمليات", search: "البحث المعرفي", settings: "الإعدادات", files: "مدير الملفات", topology: "طوبولوجيا الشبكة", security: "رادار الأمان", analytics: "التحليلات والتقارير", executive: "المساعد التنفيذي (المدير)", billing: "الفوترة والمشتركين", inventory: "المخزون الذكي", crm: "إدارة العملاء", field: "الخدمة الميدانية", reports: "منشئ التقارير", portal: "بوابة الدخول", investors: "المستثمرين", suppliers: "الموردين", boi_expiry: "مركز التحكم الذكي في الاشتراكات", management: "إدارة المشتركين", network_radius: "إدارة الراديوس والشبكة" },
+    nav: { dashboard: "لوحة القيادة", chat: "غرفة العمليات", search: "البحث المعرفي", settings: "الإعدادات", files: "مدير الملفات", topology: "طوبولوجيا الشبكة", security: "رادار الأمان", analytics: "التحليلات والتقارير", executive: "المساعد التنفيذي (المدير)", billing: "الفوترة والمشتركين", inventory: "المخزون الذكي", crm: "إدارة العملاء", field: "الخدمة الميدانية", reports: "منشئ التقارير", portal: "بوابة الدخول", investors: "المستثمرين", suppliers: "الموردين", boi_expiry: "مركز التحكم الذكي في الاشتراكات", management: "مركز الإدارة والعمليات", network_radius: "إدارة الراديوس والشبكة", financial: "المركز المالي" },
     roles: {
       super_admin: "مدير عام (Super Admin)",
       admin: "مدير نظام (Admin)",
@@ -575,12 +613,12 @@ export const dict = {
       result3: { title: "تقرير حادث: عدم تزامن قاعدة البيانات", desc: "تحليل ما بعد الوفاة لحدث عدم تزامن قاعدة البيانات في 15-03-2026. السبب الجذري والتدابير الوقائية.", tags: ["تقرير", "قاعدة بيانات"] }
     },
     management: {
-      title: "إدارة المشتركين",
-      subtitle: "إدارة المشتركين، الموردين، ومديري النظام.",
+      title: "مركز الإدارة والعمليات",
+      subtitle: "مساحة موحدة لإدارة المشتركين وIPTV والموردين والمستثمرين والطاقم الإداري والمجموعات الأمنية.",
       tabs: {
         subscribers: "المشتركون",
         suppliers: "الموردون",
-        shareholders: "المساهمون",
+        shareholders: "المستثمرون",
         directors: "المدراء (النظام الجديد)",
         deputies: "الموظفون والفنيون",
         admins: "المديرون (نظام SAS NET)",
@@ -610,7 +648,7 @@ export const dict = {
           }
         },
         table: {
-          name: "الاسم",
+          name: "الاسم الكامل",
           plan: "الباقة",
           status: "الحالة",
           expiry: "تاريخ الانتهاء",
@@ -621,6 +659,18 @@ export const dict = {
           active: "نشط",
           suspended: "معلق",
           expired: "منتهي"
+        }
+      },
+      investors: {
+        title: "قائمة المستثمرين",
+        add: "إضافة مستثمر",
+        table: {
+          name: "الاسم الكامل",
+          shares: "عدد الأسهم المملوكة",
+          buyPrice: "سعر الأسهم عند الشراء",
+          ownership: "نسبة الملكية",
+          investment: "إجمالي الاستثمار",
+          dividends: "الأرباح المستلمة"
         }
       },
       suppliers: {
@@ -913,6 +963,32 @@ export const dict = {
       roleMgmt: "إدارة الأدوار", enterPin: "أدخل رمز المدير", switchRole: "تبديل الدور", currentUser: "الدور الحالي", unlock: "إلغاء القفل", revert: "العودة كمستخدم",
       dbConn: "اتصال قاعدة البيانات", vectorStore: "مخزن المتجهات", localInf: "الاستدلال المحلي",
       operational: "يعمل", syncing: "جاري المزامنة", offlineStatus: "غير متصل", active: "نشط"
+    },
+    financial: {
+      title: "المركز المالي",
+      subtitle: "إدارة الأرصدة المركزية، عمولات الوكلاء، وسجل العمليات المالية.",
+      masterBalance: "الرصيد المركزي (المدير العام)",
+      totalLiquidity: "إجمالي السيولة في النظام",
+      agentBalances: "أرصدة الوكلاء النشطة",
+      transactions: "سجل العمليات المالية",
+      commissions: "إعدادات العمولات",
+      topUp: "شحن رصيد",
+      transfer: "تحويل أموال",
+      commissionRate: "نسبة العمولة",
+      profitMargin: "هامش الربح",
+      from: "المصدر",
+      to: "المستلم",
+      type: "النوع",
+      amount: "المبلغ",
+      date: "التاريخ",
+      status: "الحالة",
+      types: {
+        topup_agent: "شحن وكيل",
+        topup_sub: "شحن مشترك",
+        commission: "عمولة مكتسبة",
+        transfer: "تحويل داخلي",
+        withdraw: "سحب رصيد"
+      }
     },
     currencies: { ILS: "₪ شيكل", USD: "$ دولار", JOD: "JD دينار" }
   }

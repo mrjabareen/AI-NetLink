@@ -1,19 +1,20 @@
 import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Users, Truck, ShieldCheck, Search, Plus, Edit2, Trash2, X, Save, CheckCircle2, AlertCircle, UserPlus, Filter, Briefcase, UserCog, PieChart, RefreshCw, Activity, Globe, Wifi, WifiOff, Router, Zap, LogOut, Power, MoreVertical, Lock, Unlock, ShieldOff, Edit, Trash, Calendar, Send, Smartphone, Mail, MessageSquare } from 'lucide-react';
-import { AppState } from '../types';
+import { Users, Truck, ShieldCheck, Search, Plus, Edit2, Trash2, X, Save, CheckCircle2, AlertCircle, UserPlus, Filter, Briefcase, UserCog, PieChart, RefreshCw, Activity, Globe, Wifi, WifiOff, Router, Zap, LogOut, Power, MoreVertical, Lock, Unlock, ShieldOff, Edit, Trash, Calendar, Send, Smartphone, Mail, MessageSquare, CreditCard, Coins, Wallet } from 'lucide-react';
+import { AppState, Permission, FinancialTransaction } from '../types';
 import { dict } from '../dict';
 import { formatNumber, normalizeDigits } from '../utils/format';
 import { formatCurrency } from '../utils/currency';
-import { fetchSubscribers, fetchSuppliers, fetchInvestors, addSubscriber, updateSubscriber, deleteSubscriber, addSupplier, updateSupplier, deleteSupplier, fetchManagersRaw, addManager, updateManager, deleteManager, addInvestor, updateInvestor, deleteInvestor, directorsApi, deputiesApi, iptvApi, getMikrotikStatus, getMikrotikStatusBatch, disconnectSubscriber, disconnectAllSubscribers, deleteSecret, disableSecret, enableSecret, syncSubscriberToMikrotik, fetchRoutersList, fetchProfiles, activateSubscriber, extendSubscriber, getMessageData, saveMessageData, BASE_URL } from '../api';
+import { fetchSubscribers, fetchSuppliers, fetchInvestors, addSubscriber, updateSubscriber, deleteSubscriber, addSupplier, updateSupplier, deleteSupplier, fetchManagersRaw, addManager, updateManager, deleteManager, addInvestor, updateInvestor, deleteInvestor, directorsApi, deputiesApi, iptvApi, getMikrotikStatus, getMikrotikStatusBatch, disconnectSubscriber, disconnectAllSubscribers, deleteSecret, disableSecret, enableSecret, syncSubscriberToMikrotik, fetchRoutersList, fetchProfiles, activateSubscriber, extendSubscriber, getMessageData, saveMessageData, BASE_URL, topUpManager, updateManagerTxLimit } from '../api';
 import { getSmartMatchScore, smartMatch } from '../utils/search';
+import SecurityGroupsTab from './SecurityGroupsTab';
 
 interface ManagementTabProps {
   state: AppState;
   setState: React.Dispatch<React.SetStateAction<AppState>>;
 }
 
-type ManagementSubTab = 'subscribers' | 'suppliers' | 'shareholders' | 'directors' | 'deputies' | 'admins' | 'iptv';
+type ManagementSubTab = 'subscribers' | 'suppliers' | 'shareholders' | 'managers' | 'iptv' | 'groups';
 
 interface MenuAction {
   id: string;
@@ -56,7 +57,7 @@ const SmartActionMenu = ({
             initial={{ opacity: 0, scale: 0.95, y: isLastRows ? -20 : 20 }}
             animate={{ opacity: 1, scale: 1, y: isLastRows ? -10 : 10 }}
             exit={{ opacity: 0, scale: 0.95, y: isLastRows ? -20 : 20 }}
-            className={`absolute ${isRTL ? 'left-0' : 'right-0'} ${isLastRows ? 'bottom-full mb-2' : 'top-full mt-2'} w-64 bg-white dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl z-[100] overflow-hidden`}
+            className={`absolute ${isRTL ? 'left-0' : 'right-0'} ${isLastRows ? 'bottom-full mb-2' : 'top-full mt-2'} w-64 bg-white dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl z-[200] overflow-hidden`}
           >
             <div className="p-2 space-y-1">
               {actions.map((action, idx) => (
@@ -105,18 +106,111 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
   const isRTL = state.lang === 'ar';
   
   const userPermissions = state.currentUser?.permissions || [];
-  const hasPermission = (perm: string) => state.role === 'super_admin' || userPermissions.includes('all') || userPermissions.includes(perm);
+  const hasPermission = (perm: Permission | 'all') => {
+    if (state.role === 'super_admin') return true;
+    
+    // Check individual permissions
+    if (userPermissions.includes(perm as any)) return true;
+    
+    // Check group permissions
+    if (state.currentUser?.groupId) {
+      const group = state.securityGroups.find(g => g.id === state.currentUser?.groupId);
+      if (group?.permissions.includes(perm as any)) return true;
+    }
+    
+    return false;
+  };
+
+  const getSupplierFieldValue = (item: any, key: string) => String(item?.[key] ?? '').trim();
+  const getSupplierCode = (item: any) => getSupplierFieldValue(item, 'كود');
+  const getSupplierName = (item: any) => getSupplierFieldValue(item, 'اسم المورد') || String(item?.id || '');
+  const getSupplierNotes = (item: any) => getSupplierFieldValue(item, 'ملاحظات');
+  const getSubscriberDisplayName = (item: any) => item.name || item.firstname || item['الاسم الأول'] || item.username || '-';
+  const getSubscriberStatusLabel = (item: any) => t.management.subscribers.statuses[item.status] || item['حالة الحساب'] || item.status || '-';
+  const isSubscriberActive = (item: any) => item.status === 'active' || item['حالة الحساب'] === 'مفعل';
+  const getInvestorName = (item: any) => item.name || '-';
+  const getManagerName = (item: any) => item.name || `${item['الاسم الاول'] || item.firstName || ''} ${item['الاسم الثاني'] || item.lastName || ''}`.trim() || item.username || item['اسم الدخول'] || '-';
+  const getManagerRole = (item: any) => item.role || item['الصلاحية'] || (isRTL ? 'موظف' : 'Staff');
+  const isManagerActive = (item: any) => item.status === 'active' || item['الحالة'] === 'نشط' || !item.status;
+  const getIptvName = (item: any) => item.name || '-';
+  const getIptvStatusLabel = (item: any) => t.management.iptv.statuses[item.status] || item.status || '-';
+  const getIptvStatusClass = (item: any) => (
+    item.status === 'active'
+      ? 'bg-emerald-100 dark:bg-emerald-500/10 text-emerald-600'
+      : item.status === 'suspended'
+        ? 'bg-amber-100 dark:bg-amber-500/10 text-amber-600'
+        : 'bg-rose-100 dark:bg-rose-500/10 text-rose-600'
+  );
+  const getTabEntityLabel = () => {
+    switch (activeSubTab) {
+      case 'subscribers':
+        return isRTL ? 'المشترك' : 'subscriber';
+      case 'iptv':
+        return isRTL ? 'اشتراك IPTV' : 'IPTV subscription';
+      case 'suppliers':
+        return isRTL ? 'المورد' : 'supplier';
+      case 'shareholders':
+        return isRTL ? 'المستثمر' : 'investor';
+      case 'managers':
+        return isRTL ? 'العضو الإداري' : 'administrative member';
+      default:
+        return isRTL ? 'السجل' : 'record';
+    }
+  };
+  const getAddButtonLabel = () => {
+    switch (activeSubTab) {
+      case 'subscribers':
+        return t.management.subscribers.add;
+      case 'iptv':
+        return t.management.iptv.add;
+      case 'suppliers':
+        return t.management.suppliers.add;
+      case 'shareholders':
+        return isRTL ? 'إضافة مستثمر' : 'Add Investor';
+      case 'managers':
+        return isRTL ? 'إضافة عضو إداري' : 'Add Administrative Member';
+      case 'directors':
+        return isRTL ? 'إضافة مدير' : 'Add Director';
+      case 'deputies':
+        return isRTL ? 'إضافة نائب' : 'Add Deputy';
+      case 'admins':
+        return t.management.admins.add;
+      default:
+        return isRTL ? 'إضافة عنصر' : 'Add Item';
+    }
+  };
+
+  const parseSupplierAmount = (value: any) => {
+    const raw = String(value ?? '').trim();
+    if (!raw || raw === '-') return 0;
+    const isNegative = raw.includes('(') && raw.includes(')');
+    const numeric = parseFloat(raw.replace(/[^0-9.]/g, '')) || 0;
+    return isNegative ? -numeric : numeric;
+  };
+
+  const formatSupplierAmount = (value: any) => {
+    const raw = String(value ?? '').trim();
+    if (!raw || raw === '-') return '-';
+    return formatCurrency(parseSupplierAmount(raw), state.currency, state.lang, 2);
+  };
 
   const [activeSubTab, setActiveSubTab] = useState<ManagementSubTab>(() => {
-    if (hasPermission('view_subscribers')) return 'subscribers';
-    if (hasPermission('view_iptv')) return 'iptv';
-    if (hasPermission('view_suppliers')) return 'suppliers';
-    if (hasPermission('view_shareholders')) return 'shareholders';
-    if (hasPermission('view_directors')) return 'directors';
-    if (hasPermission('view_deputies')) return 'deputies';
-    if (hasPermission('view_admins')) return 'admins';
+    const saved = localStorage.getItem('sas4_active_subtab');
+    if (saved) return saved as ManagementSubTab;
+    
+    if (state.role === 'super_admin') return 'subscribers';
+    if (hasPermission('view_subscribers' as any)) return 'subscribers';
+    if (hasPermission('view_iptv' as any)) return 'iptv';
+    if (hasPermission('view_suppliers' as any)) return 'suppliers';
+    if (hasPermission('view_shareholders' as any)) return 'shareholders';
+    if (hasPermission('view_admins' as any)) return 'managers';
+    if (hasPermission('manage_security_groups' as any)) return 'groups';
     return 'subscribers';
   });
+
+  React.useEffect(() => {
+    localStorage.setItem('sas4_active_subtab', activeSubTab);
+  }, [activeSubTab]);
   const [searchTerm, setSearchTerm] = useState('');
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -125,8 +219,16 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
   const [showSuccess, setShowSuccess] = useState(false);
   const [statusFilter, setStatusFilter] = useState('all');
   const [showFilters, setShowFilters] = useState(false);
-  const [showName, setShowName] = useState(true);
-  const [showChannel, setShowChannel] = useState(true);
+  const [showName, setShowName] = useState(() => localStorage.getItem('sas4_mgmt_show_name') !== 'false');
+  const [showChannel, setShowChannel] = useState(() => localStorage.getItem('sas4_mgmt_show_channel') !== 'false');
+
+  React.useEffect(() => {
+    localStorage.setItem('sas4_mgmt_show_name', String(showName));
+  }, [showName]);
+
+  React.useEffect(() => {
+    localStorage.setItem('sas4_mgmt_show_channel', String(showChannel));
+  }, [showChannel]);
   const [apiError, setApiError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isActivateModalOpen, setIsActivateModalOpen] = useState(false);
@@ -134,6 +236,9 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
   const [isActivating, setIsActivating] = useState(false);
   const [subToActivate, setSubToActivate] = useState<any>(null);
   const [activationTarget, setActivationTarget] = useState('all');
+  const [isTopUpModalOpen, setIsTopUpModalOpen] = useState(false);
+  const [topUpTarget, setTopUpTarget] = useState<any>(null);
+  const [topUpAmount, setTopUpAmount] = useState('');
 
   // ─── MIKROTIK SYNC STATE ────────────────────────────────────────────────────
   // ─── NETWORK PROFILES (for plan dropdown) ─────────────────────────────────
@@ -192,15 +297,20 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
     { key: 'ملاحظات', label: isRTL ? 'ملاحظات' : 'Notes', nameField: false }
   ];
 
+  const SUPPLIER_COLUMNS = [
+    { id: 'code', label: isRTL ? 'الكود' : 'Code', defaultVisible: true, key: 'كود' },
+    { id: 'name', label: isRTL ? 'اسم المورد' : 'Supplier Name', defaultVisible: true, key: 'اسم المورد' },
+    { id: 'debt', label: isRTL ? 'مدين' : 'Debt', defaultVisible: true, key: 'مدين' },
+    { id: 'paid', label: isRTL ? 'مسدد' : 'Paid', defaultVisible: true, key: 'مسدد' },
+    { id: 'balance', label: isRTL ? 'الرصيد' : 'Balance', defaultVisible: true, key: 'الرصيد' },
+    { id: 'notes', label: isRTL ? 'ملاحظات' : 'Notes', defaultVisible: false, key: 'ملاحظات' }
+  ];
+
   const MANAGER_FIELDS = [
-    { key: 'اسم الدخول', label: isRTL ? 'اسم الدخول' : 'Username', nameField: true },
-    { key: 'الاسم الاول', label: isRTL ? 'الاسم الاول' : 'First Name', nameField: true },
-    { key: 'الاسم الثاني', label: isRTL ? 'الاسم الثاني' : 'Last Name', nameField: true },
-    { key: 'الصلاحية', label: isRTL ? 'الصلاحية' : 'Role', nameField: false },
+    { key: 'الصلاحية', label: isRTL ? 'الصلاحيات أو المجموعة' : 'Permissions / Group', nameField: false },
     { key: 'الرصيد', label: isRTL ? 'الرصيد' : 'Balance', nameField: false },
     { key: 'القروض', label: isRTL ? 'القروض' : 'Loans', nameField: false },
     { key: 'تابع لـ', label: isRTL ? 'تابع لـ' : 'Parent', nameField: false },
-    { key: 'المجموعة', label: isRTL ? 'المجموعة' : 'Group', nameField: false },
     { key: 'عدد المشتركين', label: isRTL ? 'عدد المشتركين' : 'Subscribers', nameField: false },
     { key: 'النقاط', label: isRTL ? 'النقاط' : 'Points', nameField: false },
     { key: 'نسبة الخصم', label: isRTL ? 'نسبة الخصم' : 'Discount', nameField: false },
@@ -208,23 +318,111 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
     { key: 'المدينة', label: isRTL ? 'المدينة' : 'City', nameField: false }
   ];
 
+  const MANAGER_COLUMNS = [
+    { id: 'name', label: isRTL ? 'الاسم' : 'Name', defaultVisible: true },
+    { id: 'username', label: isRTL ? 'اسم المستخدم' : 'Username', defaultVisible: true },
+    { id: 'role', label: isRTL ? 'الرتبة / المجموعة' : 'Role / Group', defaultVisible: true },
+    { id: 'balance', label: isRTL ? 'الرصيد' : 'Balance', defaultVisible: true },
+    { id: 'maxTxLimit', label: isRTL ? 'الحد المالي' : 'Tx Limit', defaultVisible: true },
+    { id: 'status', label: isRTL ? 'الحالة' : 'Status', defaultVisible: true },
+    { id: 'loans', label: isRTL ? 'القروض' : 'Loans', defaultVisible: false, key: 'القروض' },
+    { id: 'parent', label: isRTL ? 'تابع لـ' : 'Parent', defaultVisible: false, key: 'تابع لـ' },
+    { id: 'subscribersCount', label: isRTL ? 'عدد المشتركين' : 'Subscribers', defaultVisible: false, key: 'عدد المشتركين' },
+    { id: 'points', label: isRTL ? 'النقاط' : 'Points', defaultVisible: false, key: 'النقاط' },
+    { id: 'discount', label: isRTL ? 'نسبة الخصم' : 'Discount', defaultVisible: false, key: 'نسبة الخصم' },
+    { id: 'createdAt', label: isRTL ? 'تاريخ الانشاء' : 'Created At', defaultVisible: false, key: 'تاريخ الانشاء' },
+    { id: 'city', label: isRTL ? 'المدينة' : 'City', defaultVisible: false, key: 'المدينة' }
+  ];
+
+  const INVESTOR_COLUMNS = [
+    { id: 'name', label: isRTL ? 'الاسم الكامل' : 'Full Name', defaultVisible: true },
+    { id: 'shares', label: isRTL ? 'عدد الأسهم المملوكة' : 'Shares Owned', defaultVisible: true },
+    { id: 'buyPrice', label: isRTL ? 'سعر الأسهم عند الشراء' : 'Buy Price', defaultVisible: true },
+    { id: 'ownership', label: isRTL ? 'نسبة الملكية' : 'Ownership %', defaultVisible: true },
+    { id: 'investment', label: isRTL ? 'إجمالي الاستثمار' : 'Total Investment', defaultVisible: true },
+    { id: 'dividends', label: isRTL ? 'الأرباح المستلمة' : 'Dividends Paid', defaultVisible: true },
+    { id: 'joinDate', label: isRTL ? 'تاريخ الانضمام' : 'Join Date', defaultVisible: false },
+    { id: 'status', label: isRTL ? 'الحالة' : 'Status', defaultVisible: false }
+  ];
+
   const [visibleColumns, setVisibleColumns] = useState<Record<string, boolean>>(() => {
+    const saved = localStorage.getItem('sas4_visible_columns');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        console.error('Failed to parse visible columns from localStorage', e);
+      }
+    }
+    
     const initial: Record<string, boolean> = {};
     SUBSCRIBER_COLUMNS.forEach(col => initial[col.id] = col.defaultVisible);
+    SUPPLIER_COLUMNS.forEach(col => initial[col.id] = col.defaultVisible);
+    MANAGER_COLUMNS.forEach(col => initial[col.id] = col.defaultVisible);
+    INVESTOR_COLUMNS.forEach(col => initial[col.id] = col.defaultVisible);
     return initial;
   });
+
+  React.useEffect(() => {
+    localStorage.setItem('sas4_visible_columns', JSON.stringify(visibleColumns));
+  }, [visibleColumns]);
 
   // ─── LIVE DATA FROM API ─────────────────────────────────────────────────────
   const [subscribers, setSubscribers] = useState<any[]>([]);
   const [suppliers, setSuppliers] = useState<any[]>([]);
   const [shareholders, setShareholders] = useState<any[]>([]);
   const [managers, setManagers] = useState<any[]>([]);
+  const [iptvSubscribers, setIptvSubscribers] = useState<any[]>([]);
+  const [onlineStatuses, setOnlineStatuses] = useState<Record<string, boolean>>({});
+
+  const supplierSummary = useMemo(() => {
+    const totalDebt = suppliers.reduce((sum, item) => sum + parseSupplierAmount(item['مدين']), 0);
+    const totalPaid = suppliers.reduce((sum, item) => sum + parseSupplierAmount(item['مسدد']), 0);
+    const totalBalance = suppliers.reduce((sum, item) => sum + parseSupplierAmount(item['الرصيد']), 0);
+    const unsettledCount = suppliers.filter(item => Math.abs(parseSupplierAmount(item['الرصيد'])) > 0.0001).length;
+
+    return {
+      count: suppliers.length,
+      totalDebt,
+      totalPaid,
+      totalBalance,
+      unsettledCount
+    };
+  }, [suppliers]);
+
+  const subscriberSummary = useMemo(() => {
+    const activeCount = subscribers.filter(isSubscriberActive).length;
+    const onlineCount = subscribers.filter(item => onlineStatuses[item.username] === true).length;
+    const totalBalance = subscribers.reduce((sum, item) => sum + (parseFloat(item.balance || item['الرصيد المتبقي له'] || 0) || 0), 0);
+    const debtCount = subscribers.filter(item => (parseFloat(item['عليه دين'] || 0) || 0) > 0).length;
+
+    return { count: subscribers.length, activeCount, onlineCount, totalBalance, debtCount };
+  }, [subscribers, onlineStatuses]);
+
+  const investorSummary = useMemo(() => {
+    const totalShares = shareholders.reduce((sum, item) => sum + (Number(item.shares) || 0), 0);
+    const totalInvestment = shareholders.reduce((sum, item) => sum + (Number(item.investment) || 0), 0);
+    const totalDividends = shareholders.reduce((sum, item) => sum + (Number(item.dividends) || 0), 0);
+    return { count: shareholders.length, totalShares, totalInvestment, totalDividends };
+  }, [shareholders]);
+
+  const managerSummary = useMemo(() => {
+    const activeCount = managers.filter(isManagerActive).length;
+    const totalBalance = managers.reduce((sum, item) => sum + (Number(item.balance || item['الرصيد']) || 0), 0);
+    const limitedCount = managers.filter(item => item.isLimitEnabled || Number(item.maxTxLimit || item['الحد المالي']) > 0).length;
+    return { count: managers.length, activeCount, totalBalance, limitedCount };
+  }, [managers]);
+
+  const iptvSummary = useMemo(() => {
+    const activeCount = iptvSubscribers.filter(item => item.status === 'active').length;
+    const totalRevenue = iptvSubscribers.reduce((sum, item) => sum + (Number(item.price) || 0), 0);
+    const suspendedCount = iptvSubscribers.filter(item => item.status === 'suspended').length;
+    return { count: iptvSubscribers.length, activeCount, totalRevenue, suspendedCount };
+  }, [iptvSubscribers]);
 
   // Directors, Deputies, IPTV — Now live via API
   const [directors, setDirectors] = useState<any[]>([]);
   const [deputies, setDeputies] = useState<any[]>([]);
-  const [iptvSubscribers, setIptvSubscribers] = useState<any[]>([]);
-  const [onlineStatuses, setOnlineStatuses] = useState<Record<string, boolean>>({});
   const [lastStatusUpdate, setLastStatusUpdate] = useState<string | null>(null);
   const [refreshInterval, setRefreshInterval] = useState<number>(30000); // Default 30s
   const [isStatusLoading, setIsStatusLoading] = useState(false);
@@ -254,23 +452,21 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
     
     // Check main edit permission
     const canManageTabs = 
-      (activeSubTab === 'subscribers' && hasPermission('manage_subscribers')) ||
-      (activeSubTab === 'iptv' && hasPermission('manage_iptv')) ||
-      (activeSubTab === 'suppliers' && hasPermission('manage_suppliers')) ||
-      (activeSubTab === 'shareholders' && hasPermission('manage_shareholders')) ||
-      (activeSubTab === 'directors' && hasPermission('manage_directors')) ||
-      (activeSubTab === 'deputies' && hasPermission('manage_deputies')) ||
-      (activeSubTab === 'admins' && hasPermission('manage_admins'));
+      (activeSubTab === 'subscribers' && hasPermission('manage_subscribers' as any)) ||
+      (activeSubTab === 'iptv' && hasPermission('manage_iptv' as any)) ||
+      (activeSubTab === 'suppliers' && hasPermission('manage_suppliers' as any)) ||
+      (activeSubTab === 'shareholders' && hasPermission('manage_shareholders' as any)) ||
+      (activeSubTab === 'managers' && hasPermission('manage_admins' as any));
 
     if (!canManageTabs) return [];
 
     // Common Actions
     actions.push({
       id: 'edit',
-      label: isRTL ? 'تعديل البيانات' : 'Edit CRM Details',
+      label: isRTL ? 'تعديل السجل' : 'Edit Record',
       icon: Edit,
       onClick: (item) => handleEdit(item),
-      tooltip: isRTL ? 'تعديل بيانات المشترك والملف الشخصي' : 'Modify subscriber CRM data and profile information.'
+      tooltip: isRTL ? `تحديث بيانات ${getTabEntityLabel()} الحالي` : `Update the selected ${getTabEntityLabel()}.`
     });
 
     if (activeSubTab === 'subscribers') {
@@ -307,14 +503,14 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
         },
         {
           id: 'sync',
-          label: isRTL ? 'مزامنة للاشتراك' : 'Sync to MikroTik',
+          label: isRTL ? 'مزامنة مع الراوتر' : 'Sync with Router',
           icon: RefreshCw,
           onClick: (item) => openSyncModal(item),
           tooltip: isRTL ? 'تحديث بيانات المشترك على أجهزة الميكروتيك' : 'Push current CRM settings to MikroTik routers.'
         },
         {
           id: 'disconnect',
-          label: isRTL ? 'طرد (قطع الاتصال)' : 'Force Disconnect',
+          label: isRTL ? 'قطع الاتصال الحالي' : 'Force Disconnect',
           icon: Power,
           variant: 'danger',
           onClick: (item) => handleDisconnect(item.username),
@@ -338,7 +534,7 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
         },
         {
           id: 'delete-secret',
-          label: isRTL ? 'حذف من المايكروتيك' : 'Delete from Router',
+          label: isRTL ? 'حذف من الراوتر فقط' : 'Delete from Router Only',
           icon: ShieldOff,
           variant: 'danger',
           onClick: (item) => handleDeleteSecret(item.username),
@@ -346,7 +542,7 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
         },
         {
           id: 'send-message',
-          label: isRTL ? 'إرسال رسالة (واتساب/رسالة/بريد)' : 'Send Notification (WA/SMS/Email)',
+          label: isRTL ? 'إرسال إشعار' : 'Send Notification',
           icon: Send,
           variant: 'warning',
           onClick: (item) => {
@@ -361,14 +557,42 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
       );
     }
     
+    if (activeSubTab === 'managers') {
+      actions.push(
+        {
+          id: 'withdraw',
+          label: isRTL ? 'سحب رصيد (التسوية)' : 'Withdraw Balance',
+          icon: CreditCard,
+          variant: 'warning',
+          onClick: (item) => {
+            setTopUpTarget(item);
+            setTopUpAmount('');
+            setIsTopUpModalOpen(true);
+            // I'll repurpose TopUp modal for both or add a flag
+          },
+          tooltip: isRTL ? 'سحب المبالغ المحصلة من محفظة العضو' : 'Collect cash and deduct from member wallet.'
+        },
+        {
+          id: 'limits',
+          label: isRTL ? 'إدارة القيود المالية' : 'Manage Limits',
+          icon: Lock,
+          onClick: (item) => {
+            // Modal for Transaction Limits
+            alert(isRTL ? 'ستتوفر واجهة إدارة القيود المالية قريبًا.' : 'Financial limits management UI will be available soon.');
+          },
+          tooltip: isRTL ? 'تحديد الحد الأقصى لكل عملية شحن' : 'Set the maximum amount allowed per transaction.'
+        }
+      );
+    }
+
     // Global Delete
     actions.push({
       id: 'delete',
-      label: isRTL ? 'حذف نهائي' : 'Delete (Full)',
+      label: isRTL ? 'حذف من النظام' : 'Delete from System',
       icon: Trash,
       variant: 'danger',
       onClick: (item) => handleDelete(item.id),
-      tooltip: isRTL ? 'حذف المستخدم نهائياً من قاعدة البيانات' : 'Permanently remove the entity from the system.'
+      tooltip: isRTL ? `حذف ${getTabEntityLabel()} نهائيًا من قاعدة البيانات` : `Permanently remove this ${getTabEntityLabel()} from the database.`
     });
 
     return actions;
@@ -397,21 +621,12 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
         } else if (activeSubTab === 'shareholders') {
           const data = await fetchInvestors();
           if (data && data.length > 0) setShareholders(data);
-          else setApiError('لم يتم العثور على مساهمين في قاعدة البيانات.');
-        } else if (activeSubTab === 'admins') {
-          const data = await fetchManagersRaw();
-          if (data && data.length > 0) setManagers(data);
-          else setApiError('لم يتم العثور على مدراء في قاعدة البيانات.');
-        } else if (activeSubTab === 'directors') {
-          const data = await directorsApi.fetch();
-          if (data && data.length > 0) setDirectors(data);
-          else setApiError('لم يتم العثور على أفراد الإدارة.');
-        } else if (activeSubTab === 'deputies') {
-          const data = await deputiesApi.fetch();
-          if (data && data.length > 0) {
-             setDeputies(data.map((d: any) => ({ ...d, name: d.name || `${d.firstName || ''} ${d.lastName || ''}`.trim() })));
-          }
-          else setApiError('لم يتم العثور على نواب.');
+          else setApiError('لم يتم العثور على مستثمرين في قاعدة البيانات.');
+        } else if (activeSubTab === 'managers') {
+          const adminsRaw = await fetchManagersRaw();
+          const safeAdmins = adminsRaw || [];
+          setManagers(safeAdmins);
+          if (safeAdmins.length === 0) setApiError('لا يوجد طاقم إداري حالياً.');
         } else if (activeSubTab === 'iptv') {
           const data = await iptvApi.fetch();
           if (data && data.length > 0) setIptvSubscribers(data);
@@ -535,6 +750,49 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
 
   const handleActivateSubscriber = async () => {
     if (!subToActivate) return;
+    
+    // Financial Logic: Find the agent/manager for this subscriber
+    const agentName = subToActivate.agent || subToActivate['الوكيل المسؤل'];
+    const agent = state.teamMembers.find(m => m.name === agentName || m.username === agentName || m['اسم الدخول'] === agentName);
+    const planName = subToActivate.plan || subToActivate['سرعة الخط'];
+    const profile = networkProfiles.find(p => p.name === planName);
+    const price = profile?.price || parseFloat(subToActivate.bill || subToActivate['قيمة الفاتورة'] || 0);
+
+    if (agent) {
+      const commissionRate = agent.commissionRate || 0;
+      const commissionAmount = (price * commissionRate) / 100;
+      const costToAgent = price - commissionAmount;
+
+      if (agent.balance < costToAgent && state.role !== 'super_admin') {
+        alert(isRTL ? `رصيد الوكيل (${agent.name}) غير كافٍ. المطلوب: ${costToAgent} شيكل` : `Agent (${agent.name}) has insufficient balance. Required: ${costToAgent} ILS`);
+        return;
+      }
+
+      // Deduct balance from agent and record transaction
+      const newTx: FinancialTransaction = {
+        id: `TX-${Date.now()}`,
+        date: new Date().toLocaleString('en-US'),
+        type: 'topup_sub',
+        amount: price,
+        fromId: agent.id,
+        fromName: agent.name,
+        toId: subToActivate.id,
+        toName: subToActivate.firstname || subToActivate.name,
+        status: 'completed',
+        metadata: {
+          packageId: profile?.id,
+          packageName: planName,
+          agentCommission: commissionAmount
+        }
+      };
+
+      setState(prev => ({
+        ...prev,
+        financialTransactions: [newTx, ...prev.financialTransactions],
+        teamMembers: prev.teamMembers.map(m => m.id === agent.id ? { ...m, balance: m.balance - costToAgent } : m)
+      }));
+    }
+
     setIsActivating(true);
     try {
       const data = await activateSubscriber(subToActivate.id, activationOption, activationTarget);
@@ -681,25 +939,70 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
   };
 
   const handleEdit = (item: any) => {
-    setEditingItem({ ...item });
+    let editObj = { ...item };
+    
+    if (activeSubTab === 'managers') {
+      editObj = {
+        ...editObj,
+        firstName: item.firstName || item['الاسم الاول'] || '',
+        lastName: item.lastName || item['الاسم الثاني'] || '',
+        username: item.username || item['اسم الدخول'] || ''
+      };
+    } else if (activeSubTab === 'suppliers') {
+      editObj = {
+        ...editObj,
+        'كود': item['كود'] || '',
+        'اسم المورد': item['اسم المورد'] || '',
+        'مدين': item['مدين'] || '0.00',
+        'مسدد': item['مسدد'] || '0.00',
+        'الرصيد': item['الرصيد'] || '-',
+        'ملاحظات': item['ملاحظات'] || ''
+      };
+    } else if (activeSubTab === 'shareholders') {
+      editObj = {
+        ...editObj,
+        name: item.name || '',
+        shares: item.shares || 0,
+        buyPrice: item.buyPrice || item.sharePrice || 0,
+        investment: item.investment || 0,
+        ownership: item.ownership || '0%',
+        dividends: item.dividends || 0
+      };
+    }
+    
+    setEditingItem(editObj);
     setIsEditModalOpen(true);
     if (activeSubTab === 'subscribers') loadNetworkProfiles();
   };
 
   const handleAdd = () => {
-    let item: any = { id: `${activeSubTab.substring(0, 3).toUpperCase()}-${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}` };
+    let item: any = { id: `${activeSubTab === 'shareholders' ? 'SH' : activeSubTab.substring(0, 3).toUpperCase()}-${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}` };
     if (activeSubTab === 'subscribers') {
       item = { ...item, name: '', plan: '', status: 'active', expiry: new Date().toISOString().split('T')[0], balance: 0 };
       loadNetworkProfiles();
     } else if (activeSubTab === 'suppliers') {
-      item = { ...item, ...buildEmptyFromFields(SUPPLIER_FIELDS) };
+      item = {
+        ...item,
+        'كود': '',
+        'اسم المورد': '',
+        'مدين': '0.00',
+        'مسدد': '0.00',
+        'الرصيد': '-',
+        'ملاحظات': ''
+      };
     } else if (activeSubTab === 'shareholders') {
-      item = { ...item, name: '', shares: 0, ownership: '0%', status: 'active', joinDate: new Date().toISOString().split('T')[0], investment: 0, dividends: 0 };
-    } else if (activeSubTab === 'directors') {
-      item = { ...item, name: '', email: '', username: '', password: '', role: 'super_admin', status: 'active', permissions: 'all' };
-    } else if (activeSubTab === 'deputies') {
-      item = { ...item, firstName: '', lastName: '', address: '', idNumber: '', position: 'فني صيانة ميداني', department: 'الدعم الفني', phone: '', hireDate: new Date().toISOString().split('T')[0], salary: 0, assignedZone: '', status: 'active' };
-    } else if (activeSubTab === 'admins') {
+      item = { 
+        ...item, 
+        name: '', 
+        shares: 0, 
+        buyPrice: 0,
+        ownership: '0%', 
+        status: 'active', 
+        joinDate: new Date().toISOString().split('T')[0], 
+        investment: 0, 
+        dividends: 0 
+      };
+    } else if (activeSubTab === 'managers') {
       item = { ...item, ...buildEmptyFromFields(MANAGER_FIELDS) };
     } else if (activeSubTab === 'iptv') {
       item = { ...item, name: '', phone: '', host: 'iptv.netlink.ai', username: '', password: '', status: 'active', expiry: new Date().toISOString().split('T')[0], price: 0, platform: '', notes: '', channelNumber: '' };
@@ -734,26 +1037,32 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
     } else if (activeSubTab === 'shareholders') {
       try {
         setIsLoading(true);
-        await addInvestor(newItem);
+        // Map to Arabic keys expected by backend and ensure numbers
+        const payload = {
+          ...newItem,
+          'اسم المستثمر': newItem.name,
+          'رصيد الأسهم': parseFloat(newItem.shares) || 0,
+          'سعر الأسهم': parseFloat(newItem.investment) || 0,
+          'صافي الربح': parseFloat(newItem.dividends) || 0,
+          'سعر السهم الواحد': parseFloat(newItem.buyPrice) || 0,
+          'تاريخ الانضمام': newItem.joinDate || new Date().toISOString().split('T')[0]
+        };
+        await addInvestor(payload);
         const data = await fetchInvestors();
         if (data) setShareholders(data);
       } catch (err) {
-        setApiError(isRTL ? 'فشل إضافة المساهم' : 'Failed to add shareholder');
+        setApiError(isRTL ? 'فشل إضافة المستثمر' : 'Failed to add investor');
       } finally {
         setIsLoading(false);
       }
-    } else if (activeSubTab === 'directors') {
-      try { setIsLoading(true); await directorsApi.add(newItem); const data = await directorsApi.fetch(); if(data) setDirectors(data); } catch(err) { setApiError('Failed to add director'); } finally { setIsLoading(false); }
-    } else if (activeSubTab === 'deputies') {
-      try { setIsLoading(true); await deputiesApi.add(newItem); const data = await deputiesApi.fetch(); if(data) setDeputies(data); } catch(err) { setApiError('Failed to add deputy'); } finally { setIsLoading(false); }
-    } else if (activeSubTab === 'admins') {
+    } else if (activeSubTab === 'managers') {
       try {
         setIsLoading(true);
         await addManager(newItem);
         const data = await fetchManagersRaw();
         setManagers(data);
       } catch (err) {
-        setApiError(isRTL ? 'فشل إضافة المدير' : 'Failed to add manager');
+        setApiError(isRTL ? 'فشل إضافة العضو' : 'Failed to add team member');
       } finally {
         setIsLoading(false);
       }
@@ -766,7 +1075,7 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
   };
 
   const handleDelete = async (id: string) => {
-    if (confirm(isRTL ? 'هل أنت متأكد من الحذف؟' : 'Are you sure you want to delete this?')) {
+    if (confirm(isRTL ? `هل أنت متأكد من حذف ${getTabEntityLabel()} نهائيًا؟` : `Are you sure you want to delete this ${getTabEntityLabel()} permanently?`)) {
       if (activeSubTab === 'subscribers') {
         try {
           setIsLoading(true);
@@ -796,28 +1105,45 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
           const data = await fetchInvestors();
           if (data) setShareholders(data);
         } catch (err) {
-          setApiError(isRTL ? 'فشل حذف المساهم' : 'Failed to delete shareholder');
+          setApiError(isRTL ? 'فشل حذف المستثمر' : 'Failed to delete investor');
         } finally {
           setIsLoading(false);
         }
-      } else if (activeSubTab === 'directors') {
-        try { setIsLoading(true); await directorsApi.remove(id); const data = await directorsApi.fetch(); if(data) setDirectors(data); } catch(err) { setApiError('Failed to delete director'); } finally { setIsLoading(false); }
-      } else if (activeSubTab === 'deputies') {
-        try { setIsLoading(true); await deputiesApi.remove(id); const data = await deputiesApi.fetch(); if(data) setDeputies(data); } catch(err) { setApiError('Failed to delete deputy'); } finally { setIsLoading(false); }
-      } else if (activeSubTab === 'admins') {
+      } else if (activeSubTab === 'managers') {
         try {
           setIsLoading(true);
           await deleteManager(id);
           const data = await fetchManagersRaw();
           setManagers(data);
         } catch (err) {
-          setApiError(isRTL ? 'فشل حذف المدير' : 'Failed to delete manager');
+          setApiError(isRTL ? 'فشل حذف العضو الإداري' : 'Failed to delete administrative member');
         } finally {
           setIsLoading(false);
         }
       } else if (activeSubTab === 'iptv') {
         try { setIsLoading(true); await iptvApi.remove(id); const data = await iptvApi.fetch(); if(data) setIptvSubscribers(data); } catch(err) { setApiError('Failed to delete IPTV sub'); } finally { setIsLoading(false); }
       }
+    }
+  };
+
+  const handleTopUpManager = async () => {
+    if (!topUpTarget || !topUpAmount) return;
+    try {
+      setIsLoading(true);
+      const amount = parseFloat(topUpAmount);
+      // Logic for top up (could be deposit or withdraw depending on amount/UI)
+      await topUpManager(topUpTarget.id, amount);
+      
+      const data = await fetchManagersRaw();
+      setManagers(data);
+      setIsTopUpModalOpen(false);
+      setTopUpAmount('');
+      setShowSuccess(true);
+      setTimeout(() => setShowSuccess(false), 3000);
+    } catch (err) {
+      setApiError(isRTL ? 'فشل عملية الشحن' : 'Top up failed');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -864,11 +1190,20 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
     } else if (activeSubTab === 'shareholders') {
       try {
         setIsLoading(true);
-        await updateInvestor(editingItem.id, editingItem);
+        // Map to Arabic keys expected by backend and ensure numbers
+        const payload = {
+          ...editingItem,
+          'اسم المستثمر': editingItem.name,
+          'رصيد الأسهم': parseFloat(editingItem.shares) || 0,
+          'سعر الأسهم': parseFloat(editingItem.investment) || 0,
+          'صافي الربح': parseFloat(editingItem.dividends) || 0,
+          'سعر السهم الواحد': parseFloat(editingItem.buyPrice) || 0
+        };
+        await updateInvestor(editingItem.id, payload);
         const data = await fetchInvestors();
         if (data) setShareholders(data);
       } catch (err) {
-        setApiError(isRTL ? 'فشل تعديل المساهم' : 'Failed to replace shareholder');
+        setApiError(isRTL ? 'فشل تعديل المستثمر' : 'Failed to update investor');
       } finally {
         setIsLoading(false);
       }
@@ -876,14 +1211,14 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
       try { setIsLoading(true); await directorsApi.update(editingItem.id, editingItem); const data = await directorsApi.fetch(); if(data) setDirectors(data); } catch(err) { setApiError('Failed to update director'); } finally { setIsLoading(false); }
     } else if (activeSubTab === 'deputies') {
       try { setIsLoading(true); await deputiesApi.update(editingItem.id, editingItem); const data = await deputiesApi.fetch(); if(data) setDeputies(data); } catch(err) { setApiError('Failed to update deputy'); } finally { setIsLoading(false); }
-    } else if (activeSubTab === 'admins') {
+    } else if (activeSubTab === 'managers') {
       try {
         setIsLoading(true);
         await updateManager(editingItem.id, editingItem);
         const data = await fetchManagersRaw();
         setManagers(data);
       } catch (err) {
-        setApiError(isRTL ? 'فشل تعديل المدير' : 'Failed to update manager');
+          setApiError(isRTL ? 'فشل تعديل العضو الإداري' : 'Failed to update administrative member');
       } finally {
         setIsLoading(false);
       }
@@ -928,10 +1263,12 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
       });
     } else if (activeSubTab === 'shareholders') {
       data = shareholders.filter(s => smartMatch(searchTerm, s.name) || smartMatch(searchTerm, String(s.id)));
-    } else if (activeSubTab === 'directors') {
-      data = directors.filter(s => smartMatch(searchTerm, s.name) || smartMatch(searchTerm, s.position));
-    } else if (activeSubTab === 'deputies') {
-      data = deputies.filter(s => smartMatch(searchTerm, s.name) || smartMatch(searchTerm, s.position));
+    } else if (activeSubTab === 'managers') {
+      data = managers.filter(s => 
+        smartMatch(searchTerm, s.name || s['الاسم الاول'] || s['الاسم الثاني'] || '') || 
+        smartMatch(searchTerm, s.username || s['اسم الدخول'] || '') || 
+        smartMatch(searchTerm, s.role || s['الصلاحية'] || '')
+      );
     } else if (activeSubTab === 'iptv') {
       data = iptvSubscribers.filter(s => smartMatch(searchTerm, s.name) || smartMatch(searchTerm, s.username));
     } else {
@@ -954,8 +1291,12 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
       if (activeSubTab === 'shareholders') {
         return Math.max(getSmartMatchScore(searchTerm, item.name), getSmartMatchScore(searchTerm, String(item.id)));
       }
-      if (activeSubTab === 'directors' || activeSubTab === 'deputies') {
-        return Math.max(getSmartMatchScore(searchTerm, item.name), getSmartMatchScore(searchTerm, item.position));
+      if (activeSubTab === 'managers') {
+        return Math.max(
+          getSmartMatchScore(searchTerm, item.name || item['الاسم الاول'] || item['الاسم الثاني'] || ''), 
+          getSmartMatchScore(searchTerm, item.username || item['اسم الدخول'] || ''),
+          getSmartMatchScore(searchTerm, item.role || item['الصلاحية'] || '')
+        );
       }
       if (activeSubTab === 'iptv') {
         return Math.max(getSmartMatchScore(searchTerm, item.name), getSmartMatchScore(searchTerm, item.username));
@@ -968,6 +1309,8 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
     return [...data].sort((a, b) => getItemScore(b) - getItemScore(a));
   };
 
+
+  const filteredItems = filteredData();
   return (
     <motion.div 
       key="management" 
@@ -1018,8 +1361,8 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
           >
             <div className="p-4 bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-2xl flex flex-col gap-4">
               
-              {/* Dynamic Columns Configuration for Subscribers */}
-              {activeSubTab === 'subscribers' && (
+              {/* Dynamic Columns Configuration for Subscribers, Managers & Investors */}
+              {(activeSubTab === 'subscribers' || activeSubTab === 'suppliers' || activeSubTab === 'managers' || activeSubTab === 'shareholders') && (
                 <div className="w-full">
                   <div className="flex justify-between items-center mb-3">
                     <h4 className="text-sm font-bold text-slate-700 dark:text-slate-300">
@@ -1027,13 +1370,27 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
                     </h4>
                     <div className="flex gap-3 text-xs">
                       <button 
-                        onClick={() => setVisibleColumns(SUBSCRIBER_COLUMNS.reduce((acc, col) => ({ ...acc, [col.id]: true }), {}))}
+                        onClick={() => {
+                          const columns = activeSubTab === 'subscribers' ? SUBSCRIBER_COLUMNS :
+                                         activeSubTab === 'suppliers' ? SUPPLIER_COLUMNS :
+                                         activeSubTab === 'managers' ? MANAGER_COLUMNS : INVESTOR_COLUMNS;
+                          const next = { ...visibleColumns };
+                          columns.forEach(col => next[col.id] = true);
+                          setVisibleColumns(next);
+                        }}
                         className="text-teal-600 dark:text-teal-400 hover:text-teal-700 font-bold transition-colors"
                       >
                         {isRTL ? 'تحديد الكل' : 'Select All'}
                       </button>
                       <button 
-                        onClick={() => setVisibleColumns(SUBSCRIBER_COLUMNS.reduce((acc, col) => ({ ...acc, [col.id]: false }), {}))}
+                        onClick={() => {
+                          const columns = activeSubTab === 'subscribers' ? SUBSCRIBER_COLUMNS :
+                                         activeSubTab === 'suppliers' ? SUPPLIER_COLUMNS :
+                                         activeSubTab === 'managers' ? MANAGER_COLUMNS : INVESTOR_COLUMNS;
+                          const next = { ...visibleColumns };
+                          columns.forEach(col => next[col.id] = false);
+                          setVisibleColumns(next);
+                        }}
                         className="text-rose-600 hover:text-rose-700 font-bold transition-colors"
                       >
                         {isRTL ? 'إلغاء الكل' : 'Clear All'}
@@ -1042,7 +1399,9 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
                   </div>
                   
                   <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
-                    {SUBSCRIBER_COLUMNS.map(col => (
+                    {(activeSubTab === 'subscribers' ? SUBSCRIBER_COLUMNS :
+                      activeSubTab === 'suppliers' ? SUPPLIER_COLUMNS :
+                      activeSubTab === 'managers' ? MANAGER_COLUMNS : INVESTOR_COLUMNS).map(col => (
                       <label key={col.id} className="flex items-center gap-2 text-xs font-semibold text-slate-600 dark:text-slate-400 cursor-pointer select-none">
                         <input 
                           type="checkbox" 
@@ -1057,8 +1416,8 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
                 </div>
               )}
 
-              {/* Toggles for other tabs - ONLY render if not subscribers */}
-              {activeSubTab !== 'subscribers' && (
+              {/* Toggles for other tabs - ONLY render if not subscribers, suppliers, managers, or investors */}
+              {activeSubTab !== 'subscribers' && activeSubTab !== 'suppliers' && activeSubTab !== 'managers' && activeSubTab !== 'shareholders' && (
                 <div className="flex flex-wrap gap-4">
                   <div className="flex items-center gap-4">
                     <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 cursor-pointer">
@@ -1117,34 +1476,25 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
             className={`whitespace-nowrap shrink-0 flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all ${activeSubTab === 'shareholders' ? 'bg-white dark:bg-slate-800 text-teal-600 dark:text-teal-400 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
           >
             <PieChart size={18} />
-            {t.management.tabs.shareholders}
+            {isRTL ? 'المستثمرون' : 'Investors'}
           </button>
         )}
-        {hasPermission('view_directors') && (
+        {(hasPermission('view_admins' as any) || state.role === 'super_admin') && (
           <button 
-            onClick={() => setActiveSubTab('directors')}
-            className={`whitespace-nowrap shrink-0 flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all ${activeSubTab === 'directors' ? 'bg-white dark:bg-slate-800 text-teal-600 dark:text-teal-400 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
-          >
-            <Briefcase size={18} />
-            {t.management.tabs.directors}
-          </button>
-        )}
-        {hasPermission('view_deputies') && (
-          <button 
-            onClick={() => setActiveSubTab('deputies')}
-            className={`whitespace-nowrap shrink-0 flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all ${activeSubTab === 'deputies' ? 'bg-white dark:bg-slate-800 text-teal-600 dark:text-teal-400 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
-          >
-            <UserCog size={18} />
-            {t.management.tabs.deputies}
-          </button>
-        )}
-        {hasPermission('view_admins') && (
-          <button 
-            onClick={() => setActiveSubTab('admins')}
-            className={`whitespace-nowrap shrink-0 flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all ${activeSubTab === 'admins' ? 'bg-white dark:bg-slate-800 text-teal-600 dark:text-teal-400 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
+            onClick={() => setActiveSubTab('managers')}
+            className={`whitespace-nowrap shrink-0 flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all ${activeSubTab === 'managers' ? 'bg-white dark:bg-slate-800 text-teal-600 dark:text-teal-400 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
           >
             <ShieldCheck size={18} />
-            {t.management.tabs.admins}
+            {isRTL ? 'الطاقم الإداري' : 'Administrative Team'}
+          </button>
+        )}
+        {(hasPermission('manage_security_groups' as any) || state.role === 'super_admin') && (
+          <button 
+            onClick={() => setActiveSubTab('groups')}
+            className={`whitespace-nowrap shrink-0 flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all ${activeSubTab === 'groups' ? 'bg-white dark:bg-slate-800 text-teal-600 dark:text-teal-400 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
+          >
+            <Lock size={18} />
+            {isRTL ? 'المجموعات الأمنية' : 'Security Groups'}
           </button>
         )}
       </div>
@@ -1156,18 +1506,15 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
             {activeSubTab === 'subscribers' && t.management.subscribers.title}
             {activeSubTab === 'iptv' && t.management.iptv.title}
             {activeSubTab === 'suppliers' && t.management.suppliers.title}
-            {activeSubTab === 'shareholders' && t.management.tabs.shareholders}
-            {activeSubTab === 'directors' && t.management.tabs.directors}
-            {activeSubTab === 'deputies' && t.management.tabs.deputies}
-            {activeSubTab === 'admins' && t.management.admins.title}
+            {activeSubTab === 'shareholders' && (isRTL ? 'قائمة المستثمرين' : 'Investors List')}
+            {activeSubTab === 'managers' && (isRTL ? 'إدارة الطاقم والارصدة' : 'Staff & Balance Management')}
+            {activeSubTab === 'groups' && (isRTL ? 'المجموعات وتخصيص الصلاحيات' : 'Groups & Permissions')}
           </h3>
           {(activeSubTab === 'subscribers' && hasPermission('manage_subscribers')) ||
            (activeSubTab === 'iptv' && hasPermission('manage_iptv')) ||
            (activeSubTab === 'suppliers' && hasPermission('manage_suppliers')) ||
-           (activeSubTab === 'shareholders' && hasPermission('manage_shareholders')) ||
-           (activeSubTab === 'directors' && hasPermission('manage_directors')) ||
-           (activeSubTab === 'deputies' && hasPermission('manage_deputies')) ||
-           (activeSubTab === 'admins' && hasPermission('manage_admins')) ? (
+           (activeSubTab === 'shareholders' && (hasPermission('manage_shareholders' as any) || state.role === 'super_admin')) ||
+           (activeSubTab === 'managers' && (hasPermission('manage_admins' as any) || state.role === 'super_admin')) ? (
             <div className="flex items-center gap-2">
               {activeSubTab === 'subscribers' && (
                 <button
@@ -1185,13 +1532,7 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
                 className="px-6 py-2.5 bg-teal-500 hover:bg-teal-600 text-white rounded-xl text-sm font-bold flex items-center gap-2 transition-all shadow-lg shadow-teal-500/20"
               >
                 <Plus size={16} />
-                {activeSubTab === 'subscribers' && t.management.subscribers.add}
-                {activeSubTab === 'iptv' && t.management.iptv.add}
-                {activeSubTab === 'suppliers' && t.management.suppliers.add}
-                {activeSubTab === 'shareholders' && (isRTL ? 'إضافة مساهم' : 'Add Shareholder')}
-                {activeSubTab === 'directors' && (isRTL ? 'إضافة مدير' : 'Add Director')}
-                {activeSubTab === 'deputies' && (isRTL ? 'إضافة نائب' : 'Add Deputy')}
-                {activeSubTab === 'admins' && t.management.admins.add}
+                {getAddButtonLabel()}
               </button>
             </div>
           ) : null}
@@ -1205,8 +1546,9 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
         )}
 
         {isLoading && (
-          <div className="mx-4 mt-4 p-4 text-slate-500 flex items-center justify-center gap-3 font-bold">
-            جاري جلب البيانات من الخادم...
+          <div className="mx-4 mt-4 p-4 text-slate-500 dark:text-slate-400 flex items-center justify-center gap-3 font-bold">
+            <RefreshCw size={20} className="animate-spin text-teal-500" />
+            {isRTL ? 'جاري جلب البيانات من الخادم...' : 'Fetching data from server...'}
           </div>
         )}
 
@@ -1285,142 +1627,538 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
           </div>
         )}
 
-        <div className="flex-1 overflow-y-auto custom-scrollbar">
-          <table className="w-full text-left border-collapse">
-            <thead className="sticky top-0 bg-slate-50 dark:bg-[#09090B] z-10">
-              <tr className="border-b border-slate-200 dark:border-slate-800">
-                {activeSubTab === 'subscribers' && (
-                  <>
-                    {SUBSCRIBER_COLUMNS.map(col => visibleColumns[col.id] && (
-                      <th key={col.id} className="px-6 py-5 text-sm font-extrabold text-slate-600 dark:text-slate-400 uppercase tracking-wider">{col.label}</th>
-                    ))}
-                  </>
-                )}
-                {activeSubTab === 'suppliers' && (
-                  <>
-                    {SUPPLIER_FIELDS.filter(field => showName || !field.nameField).map(field => (
-                      <th key={field.key} className="px-6 py-5 text-sm font-extrabold text-slate-600 dark:text-slate-400 uppercase tracking-wider">{field.label}</th>
-                    ))}
-                  </>
-                )}
-                {activeSubTab === 'shareholders' && (
-                  <>
-                    {showName && <th className="px-6 py-5 text-sm font-extrabold text-slate-600 dark:text-slate-400 uppercase tracking-wider">{t.management.subscribers.table.name}</th>}
-                    <th className="px-6 py-5 text-sm font-extrabold text-slate-600 dark:text-slate-400 uppercase tracking-wider">{isRTL ? 'الأسهم' : 'Shares'}</th>
-                    <th className="px-6 py-5 text-sm font-extrabold text-slate-600 dark:text-slate-400 uppercase tracking-wider">{isRTL ? 'نسبة الملكية' : 'Ownership %'}</th>
-                    <th className="px-6 py-5 text-sm font-extrabold text-slate-600 dark:text-slate-400 uppercase tracking-wider">{isRTL ? 'إجمالي الاستثمار' : 'Total Investment'}</th>
-                    <th className="px-6 py-5 text-sm font-extrabold text-slate-600 dark:text-slate-400 uppercase tracking-wider">{isRTL ? 'الأرباح المستلمة' : 'Dividends Paid'}</th>
-                    <th className="px-6 py-5 text-sm font-extrabold text-slate-600 dark:text-slate-400 uppercase tracking-wider">{isRTL ? 'تاريخ الانضمام' : 'Join Date'}</th>
-                  </>
-                )}
-                {activeSubTab === 'directors' && (
-                  <>
-                    {showName && <th className="px-6 py-5 text-sm font-extrabold text-slate-600 dark:text-slate-400 uppercase tracking-wider">{t.management.subscribers.table.name}</th>}
-                    <th className="px-6 py-5 text-sm font-extrabold text-slate-600 dark:text-slate-400 uppercase tracking-wider">{isRTL ? 'إسم المستخدم' : 'Username'}</th>
-                    <th className="px-6 py-5 text-sm font-extrabold text-slate-600 dark:text-slate-400 uppercase tracking-wider">{isRTL ? 'البريد الإلكتروني' : 'Email'}</th>
-                    <th className="px-6 py-5 text-sm font-extrabold text-slate-600 dark:text-slate-400 uppercase tracking-wider">{isRTL ? 'الصلاحية (الرتبة)' : 'Role'}</th>
-                    <th className="px-6 py-5 text-sm font-extrabold text-slate-600 dark:text-slate-400 uppercase tracking-wider">{t.management.subscribers.table.status}</th>
-                  </>
-                )}
-                {activeSubTab === 'deputies' && (
-                  <>
-                    {showName && <th className="px-6 py-5 text-sm font-extrabold text-slate-600 dark:text-slate-400 uppercase tracking-wider">{t.management.subscribers.table.name}</th>}
-                    <th className="px-6 py-5 text-sm font-extrabold text-slate-600 dark:text-slate-400 uppercase tracking-wider">{isRTL ? 'المنصب والقسم' : 'Position / Dept'}</th>
-                    <th className="px-6 py-5 text-sm font-extrabold text-slate-600 dark:text-slate-400 uppercase tracking-wider">{isRTL ? 'رقم الهاتف' : 'Phone'}</th>
-                    <th className="px-6 py-5 text-sm font-extrabold text-slate-600 dark:text-slate-400 uppercase tracking-wider">{isRTL ? 'المنطقة' : 'Zone'}</th>
-                    <th className="px-6 py-5 text-sm font-extrabold text-slate-600 dark:text-slate-400 uppercase tracking-wider">{t.management.subscribers.table.status}</th>
-                  </>
-                )}
-                {activeSubTab === 'admins' && (
-                  <>
-                    {MANAGER_FIELDS.filter(field => showName || !field.nameField).map(field => (
-                      <th key={field.key} className="px-6 py-5 text-sm font-extrabold text-slate-600 dark:text-slate-400 uppercase tracking-wider">{field.label}</th>
-                    ))}
-                  </>
-                )}
-                {activeSubTab === 'iptv' && (
-                  <>
-                    {showName && <th className="px-6 py-5 text-sm font-extrabold text-slate-600 dark:text-slate-400 uppercase tracking-wider">{t.management.iptv.table.name}</th>}
-                    {showChannel && <th className="px-6 py-5 text-sm font-extrabold text-slate-600 dark:text-slate-400 uppercase tracking-wider">{isRTL ? 'رقم القناة' : 'Channel Number'}</th>}
-                    <th className="px-6 py-5 text-sm font-extrabold text-slate-600 dark:text-slate-400 uppercase tracking-wider">{t.management.iptv.table.phone}</th>
-                    <th className="px-6 py-5 text-sm font-extrabold text-slate-600 dark:text-slate-400 uppercase tracking-wider">{t.management.iptv.table.provider}</th>
-                    <th className="px-6 py-5 text-sm font-extrabold text-slate-600 dark:text-slate-400 uppercase tracking-wider">{t.management.iptv.table.username}</th>
-                    <th className="px-6 py-5 text-sm font-extrabold text-slate-600 dark:text-slate-400 uppercase tracking-wider">{t.management.iptv.table.expiry}</th>
-                    <th className="px-6 py-5 text-sm font-extrabold text-slate-600 dark:text-slate-400 uppercase tracking-wider">{t.management.iptv.table.price}</th>
-                    <th className="px-6 py-5 text-sm font-extrabold text-slate-600 dark:text-slate-400 uppercase tracking-wider">{t.management.iptv.table.status}</th>
-                    <th className="px-6 py-5 text-sm font-extrabold text-slate-600 dark:text-slate-400 uppercase tracking-wider">{isRTL ? 'ملاحظات' : 'Notes'}</th>
-                  </>
-                )}
-                <th className="px-6 py-5 text-xs font-bold text-slate-500 uppercase tracking-wider"></th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-              {filteredData().map((item: any) => (
-                <tr key={item.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors group">
+        {activeSubTab === 'groups' ? (
+          <div className="flex-1 overflow-hidden">
+            <SecurityGroupsTab state={state} setState={setState} />
+          </div>
+        ) : (
+          <div className="flex-1 overflow-auto custom-scrollbar">
+            {activeSubTab === 'subscribers' && (
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 p-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-900/30">
+                <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#101014] p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-[11px] font-black text-slate-500 uppercase tracking-widest">{isRTL ? 'إجمالي المشتركين' : 'Subscribers'}</p>
+                      <p className="mt-2 text-2xl font-black text-slate-900 dark:text-white">{formatNumber(subscriberSummary.count)}</p>
+                    </div>
+                    <Users className="text-teal-500" size={24} />
+                  </div>
+                </div>
+                <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#101014] p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-[11px] font-black text-slate-500 uppercase tracking-widest">{isRTL ? 'النشطون' : 'Active'}</p>
+                      <p className="mt-2 text-xl font-black text-emerald-600 dark:text-emerald-400">{formatNumber(subscriberSummary.activeCount)}</p>
+                    </div>
+                    <Wifi className="text-emerald-500" size={24} />
+                  </div>
+                </div>
+                <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#101014] p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-[11px] font-black text-slate-500 uppercase tracking-widest">{isRTL ? 'المتصلون الآن' : 'Online Now'}</p>
+                      <p className="mt-2 text-xl font-black text-blue-600 dark:text-blue-400">{formatNumber(subscriberSummary.onlineCount)}</p>
+                    </div>
+                    <Activity className="text-blue-500" size={24} />
+                  </div>
+                </div>
+                <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#101014] p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-[11px] font-black text-slate-500 uppercase tracking-widest">{isRTL ? 'إجمالي الرصيد' : 'Total Balance'}</p>
+                      <p className="mt-2 text-xl font-black text-amber-600 dark:text-amber-400">{formatCurrency(subscriberSummary.totalBalance, state.currency, state.lang, 2)}</p>
+                      <p className="mt-1 text-[10px] font-bold text-slate-400">{formatNumber(subscriberSummary.debtCount)} {isRTL ? 'عليهم دين' : 'with debt'}</p>
+                    </div>
+                    <CreditCard className="text-amber-500" size={24} />
+                  </div>
+                </div>
+              </div>
+            )}
+            {activeSubTab === 'iptv' && (
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 p-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-900/30">
+                <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#101014] p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-[11px] font-black text-slate-500 uppercase tracking-widest">{isRTL ? 'إجمالي اشتراكات IPTV' : 'IPTV Subscribers'}</p>
+                      <p className="mt-2 text-2xl font-black text-slate-900 dark:text-white">{formatNumber(iptvSummary.count)}</p>
+                    </div>
+                    <PieChart className="text-teal-500" size={24} />
+                  </div>
+                </div>
+                <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#101014] p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-[11px] font-black text-slate-500 uppercase tracking-widest">{isRTL ? 'النشطون' : 'Active'}</p>
+                      <p className="mt-2 text-xl font-black text-emerald-600 dark:text-emerald-400">{formatNumber(iptvSummary.activeCount)}</p>
+                    </div>
+                    <Wifi className="text-emerald-500" size={24} />
+                  </div>
+                </div>
+                <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#101014] p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-[11px] font-black text-slate-500 uppercase tracking-widest">{isRTL ? 'إيراد الاشتراكات' : 'Subscription Revenue'}</p>
+                      <p className="mt-2 text-xl font-black text-blue-600 dark:text-blue-400">{formatCurrency(iptvSummary.totalRevenue, state.currency, state.lang, 2)}</p>
+                    </div>
+                    <Coins className="text-blue-500" size={24} />
+                  </div>
+                </div>
+                <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#101014] p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-[11px] font-black text-slate-500 uppercase tracking-widest">{isRTL ? 'الموقوفون' : 'Suspended'}</p>
+                      <p className="mt-2 text-xl font-black text-amber-600 dark:text-amber-400">{formatNumber(iptvSummary.suspendedCount)}</p>
+                    </div>
+                    <WifiOff className="text-amber-500" size={24} />
+                  </div>
+                </div>
+              </div>
+            )}
+            {activeSubTab === 'suppliers' && (
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 p-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-900/30">
+                <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#101014] p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-[11px] font-black text-slate-500 uppercase tracking-widest">{isRTL ? 'إجمالي الموردين' : 'Suppliers'}</p>
+                      <p className="mt-2 text-2xl font-black text-slate-900 dark:text-white">{formatNumber(supplierSummary.count)}</p>
+                    </div>
+                    <Truck className="text-teal-500" size={24} />
+                  </div>
+                </div>
+                <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#101014] p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-[11px] font-black text-slate-500 uppercase tracking-widest">{isRTL ? 'إجمالي المدين' : 'Total Debt'}</p>
+                      <p className="mt-2 text-xl font-black text-rose-600 dark:text-rose-400">{formatCurrency(supplierSummary.totalDebt, state.currency, state.lang, 2)}</p>
+                    </div>
+                    <AlertCircle className="text-rose-500" size={24} />
+                  </div>
+                </div>
+                <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#101014] p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-[11px] font-black text-slate-500 uppercase tracking-widest">{isRTL ? 'إجمالي المسدد' : 'Total Paid'}</p>
+                      <p className="mt-2 text-xl font-black text-emerald-600 dark:text-emerald-400">{formatCurrency(supplierSummary.totalPaid, state.currency, state.lang, 2)}</p>
+                    </div>
+                    <CreditCard className="text-emerald-500" size={24} />
+                  </div>
+                </div>
+                <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#101014] p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-[11px] font-black text-slate-500 uppercase tracking-widest">{isRTL ? 'صافي الرصيد' : 'Net Balance'}</p>
+                      <p className={`mt-2 text-xl font-black ${supplierSummary.totalBalance < 0 ? 'text-amber-600 dark:text-amber-400' : 'text-teal-600 dark:text-teal-400'}`}>
+                        {formatCurrency(supplierSummary.totalBalance, state.currency, state.lang, 2)}
+                      </p>
+                      <p className="mt-1 text-[10px] font-bold text-slate-400">{formatNumber(supplierSummary.unsettledCount)} {isRTL ? 'غير مسدد بالكامل' : 'unsettled suppliers'}</p>
+                    </div>
+                    <Coins className="text-amber-500" size={24} />
+                  </div>
+                </div>
+              </div>
+            )}
+            {activeSubTab === 'shareholders' && (
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 p-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-900/30">
+                <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#101014] p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-[11px] font-black text-slate-500 uppercase tracking-widest">{isRTL ? 'إجمالي المستثمرين' : 'Investors'}</p>
+                      <p className="mt-2 text-2xl font-black text-slate-900 dark:text-white">{formatNumber(investorSummary.count)}</p>
+                    </div>
+                    <PieChart className="text-teal-500" size={24} />
+                  </div>
+                </div>
+                <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#101014] p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-[11px] font-black text-slate-500 uppercase tracking-widest">{isRTL ? 'إجمالي الأسهم' : 'Total Shares'}</p>
+                      <p className="mt-2 text-xl font-black text-blue-600 dark:text-blue-400">{formatNumber(investorSummary.totalShares)}</p>
+                    </div>
+                    <Coins className="text-blue-500" size={24} />
+                  </div>
+                </div>
+                <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#101014] p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-[11px] font-black text-slate-500 uppercase tracking-widest">{isRTL ? 'إجمالي الاستثمار' : 'Total Investment'}</p>
+                      <p className="mt-2 text-xl font-black text-amber-600 dark:text-amber-400">{formatCurrency(investorSummary.totalInvestment, state.currency, state.lang, 2)}</p>
+                    </div>
+                    <CreditCard className="text-amber-500" size={24} />
+                  </div>
+                </div>
+                <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#101014] p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-[11px] font-black text-slate-500 uppercase tracking-widest">{isRTL ? 'الأرباح الموزعة' : 'Dividends'}</p>
+                      <p className="mt-2 text-xl font-black text-emerald-600 dark:text-emerald-400">{formatCurrency(investorSummary.totalDividends, state.currency, state.lang, 2)}</p>
+                    </div>
+                    <AlertCircle className="text-emerald-500" size={24} />
+                  </div>
+                </div>
+              </div>
+            )}
+            {activeSubTab === 'managers' && (
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 p-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-900/30">
+                <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#101014] p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-[11px] font-black text-slate-500 uppercase tracking-widest">{isRTL ? 'إجمالي الطاقم' : 'Team Members'}</p>
+                      <p className="mt-2 text-2xl font-black text-slate-900 dark:text-white">{formatNumber(managerSummary.count)}</p>
+                    </div>
+                    <ShieldCheck className="text-teal-500" size={24} />
+                  </div>
+                </div>
+                <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#101014] p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-[11px] font-black text-slate-500 uppercase tracking-widest">{isRTL ? 'النشطون' : 'Active'}</p>
+                      <p className="mt-2 text-xl font-black text-emerald-600 dark:text-emerald-400">{formatNumber(managerSummary.activeCount)}</p>
+                    </div>
+                    <Users className="text-emerald-500" size={24} />
+                  </div>
+                </div>
+                <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#101014] p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-[11px] font-black text-slate-500 uppercase tracking-widest">{isRTL ? 'إجمالي الأرصدة' : 'Total Balances'}</p>
+                      <p className="mt-2 text-xl font-black text-blue-600 dark:text-blue-400">{formatCurrency(managerSummary.totalBalance, state.currency, state.lang, 2)}</p>
+                    </div>
+                    <Wallet className="text-blue-500" size={24} />
+                  </div>
+                </div>
+                <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#101014] p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-[11px] font-black text-slate-500 uppercase tracking-widest">{isRTL ? 'بقيود مالية' : 'With Limits'}</p>
+                      <p className="mt-2 text-xl font-black text-amber-600 dark:text-amber-400">{formatNumber(managerSummary.limitedCount)}</p>
+                    </div>
+                    <Lock className="text-amber-500" size={24} />
+                  </div>
+                </div>
+              </div>
+            )}
+            {activeSubTab === 'subscribers' && (
+              <div className="md:hidden p-4 space-y-3">
+                {filteredItems.map((item: any, index: number, items: any[]) => (
+                  <div key={item.id} className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#101014] p-4 space-y-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-10 h-10 rounded-full bg-teal-500/10 flex items-center justify-center text-teal-600 font-black text-sm shrink-0">
+                          {(getSubscriberDisplayName(item) || '?').charAt(0)}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-sm font-black text-slate-900 dark:text-white truncate">{getSubscriberDisplayName(item)}</p>
+                          <p className="text-[10px] text-slate-400 font-mono mt-1 truncate">{item.username || item.id || '-'}</p>
+                        </div>
+                      </div>
+                      <SmartActionMenu item={item} actions={getActions(item)} isOpen={openActionMenuId === item.id} onToggle={() => setOpenActionMenuId(openActionMenuId === item.id ? null : item.id)} isRTL={isRTL} isLastRows={items.length > 3 && index >= items.length - 1} />
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="rounded-xl bg-emerald-500/5 border border-emerald-500/10 p-3">
+                        <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{isRTL ? 'الحالة' : 'Status'}</p>
+                        <p className="mt-2 text-xs font-black text-emerald-600 dark:text-emerald-400">{getSubscriberStatusLabel(item)}</p>
+                      </div>
+                      <div className="rounded-xl bg-blue-500/5 border border-blue-500/10 p-3">
+                        <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{isRTL ? 'الرصيد' : 'Balance'}</p>
+                        <p className="mt-2 text-xs font-black text-blue-600 dark:text-blue-400">{formatCurrency(parseFloat(item.balance || item['الرصيد المتبقي له'] || 0), state.currency, state.lang, 2)}</p>
+                      </div>
+                      <div className="rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 p-3">
+                        <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{isRTL ? 'الباقة' : 'Plan'}</p>
+                        <p className="mt-2 text-xs font-bold text-slate-700 dark:text-slate-300">{item.plan || item['سرعة الخط'] || '-'}</p>
+                      </div>
+                      <div className="rounded-xl bg-amber-500/5 border border-amber-500/10 p-3">
+                        <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{isRTL ? 'الانتهاء' : 'Expiry'}</p>
+                        <p className="mt-2 text-xs font-black text-amber-600 dark:text-amber-400">{item.expiry || item['تاريخ ناهية الاشتراك'] || '-'}</p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            {activeSubTab === 'iptv' && (
+              <div className="md:hidden p-4 space-y-3">
+                {filteredItems.map((item: any, index: number, items: any[]) => (
+                  <div key={item.id} className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#101014] p-4 space-y-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-10 h-10 rounded-full bg-teal-500/10 flex items-center justify-center text-teal-600 font-black text-sm shrink-0">
+                          {(getIptvName(item) || '?').charAt(0)}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-sm font-black text-slate-900 dark:text-white truncate">{getIptvName(item)}</p>
+                          <p className="text-[10px] text-slate-400 font-mono mt-1 truncate">{item.username || '-'}</p>
+                        </div>
+                      </div>
+                      <SmartActionMenu item={item} actions={getActions(item)} isOpen={openActionMenuId === item.id} onToggle={() => setOpenActionMenuId(openActionMenuId === item.id ? null : item.id)} isRTL={isRTL} isLastRows={items.length > 3 && index >= items.length - 1} />
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 p-3">
+                        <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{isRTL ? 'المنصة' : 'Platform'}</p>
+                        <p className="mt-2 text-xs font-bold text-slate-700 dark:text-slate-300">{item.platform || '-'}</p>
+                      </div>
+                      <div className="rounded-xl bg-blue-500/5 border border-blue-500/10 p-3">
+                        <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{isRTL ? 'السعر' : 'Price'}</p>
+                        <p className="mt-2 text-xs font-black text-blue-600 dark:text-blue-400">{formatCurrency(item.price || 0, state.currency, state.lang, 2)}</p>
+                      </div>
+                      <div className="rounded-xl bg-amber-500/5 border border-amber-500/10 p-3">
+                        <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{isRTL ? 'الانتهاء' : 'Expiry'}</p>
+                        <p className="mt-2 text-xs font-black text-amber-600 dark:text-amber-400">{item.expiry || '-'}</p>
+                      </div>
+                      <div className="rounded-xl border p-3 bg-white/60 dark:bg-slate-900/30 border-slate-200 dark:border-slate-800">
+                        <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{isRTL ? 'الحالة' : 'Status'}</p>
+                        <span className={`mt-2 inline-flex px-2.5 py-1 rounded-lg text-[10px] font-black ${getIptvStatusClass(item)}`}>{getIptvStatusLabel(item)}</span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            {activeSubTab === 'suppliers' && (
+              <div className="md:hidden p-4 space-y-3">
+                {filteredItems.map((item: any, index: number, items: any[]) => {
+                  const balanceValue = parseSupplierAmount(item['الرصيد']);
+                  const balanceClass = balanceValue < 0
+                    ? 'text-amber-600 dark:text-amber-400'
+                    : balanceValue > 0
+                      ? 'text-blue-600 dark:text-blue-400'
+                      : 'text-slate-500 dark:text-slate-400';
+
+                  return (
+                    <div key={item.id} className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#101014] p-4 space-y-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="w-10 h-10 rounded-full bg-blue-500/10 flex items-center justify-center text-blue-600 font-black text-sm shrink-0">
+                            {(getSupplierName(item) || '?').charAt(0)}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-sm font-black text-slate-900 dark:text-white truncate">{getSupplierName(item) || '-'}</p>
+                            <div className="flex items-center gap-2 mt-1">
+                              <span className="inline-flex items-center rounded-xl bg-slate-100 dark:bg-slate-800 px-2.5 py-1 text-[10px] font-black text-slate-700 dark:text-slate-300 font-mono">
+                                {getSupplierCode(item) || '-'}
+                              </span>
+                              <span className="text-[10px] text-slate-400 font-mono truncate">{item.id}</span>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="shrink-0">
+                          <SmartActionMenu 
+                            item={item}
+                            actions={getActions(item)}
+                            isOpen={openActionMenuId === item.id}
+                            onToggle={() => setOpenActionMenuId(openActionMenuId === item.id ? null : item.id)}
+                            isRTL={isRTL}
+                            isLastRows={items.length > 3 && index >= items.length - 1}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-3">
+                        <div className="rounded-xl bg-rose-500/5 border border-rose-500/10 p-3">
+                          <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{isRTL ? 'مدين' : 'Debt'}</p>
+                          <p className="mt-2 text-xs font-black text-rose-600 dark:text-rose-400 break-words">{formatSupplierAmount(item['مدين'])}</p>
+                        </div>
+                        <div className="rounded-xl bg-emerald-500/5 border border-emerald-500/10 p-3">
+                          <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{isRTL ? 'مسدد' : 'Paid'}</p>
+                          <p className="mt-2 text-xs font-black text-emerald-600 dark:text-emerald-400 break-words">{formatSupplierAmount(item['مسدد'])}</p>
+                        </div>
+                        <div className="rounded-xl bg-amber-500/5 border border-amber-500/10 p-3">
+                          <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{isRTL ? 'الرصيد' : 'Balance'}</p>
+                          <p className={`mt-2 text-xs font-black break-words ${balanceClass}`}>{formatSupplierAmount(item['الرصيد'])}</p>
+                        </div>
+                      </div>
+
+                      <div className="rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 p-3">
+                        <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{isRTL ? 'ملاحظات' : 'Notes'}</p>
+                        <p className="mt-2 text-xs text-slate-600 dark:text-slate-400 leading-relaxed break-words">{getSupplierNotes(item) || '-'}</p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+            {activeSubTab === 'shareholders' && (
+              <div className="md:hidden p-4 space-y-3">
+                {filteredItems.map((item: any, index: number, items: any[]) => (
+                  <div key={item.id} className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#101014] p-4 space-y-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-10 h-10 rounded-full bg-amber-500/10 flex items-center justify-center text-amber-600 font-black text-sm shrink-0">
+                          {(getInvestorName(item) || '?').charAt(0)}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-sm font-black text-slate-900 dark:text-white truncate">{getInvestorName(item)}</p>
+                          <p className="text-[10px] text-slate-400 font-mono mt-1">{item.id}</p>
+                        </div>
+                      </div>
+                      <SmartActionMenu item={item} actions={getActions(item)} isOpen={openActionMenuId === item.id} onToggle={() => setOpenActionMenuId(openActionMenuId === item.id ? null : item.id)} isRTL={isRTL} isLastRows={items.length > 3 && index >= items.length - 1} />
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="rounded-xl bg-blue-500/5 border border-blue-500/10 p-3">
+                        <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{isRTL ? 'الأسهم' : 'Shares'}</p>
+                        <p className="mt-2 text-xs font-black text-blue-600 dark:text-blue-400">{formatNumber(item.shares || 0)}</p>
+                      </div>
+                      <div className="rounded-xl bg-amber-500/5 border border-amber-500/10 p-3">
+                        <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{isRTL ? 'سعر الشراء' : 'Buy Price'}</p>
+                        <p className="mt-2 text-xs font-black text-amber-600 dark:text-amber-400">{formatCurrency(item.buyPrice || 0, state.currency, state.lang, 2)}</p>
+                      </div>
+                      <div className="rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 p-3">
+                        <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{isRTL ? 'الاستثمار' : 'Investment'}</p>
+                        <p className="mt-2 text-xs font-black text-slate-700 dark:text-slate-300">{formatCurrency(item.investment || 0, state.currency, state.lang, 2)}</p>
+                      </div>
+                      <div className="rounded-xl bg-emerald-500/5 border border-emerald-500/10 p-3">
+                        <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{isRTL ? 'الأرباح' : 'Dividends'}</p>
+                        <p className="mt-2 text-xs font-black text-emerald-600 dark:text-emerald-400">{formatCurrency(item.dividends || 0, state.currency, state.lang, 2)}</p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            {activeSubTab === 'managers' && (
+              <div className="md:hidden p-4 space-y-3">
+                {filteredItems.map((item: any, index: number, items: any[]) => (
+                  <div key={item.id} className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#101014] p-4 space-y-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center font-black text-sm shrink-0 ${(item.role === 'super_admin' || item['الصلاحية'] === 'Super Admin') ? 'bg-amber-500/10 text-amber-600' : 'bg-teal-500/10 text-teal-600'}`}>
+                          {(getManagerName(item) || '?').charAt(0)}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-sm font-black text-slate-900 dark:text-white truncate">{getManagerName(item)}</p>
+                          <p className="text-[10px] text-slate-400 font-mono mt-1 truncate">{item.username || item['اسم الدخول'] || '-'}</p>
+                        </div>
+                      </div>
+                      <SmartActionMenu item={item} actions={getActions(item)} isOpen={openActionMenuId === item.id} onToggle={() => setOpenActionMenuId(openActionMenuId === item.id ? null : item.id)} isRTL={isRTL} isLastRows={items.length > 3 && index >= items.length - 1} />
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 p-3">
+                        <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{isRTL ? 'الدور' : 'Role'}</p>
+                        <p className="mt-2 text-xs font-black text-slate-700 dark:text-slate-300">{getManagerRole(item)}</p>
+                      </div>
+                      <div className="rounded-xl bg-blue-500/5 border border-blue-500/10 p-3">
+                        <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{isRTL ? 'الرصيد' : 'Balance'}</p>
+                        <p className="mt-2 text-xs font-black text-blue-600 dark:text-blue-400">{formatCurrency(item.balance || item['الرصيد'] || 0, state.currency, state.lang, 2)}</p>
+                      </div>
+                      <div className="rounded-xl bg-amber-500/5 border border-amber-500/10 p-3">
+                        <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{isRTL ? 'الحد المالي' : 'Tx Limit'}</p>
+                        <p className="mt-2 text-xs font-black text-amber-600 dark:text-amber-400">{(item.maxTxLimit || item['الحد المالي']) ? formatCurrency(item.maxTxLimit || item['الحد المالي'], state.currency, state.lang, 2) : (isRTL ? 'بدون قيود' : 'No Limit')}</p>
+                      </div>
+                      <div className="rounded-xl bg-emerald-500/5 border border-emerald-500/10 p-3">
+                        <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{isRTL ? 'الحالة' : 'Status'}</p>
+                        <p className="mt-2 text-xs font-black text-emerald-600 dark:text-emerald-400">{isManagerActive(item) ? (isRTL ? 'نشط' : 'Active') : (isRTL ? 'مجمد' : 'Disabled')}</p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            <table className={`${['subscribers', 'suppliers', 'shareholders', 'managers', 'iptv'].includes(activeSubTab) ? 'hidden md:table w-full' : 'w-full'} ${activeSubTab === 'suppliers' ? 'min-w-[780px] table-auto' : ''} text-left border-collapse`}>
+              <thead className="sticky top-0 bg-slate-50 dark:bg-[#09090B] z-[10]">
+                <tr className="border-b border-slate-200 dark:border-slate-800">
                   {activeSubTab === 'subscribers' && (
+                    <>
+                      {SUBSCRIBER_COLUMNS.map(col => visibleColumns[col.id] && (
+                        <th key={col.id} className="px-4 py-4 text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest text-right">{col.label}</th>
+                      ))}
+                    </>
+                  )}
+                  {activeSubTab === 'suppliers' && (
+                    <>
+                      {SUPPLIER_COLUMNS.map(col => visibleColumns[col.id] && (
+                        <th key={col.id} className={`px-4 py-4 text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest text-right ${col.id === 'debt' ? 'hidden md:table-cell' : ''} ${col.id === 'paid' ? 'hidden lg:table-cell' : ''} ${col.id === 'notes' ? 'hidden xl:table-cell' : ''}`}>
+                          {col.label}
+                        </th>
+                      ))}
+                    </>
+                  )}
+                  {activeSubTab === 'shareholders' && (
+                    <>
+                      {INVESTOR_COLUMNS.map(col => visibleColumns[col.id] && (
+                        <th key={col.id} className={`px-4 py-4 text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest text-right ${['buyPrice', 'ownership'].includes(col.id) ? 'hidden md:table-cell' : ''} ${col.id === 'dividends' ? 'hidden lg:table-cell' : ''}`}>
+                          {col.label}
+                        </th>
+                      ))}
+                    </>
+                  )}
+                  {activeSubTab === 'managers' && (
+                    <>
+                      {MANAGER_COLUMNS.map(col => visibleColumns[col.id] && (
+                        <th key={col.id} className="px-4 py-4 text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest text-right">{col.label}</th>
+                      ))}
+                    </>
+                  )}
+                  {activeSubTab === 'iptv' && (
+                    <>
+                      {showName && <th className="px-4 py-4 text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest text-right">{t.management.iptv.table.name}</th>}
+                      {showChannel && <th className="hidden sm:table-cell px-4 py-4 text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest text-right">{isRTL ? 'القناة' : 'CH'}</th>}
+                      <th className="hidden md:table-cell px-4 py-4 text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest text-right">{t.management.iptv.table.phone}</th>
+                      <th className="px-4 py-4 text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest text-right">{isRTL ? 'المزود' : 'Provider'}</th>
+                      <th className="hidden lg:table-cell px-4 py-4 text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest text-right">{t.management.iptv.table.username}</th>
+                      <th className="px-4 py-4 text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest text-right">{isRTL ? 'الانتهاء' : 'Expiry'}</th>
+                      <th className="px-4 py-4 text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest text-right">{isRTL ? 'السعر' : 'Price'}</th>
+                      <th className="px-4 py-4 text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest text-right">{t.management.iptv.table.status}</th>
+                    </>
+                  )}
+                  <th className="px-6 py-5 text-xs font-bold text-slate-500 uppercase tracking-wider"></th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                {filteredItems.map((item: any, index: number, items: any[]) => (
+                  <tr key={item.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors group">
+                    {activeSubTab === 'subscribers' && (
                     <>
                       {SUBSCRIBER_COLUMNS.map(col => {
                         if (!visibleColumns[col.id]) return null;
                         switch (col.id) {
-                          case 'id': return <td key={col.id} className="px-6 py-6 text-sm text-slate-500 dark:text-slate-400 font-mono">{item.id || item.username || '-'}</td>;
-                          case 'firstname': return <td key={col.id} className="px-6 py-6 text-base font-bold text-slate-800 dark:text-slate-200">{item.firstname || item.name || '-'}</td>;
-                          case 'lastname': return <td key={col.id} className="px-6 py-6 text-base font-bold text-slate-800 dark:text-slate-200">{item.lastname || ''}</td>;
-                          case 'username': return <td key={col.id} className="px-6 py-6 text-sm font-medium text-slate-600 dark:text-slate-400">{item.username || ''}</td>;
-                          case 'phone': return <td key={col.id} className="px-6 py-6 text-sm font-mono text-slate-600 dark:text-slate-400">{item.phone || item['رقم الموبايل'] || '-'}</td>;
-                          case 'idNumber': return <td key={col.id} className="px-6 py-6 text-sm text-slate-600 dark:text-slate-400 font-mono">{item.idNumber || item['رقم الهوية'] || '-'}</td>;
-                          case 'password': return <td key={col.id} className="px-6 py-6 text-sm text-slate-600 dark:text-slate-400 font-mono">{item.password || item['كلمة المرور'] || '-'}</td>;
+                          case 'id': return <td key={col.id} className="px-4 py-4 text-xs text-slate-500 dark:text-slate-400 font-mono">{item.id || item.username || '-'}</td>;
+                          case 'firstname': return <td key={col.id} className="px-4 py-4 text-sm font-bold text-slate-800 dark:text-slate-200 line-clamp-1">{item.firstname || item.name || '-'}</td>;
+                          case 'lastname': return <td key={col.id} className="px-4 py-4 text-sm font-bold text-slate-800 dark:text-slate-200 line-clamp-1">{item.lastname || ''}</td>;
+                          case 'username': return <td key={col.id} className="px-4 py-4 text-xs font-medium text-slate-600 dark:text-slate-400 truncate max-w-[100px]">{item.username || ''}</td>;
+                          case 'phone': return <td key={col.id} className="px-4 py-4 text-xs font-mono text-slate-600 dark:text-slate-400">{item.phone || item['رقم الموبايل'] || '-'}</td>;
+                          case 'idNumber': return <td key={col.id} className="px-4 py-4 text-xs text-slate-600 dark:text-slate-400 font-mono">{item.idNumber || item['رقم الهوية'] || '-'}</td>;
+                          case 'password': return <td key={col.id} className="px-4 py-4 text-xs text-slate-600 dark:text-slate-400 font-mono">{item.password || item['كلمة المرور'] || '-'}</td>;
                           case 'status': return (
-                            <td key={col.id} className="px-6 py-6">
-                              <span className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider ${
+                            <td key={col.id} className="px-4 py-4">
+                              <span className={`px-2 py-1 rounded-lg text-[10px] font-bold uppercase ${
                                 item.status === 'active' || item['حالة الحساب'] === 'مفعل' ? 'bg-emerald-100 dark:bg-emerald-500/10 text-emerald-600' : 'bg-rose-100 dark:bg-rose-500/10 text-rose-600'
                               }`}>
                                 {t.management.subscribers.statuses[item.status] || item['حالة الحساب'] || item.status}
                               </span>
                             </td>
                           );
-                          case 'plan': return <td key={col.id} className="px-6 py-6 text-base font-medium text-slate-600 dark:text-slate-400">{item.plan || item['سرعة الخط'] || '-'}</td>;
-                          case 'balance': return <td key={col.id} className="px-6 py-6 text-base font-bold text-emerald-600 dark:text-emerald-400">{formatCurrency(parseFloat(item.balance || item['الرصيد المتبقي له'] || 0), state.currency, state.lang)}</td>;
-                          case 'debt': return <td key={col.id} className="px-6 py-6 text-base font-bold text-rose-600 dark:text-rose-400">{formatCurrency(parseFloat(item['عليه دين'] || 0), state.currency, state.lang)}</td>;
-                          case 'paid': return <td key={col.id} className="px-6 py-6 text-base font-bold text-teal-600 dark:text-teal-400">{formatCurrency(parseFloat(item['قام بتسديد'] || 0), state.currency, state.lang)}</td>;
-                          case 'bill': return <td key={col.id} className="px-6 py-6 text-sm font-medium text-slate-600 dark:text-slate-400">{item['قيمة الفاتورة'] || '-'}</td>;
-                          case 'agent': return <td key={col.id} className="px-6 py-6 text-sm font-medium text-slate-700 dark:text-slate-300">{item.agent || item['الوكيل المسؤل'] || '-'}</td>;
-                          case 'subType': return <td key={col.id} className="px-6 py-6 text-sm text-slate-600 dark:text-slate-400">{item['نوع الاشتراك'] || '-'}</td>;
-                          case 'startDate': return <td key={col.id} className="px-6 py-6 text-sm text-slate-500 font-mono">{item['تاريخ بداية العقد مع الشركة'] || '-'}</td>;
-                          case 'expiry': return <td key={col.id} className="px-6 py-6 text-sm text-slate-500 font-mono">{item.expiry || item['تاريخ ناهية الاشتراك'] || '-'}</td>;
-                          case 'address': return <td key={col.id} className="px-6 py-6 text-sm text-slate-600 dark:text-slate-400">{item.address || item['عنوان المشترك'] || '-'}</td>;
-                          case 'city': return <td key={col.id} className="px-6 py-6 text-sm text-slate-600 dark:text-slate-400">{item.city || '-'}</td>;
-                          case 'email': return <td key={col.id} className="px-6 py-6 text-sm text-slate-500">{item.email || '-'}</td>;
-                          case 'ip_litebeam': return <td key={col.id} className="px-6 py-6 text-sm font-mono text-slate-600 dark:text-slate-400">{item.ip || item['ip_litebeam'] || '-'}</td>;
-                          case 'mac_litebeam': return <td key={col.id} className="px-6 py-6 text-sm font-mono text-slate-600 dark:text-slate-400">{item.mac || item['mac_litebeam'] || '-'}</td>;
+                          case 'plan': return <td key={col.id} className="px-4 py-4 text-xs font-medium text-slate-600 dark:text-slate-400 truncate max-w-[120px]">{item.plan || item['سرعة الخط'] || '-'}</td>;
+                          case 'balance': return <td key={col.id} className="px-4 py-4 text-sm font-black text-emerald-600 dark:text-emerald-400 whitespace-nowrap">{formatCurrency(parseFloat(item.balance || item['الرصيد المتبقي له'] || 0), state.currency, state.lang)}</td>;
+                          case 'debt': return <td key={col.id} className="px-4 py-4 text-sm font-black text-rose-600 dark:text-rose-400 whitespace-nowrap">{formatCurrency(parseFloat(item['عليه دين'] || 0), state.currency, state.lang)}</td>;
+                          case 'paid': return <td key={col.id} className="px-4 py-4 text-sm font-black text-teal-600 dark:text-teal-400 whitespace-nowrap">{formatCurrency(parseFloat(item['قام بتسديد'] || 0), state.currency, state.lang)}</td>;
+                          case 'bill': return <td key={col.id} className="px-4 py-4 text-xs font-medium text-slate-600 dark:text-slate-400">{item['قيمة الفاتورة'] || '-'}</td>;
+                          case 'agent': return <td key={col.id} className="px-4 py-4 text-xs font-medium text-slate-700 dark:text-slate-300 line-clamp-1">{item.agent || item['الوكيل المسؤل'] || '-'}</td>;
+                          case 'subType': return <td key={col.id} className="px-4 py-4 text-xs text-slate-600 dark:text-slate-400 line-clamp-1">{item['نوع الاشتراك'] || '-'}</td>;
+                          case 'startDate': return <td key={col.id} className="px-4 py-4 text-[10px] text-slate-500 font-mono">{item['تاريخ بداية العقد مع الشركة'] || '-'}</td>;
+                          case 'expiry': return <td key={col.id} className="px-4 py-4 text-[10px] text-slate-500 font-mono">{item.expiry || item['تاريخ ناهية الاشتراك'] || '-'}</td>;
+                          case 'address': return <td key={col.id} className="px-4 py-4 text-xs text-slate-600 dark:text-slate-400 truncate max-w-[150px]">{item.address || item['عنوان المشترك'] || '-'}</td>;
+                          case 'city': return <td key={col.id} className="px-4 py-4 text-xs text-slate-600 dark:text-slate-400">{item.city || '-'}</td>;
+                          case 'email': return <td key={col.id} className="px-4 py-4 text-[10px] text-slate-500 truncate max-w-[120px]">{item.email || '-'}</td>;
+                          case 'ip_litebeam': return <td key={col.id} className="px-4 py-4 text-xs font-mono text-slate-600 dark:text-slate-400">{item.ip || item['ip_litebeam'] || '-'}</td>;
+                          case 'mac_litebeam': return <td key={col.id} className="px-4 py-4 text-xs font-mono text-slate-600 dark:text-slate-400">{item.mac || item['mac_litebeam'] || '-'}</td>;
                           case 'live': return (
-                            <td key={col.id} className="px-6 py-6">
-                              <div className="flex items-center justify-center">
+                            <td key={col.id} className="px-4 py-4">
+                              <div className="flex items-center justify-center shrink-0">
                                 {onlineStatuses[item.username] === true ? (
                                   <span 
-                                    className="flex items-center gap-1.5 text-emerald-500 font-bold text-xs bg-emerald-500/10 px-2.5 py-1.5 rounded-full border border-emerald-500/20 shadow-sm cursor-help"
-                                    title={isRTL ? `آخر تحديث: ${lastStatusUpdate}` : `Last checked: ${lastStatusUpdate}`}
+                                    className="flex items-center gap-1 text-emerald-500 font-black text-[9px] bg-emerald-500/10 px-2 py-1 rounded-full border border-emerald-500/20"
                                   >
-                                    <div className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)] animate-pulse" />
-                                    {isRTL ? 'متصل' : 'Online'}
+                                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                                    ON
                                   </span>
                                 ) : onlineStatuses[item.username] === false ? (
-                                  <span 
-                                    className="flex items-center gap-1.5 text-slate-400 font-bold text-xs bg-slate-100 dark:bg-slate-800/50 px-2.5 py-1.5 rounded-full border border-slate-200 dark:border-slate-700/50 cursor-help opacity-70 hover:opacity-100 transition-opacity"
-                                    title={isRTL ? `تم البحث في الروترات ولم يتم العثور على اسم المستخدم: ${item.username}` : `Searched routers, no match for: ${item.username}`}
-                                  >
-                                    <div className="w-2 h-2 rounded-full bg-slate-400" />
-                                    {isRTL ? 'أوفلاين' : 'Offline'}
-                                  </span>
+                                  <span className="text-[9px] text-slate-400 font-bold opacity-60">OFF</span>
                                 ) : (
-                                  <div className="flex items-center gap-1.5 text-slate-400 text-[10px] animate-pulse">
-                                    <Activity size={12} className="animate-spin-slow" />
-                                    <span>{isRTL ? 'جار الفحص...' : 'Checking...'}</span>
-                                  </div>
+                                  <Activity size={10} className="text-slate-300 animate-spin" />
                                 )}
                               </div>
                             </td>
                           );
-                          case 'notes': return <td key={col.id} className="px-6 py-6 text-sm text-slate-500 dark:text-slate-500 truncate max-w-[200px]" title={item.notes || item['ملاحظات اخرى'] || ''}>{item.notes || item['ملاحظات اخرى'] || '-'}</td>;
+                          case 'notes': return <td key={col.id} className="px-4 py-4 text-xs text-slate-500 dark:text-slate-500 truncate max-w-[100px]">{item.notes || item['ملاحظات اخرى'] || '-'}</td>;
                           default: return null;
                         }
                       })}
@@ -1428,142 +2166,221 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
                   )}
                   {activeSubTab === 'suppliers' && (
                     <>
-                      {SUPPLIER_FIELDS.filter(field => showName || !field.nameField).map(field => (
-                        <td key={field.key} className="px-6 py-6 text-base text-slate-600 dark:text-slate-400">
-                          {item[field.key] ?? ''}
-                        </td>
-                      ))}
+                      {SUPPLIER_COLUMNS.map(col => {
+                        if (!visibleColumns[col.id]) return null;
+                        switch (col.id) {
+                          case 'code':
+                            return (
+                              <td key={col.id} className="px-4 py-4">
+                                <span className="inline-flex items-center rounded-xl bg-slate-100 dark:bg-slate-800 px-3 py-1.5 text-xs font-black text-slate-700 dark:text-slate-300 font-mono">
+                                  {getSupplierCode(item) || '-'}
+                                </span>
+                              </td>
+                            );
+                          case 'name':
+                            return (
+                              <td key={col.id} className="px-4 py-4">
+                                <div className="flex items-center gap-3">
+                                  <div className="w-9 h-9 rounded-full bg-blue-500/10 flex items-center justify-center text-blue-600 font-black text-sm shrink-0">
+                                    {(getSupplierName(item) || '?').charAt(0)}
+                                  </div>
+                                  <div className="min-w-0">
+                                    <p className="text-sm font-black text-slate-800 dark:text-slate-200 truncate">{getSupplierName(item) || '-'}</p>
+                                    <p className="text-[10px] text-slate-400 font-mono mt-1">{item.id}</p>
+                                  </div>
+                                </div>
+                              </td>
+                            );
+                          case 'debt':
+                            return (
+                              <td key={col.id} className="hidden md:table-cell px-4 py-4 text-sm font-black text-rose-600 dark:text-rose-400 whitespace-nowrap">
+                                {formatSupplierAmount(item['مدين'])}
+                              </td>
+                            );
+                          case 'paid':
+                            return (
+                              <td key={col.id} className="hidden lg:table-cell px-4 py-4 text-sm font-black text-emerald-600 dark:text-emerald-400 whitespace-nowrap">
+                                {formatSupplierAmount(item['مسدد'])}
+                              </td>
+                            );
+                          case 'balance': {
+                            const balanceValue = parseSupplierAmount(item['الرصيد']);
+                            const balanceClass = balanceValue < 0
+                              ? 'text-amber-600 dark:text-amber-400'
+                              : balanceValue > 0
+                                ? 'text-blue-600 dark:text-blue-400'
+                                : 'text-slate-500 dark:text-slate-400';
+                            return (
+                              <td key={col.id} className={`px-4 py-4 text-sm font-black whitespace-nowrap ${balanceClass}`}>
+                                {formatSupplierAmount(item['الرصيد'])}
+                              </td>
+                            );
+                          }
+                          case 'notes':
+                            return (
+                              <td key={col.id} className="hidden xl:table-cell px-4 py-4 text-xs text-slate-500 dark:text-slate-400 max-w-[240px] truncate">
+                                {getSupplierNotes(item) || '-'}
+                              </td>
+                            );
+                          default:
+                            return null;
+                        }
+                      })}
                     </>
                   )}
                   {activeSubTab === 'shareholders' && (
                     <>
-                      {showName && (
-                        <td className="px-6 py-6">
-                          <div className="flex items-center gap-4">
-                            <div className="w-10 h-10 rounded-full bg-amber-500/10 flex items-center justify-center text-amber-600 font-bold text-sm">
-                              {item.name.charAt(0)}
-                            </div>
-                            <p className="text-lg font-bold text-slate-800 dark:text-slate-200">{item.name}</p>
-                          </div>
-                        </td>
-                      )}
-                      <td className="px-6 py-6">
-                        <div className="flex items-center gap-3">
-                          <button 
-                            onClick={() => {
-                              const newShares = Math.max(0, item.shares - 100);
-                              setShareholders(prev => prev.map(s => s.id === item.id ? { ...s, shares: newShares } : s));
-                            }}
-                            className="w-8 h-8 flex items-center justify-center bg-rose-500/10 text-rose-600 rounded-lg hover:bg-rose-500/20 transition-colors"
-                          >
-                            -
-                          </button>
-                          <span className="text-base font-bold text-slate-800 dark:text-slate-200 min-w-[80px] text-center">
-                            {formatNumber(item.shares)}
-                          </span>
-                          <button 
-                            onClick={() => {
-                              const newShares = item.shares + 100;
-                              setShareholders(prev => prev.map(s => s.id === item.id ? { ...s, shares: newShares } : s));
-                            }}
-                            className="w-8 h-8 flex items-center justify-center bg-emerald-500/10 text-emerald-600 rounded-lg hover:bg-emerald-500/20 transition-colors"
-                          >
-                            +
-                          </button>
-                        </div>
-                      </td>
-                      <td className="px-6 py-6 text-base font-bold text-slate-600 dark:text-slate-400">{item.ownership}</td>
-                      <td className="px-6 py-6 text-base font-bold text-slate-800 dark:text-slate-200">
-                        {formatCurrency(item.investment, state.currency, state.lang)}
-                      </td>
-                      <td className="px-6 py-6 text-base font-bold text-emerald-600 dark:text-emerald-400">
-                        {formatCurrency(item.dividends, state.currency, state.lang)}
-                      </td>
-                      <td className="px-6 py-6 text-base text-slate-500 font-mono">{item.joinDate}</td>
+                      {INVESTOR_COLUMNS.map(col => {
+                        if (!visibleColumns[col.id]) return null;
+                        switch (col.id) {
+                          case 'name':
+                            return (
+                              <td key={col.id} className="px-4 py-4">
+                                <div className="flex items-center gap-3">
+                                  <div className="w-8 h-8 rounded-full bg-amber-500/10 flex items-center justify-center text-amber-600 font-bold text-xs shrink-0">
+                                    {(item.name || '?').charAt(0)}
+                                  </div>
+                                  <p className="text-sm font-bold text-slate-800 dark:text-slate-200 line-clamp-1">{item.name}</p>
+                                </div>
+                              </td>
+                            );
+                          case 'shares':
+                            return (
+                              <td key={col.id} className="px-4 py-4">
+                                <div className="flex items-center gap-2">
+                                  <button 
+                                    onClick={() => {
+                                      const newShares = Math.max(0, (item.shares || 0) - 10);
+                                      setShareholders(prev => prev.map(s => s.id === item.id ? { ...s, shares: newShares } : s));
+                                    }}
+                                    className="w-6 h-6 flex items-center justify-center bg-rose-500/10 text-rose-600 rounded hover:bg-rose-500/20 transition-colors text-xs"
+                                  >
+                                    -
+                                  </button>
+                                  <span className="text-xs font-bold text-slate-800 dark:text-slate-200 min-w-[50px] text-center">
+                                    {formatNumber(item.shares || 0)}
+                                  </span>
+                                  <button 
+                                    onClick={() => {
+                                      const newShares = (item.shares || 0) + 10;
+                                      setShareholders(prev => prev.map(s => s.id === item.id ? { ...s, shares: newShares } : s));
+                                    }}
+                                    className="w-6 h-6 flex items-center justify-center bg-emerald-500/10 text-emerald-600 rounded hover:bg-emerald-500/20 transition-colors text-xs"
+                                  >
+                                    +
+                                  </button>
+                                </div>
+                              </td>
+                            );
+                          case 'buyPrice':
+                            return <td key={col.id} className="hidden md:table-cell px-4 py-4 text-xs font-black text-slate-600 dark:text-slate-400">{formatCurrency(item.buyPrice || 0, state.currency, state.lang)}</td>;
+                          case 'ownership':
+                            return <td key={col.id} className="hidden md:table-cell px-4 py-4 text-xs font-bold text-slate-600 dark:text-slate-400">{item.ownership || '0%'}</td>;
+                          case 'investment':
+                            return <td key={col.id} className="px-4 py-4 text-sm font-black text-slate-800 dark:text-slate-200">{formatCurrency(item.investment || 0, state.currency, state.lang)}</td>;
+                          case 'dividends':
+                            return <td key={col.id} className="hidden lg:table-cell px-4 py-4 text-sm font-bold text-emerald-600 dark:text-emerald-400">{formatCurrency(item.dividends || 0, state.currency, state.lang)}</td>;
+                          default:
+                            return <td key={col.id} className="px-4 py-4 text-xs text-slate-600 dark:text-slate-400">{item[col.id] || '-'}</td>;
+                        }
+                      })}
                     </>
                   )}
-                  {activeSubTab === 'directors' && (
+                  {activeSubTab === 'managers' && (
                     <>
-                      {showName && (
-                        <td className="px-6 py-6 font-bold text-slate-800 dark:text-slate-200">
-                          {item.name}
-                        </td>
-                      )}
-                      <td className="px-6 py-6 text-sm text-slate-600 dark:text-slate-400">{item.username}</td>
-                      <td className="px-6 py-6 text-sm font-mono text-slate-500">{item.email}</td>
-                      <td className="px-6 py-6">
-                        <span className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase ${
-                          item.role === 'super_admin' ? 'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400' : 'bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400'
-                        }`}>
-                          {item.role === 'super_admin' ? 'Super Admin' : 'Admin'}
-                        </span>
-                      </td>
-                      <td className="px-6 py-6">
-                        <span className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider ${
-                          item.status === 'active' ? 'bg-emerald-100 dark:bg-emerald-500/10 text-emerald-600' : 'bg-rose-100 dark:bg-rose-500/10 text-rose-600'
-                        }`}>
-                          {item.status === 'active' ? t.settings.ai.active : t.settings.ai.inactive}
-                        </span>
-                      </td>
-                    </>
-                  )}
-                  {activeSubTab === 'deputies' && (
-                    <>
-                      {showName && (
-                        <td className="px-6 py-6">
-                          <div className="flex items-center gap-4">
-                            <div className={`w-10 h-10 rounded-full bg-orange-500/10 text-orange-600 flex items-center justify-center font-bold text-sm`}>
-                              {item.firstName ? item.firstName.charAt(0) : (item.name ? item.name.charAt(0) : '')}
-                            </div>
-                            <p className="text-lg font-bold text-slate-800 dark:text-slate-200">
-                                {item.firstName || item.lastName ? `${item.firstName || ''} ${item.lastName || ''}`.trim() : item.name}
-                            </p>
-                          </div>
-                        </td>
-                      )}
-                      <td className="px-6 py-6">
-                        <div className="flex flex-col">
-                          <span className="text-base font-bold text-slate-800 dark:text-slate-200">{item.position}</span>
-                          <span className="text-sm text-slate-500 dark:text-slate-400">{item.department}</span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-6 text-base font-mono text-slate-600 dark:text-slate-400">{item.phone || '-'}</td>
-                      <td className="px-6 py-6 text-base font-medium text-slate-600 dark:text-slate-400">{item.assignedZone || '-'}</td>
-                      <td className="px-6 py-6">
-                        <span className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider ${
-                          item.status === 'active' ? 'bg-emerald-100 dark:bg-emerald-500/10 text-emerald-600' : 'bg-rose-100 dark:bg-rose-500/10 text-rose-600'
-                        }`}>
-                          {item.status === 'active' ? t.settings.ai.active : t.settings.ai.inactive}
-                        </span>
-                      </td>
+                      {MANAGER_COLUMNS.map(col => {
+                        if (!visibleColumns[col.id]) return null;
+                        switch (col.id) {
+                          case 'name':
+                            return (
+                              <td key={col.id} className="px-4 py-4">
+                                <div className="flex items-center gap-3">
+                                  <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs shrink-0 ${
+                                    (item.role === 'super_admin' || item['الصلاحية'] === 'Super Admin') ? 'bg-amber-500/10 text-amber-600' : 'bg-teal-500/10 text-teal-600'
+                                  }`}>
+                                    {(item.name || item.username || item['اسم الدخول'] || '?').charAt(0)}
+                                  </div>
+                                  <p className="text-sm font-bold text-slate-800 dark:text-slate-200 line-clamp-1">
+                                      {item.name || `${item['الاسم الاول'] || item.firstName || ''} ${item['الاسم الثاني'] || item.lastName || ''}`.trim() || item.username || item['اسم الدخول']}
+                                  </p>
+                                </div>
+                              </td>
+                            );
+                          case 'username':
+                            return <td key={col.id} className="px-4 py-4 text-xs text-slate-600 dark:text-slate-400 font-mono truncate max-w-[100px]">{item.username || item['اسم الدخول'] || '-'}</td>;
+                          case 'role':
+                            return (
+                              <td key={col.id} className="px-4 py-4">
+                                <span className={`inline-block px-2 py-1 rounded-lg text-[9px] font-black uppercase tracking-tighter truncate max-w-[120px] ${
+                                  (item.role === 'super_admin' || item['الصلاحية'] === 'Super Admin') ? 'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400' : 'bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400'
+                                }`}>
+                                  {item.role || item['الصلاحية'] || (isRTL ? 'موظف' : 'Staff')}
+                                </span>
+                              </td>
+                            );
+                          case 'balance':
+                            return (
+                              <td key={col.id} className="px-4 py-4 text-sm font-black text-slate-800 dark:text-slate-200 whitespace-nowrap">
+                                {formatCurrency(item.balance || item['الرصيد'] || 0, state.currency, state.lang)}
+                              </td>
+                            );
+                          case 'maxTxLimit':
+                            return (
+                              <td key={col.id} className="px-4 py-4">
+                                {(item.maxTxLimit || item['الحد المالي']) ? (
+                                  <div className="flex flex-col">
+                                    <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                                      {formatCurrency(item.maxTxLimit || item['الحد المالي'], state.currency, state.lang)}
+                                    </span>
+                                    <span className="text-[8px] text-emerald-500 uppercase font-black">Limit ON</span>
+                                  </div>
+                                ) : (
+                                  <span className="text-[10px] text-slate-400 italic">{isRTL ? 'بدون قيود' : 'No Limit'}</span>
+                                )}
+                              </td>
+                            );
+                          case 'status':
+                            return (
+                              <td key={col.id} className="px-4 py-4">
+                                <span className={`px-2 py-1 rounded-lg text-[10px] font-bold uppercase ${
+                                  (item.status === 'active' || item['الحالة'] === 'نشط' || !item.status) ? 'bg-emerald-100 dark:bg-emerald-500/10 text-emerald-600' : 'bg-rose-100 dark:bg-rose-500/10 text-rose-600'
+                                }`}>
+                                  {(item.status === 'active' || item['الحالة'] === 'نشط' || !item.status) ? (isRTL ? 'نشط' : 'Active') : (isRTL ? 'مجمد' : 'Disabled')}
+                                </span>
+                              </td>
+                            );
+                          default:
+                            return <td key={col.id} className="px-4 py-4 text-xs text-slate-600 dark:text-slate-400">{item[col.id] || item[col.key || ''] || '-'}</td>;
+                        }
+                      })}
                     </>
                   )}
                   {activeSubTab === 'iptv' && (
                     <>
                       {showName && (
-                        <td className="px-6 py-6">
-                          <div className="flex items-center gap-4">
-                            <div className="w-10 h-10 rounded-full bg-teal-500/10 flex items-center justify-center text-teal-600 font-bold text-sm">
-                              {item.name.charAt(0)}
+                        <td className="px-4 py-4">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-full bg-teal-500/10 flex items-center justify-center text-teal-600 font-bold text-xs shrink-0">
+                              {(item.name || '?').charAt(0)}
                             </div>
-                            <p className="text-lg font-bold text-slate-800 dark:text-slate-200">{item.name}</p>
+                            <p className="text-sm font-bold text-slate-800 dark:text-slate-200 line-clamp-1">{item.name}</p>
                           </div>
                         </td>
                       )}
                       {showChannel && (
-                        <td className="px-6 py-6 text-base font-bold text-slate-800 dark:text-slate-200">
+                        <td className="hidden sm:table-cell px-4 py-4 text-xs font-bold text-slate-800 dark:text-slate-200">
                           {item.channelNumber || '-'}
                         </td>
                       )}
-                      <td className="px-6 py-6 text-base font-mono text-slate-600 dark:text-slate-400">{item.phone}</td>
-                      <td className="px-6 py-6 text-base font-medium text-slate-600 dark:text-slate-400">{item.platform}</td>
-                      <td className="px-6 py-6 text-base font-mono text-slate-600 dark:text-slate-400">{item.username}</td>
-                      <td className="px-6 py-6 text-base font-mono text-slate-500">{item.expiry}</td>
-                      <td className="px-6 py-6 text-lg font-bold text-slate-800 dark:text-slate-200">
+                      <td className="hidden md:table-cell px-4 py-4 text-xs font-mono text-slate-600 dark:text-slate-400">{item.phone}</td>
+                      <td className="px-4 py-4 text-xs font-medium text-slate-600 dark:text-slate-400">{item.platform}</td>
+                      <td className="hidden lg:table-cell px-4 py-4 text-xs font-mono text-slate-600 dark:text-slate-400">{item.username}</td>
+                      <td className="px-4 py-4 text-xs font-mono text-slate-500">{item.expiry}</td>
+                      <td className="px-4 py-4 text-sm font-black text-slate-800 dark:text-slate-200">
                         {formatCurrency(item.price, state.currency, state.lang)}
                       </td>
-                      <td className="px-6 py-6">
-                        <span className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider ${
+                      <td className="px-4 py-4">
+                        <span className={`px-2 py-1 rounded-lg text-[10px] font-bold uppercase ${
                           item.status === 'active' ? 'bg-emerald-100 dark:bg-emerald-500/10 text-emerald-600' : 
                           item.status === 'suspended' ? 'bg-amber-100 dark:bg-amber-500/10 text-amber-600' :
                           'bg-rose-100 dark:bg-rose-500/10 text-rose-600'
@@ -1571,28 +2388,16 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
                           {t.management.iptv.statuses[item.status] || item.status}
                         </span>
                       </td>
-                      <td className="px-6 py-6 text-sm text-slate-500 dark:text-slate-400 max-w-[200px] truncate" title={item.notes}>
-                        {item.notes || '-'}
-                      </td>
                     </>
                   )}
-                  {activeSubTab === 'admins' && (
-                    <>
-                      {MANAGER_FIELDS.filter(field => showName || !field.nameField).map(field => (
-                        <td key={field.key} className="px-6 py-6 text-base text-slate-600 dark:text-slate-400">
-                          {item[field.key] ?? ''}
-                        </td>
-                      ))}
-                    </>
-                  )}
-                  <td className="px-6 py-6 text-right">
+                  <td className="px-6 py-6 text-right relative z-[30]">
                     <SmartActionMenu 
                       item={item}
                       actions={getActions(item)}
                       isOpen={openActionMenuId === item.id}
                       onToggle={() => setOpenActionMenuId(openActionMenuId === item.id ? null : item.id)}
                       isRTL={isRTL}
-                      isLastRows={filteredData().indexOf(item) >= Math.max(0, filteredData().length - 4)}
+                      isLastRows={items.length > 4 && index >= items.length - 2}
                     />
                   </td>
                 </tr>
@@ -1600,6 +2405,7 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
             </tbody>
           </table>
         </div>
+      )}
       </div>
 
       {/* Success Notification */}
@@ -1822,7 +2628,7 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
                   >
                     {/* Main status line */}
                     <div className={`flex items-center gap-2 font-bold text-sm p-4 ${syncResult.success ? 'text-emerald-700 dark:text-emerald-400' : 'text-rose-700 dark:text-rose-400'}`}>
-                      {syncResult.success ? <CheckCircle2 size={18} /> : <AlertCircle size={18} />}
+{syncResult.success ? <CheckCircle2 size={18} /> : <AlertCircle size={18} />}
                       {syncResult.message}
                     </div>
 
@@ -1840,20 +2646,17 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
                                 </span>
                               )}
                             </div>
-                            {/* Profile used */}
                             {d.success && d.profile && (
                               <div className="mt-1.5 flex items-center gap-1.5 text-[11px] text-slate-500 dark:text-slate-400">
                                 <Zap size={11} className="text-indigo-400" />
                                 {isRTL ? 'الباقة المطبقة:' : 'Profile applied:'} <span className="font-mono font-bold text-indigo-600 dark:text-indigo-400">{d.profile}</span>
                               </div>
                             )}
-                            {/* Fallback / skipped note */}
                             {d.note && (
                               <div className="mt-1.5 p-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700/30 rounded-lg text-[11px] text-amber-700 dark:text-amber-400 leading-relaxed">
                                 ⚠️ {d.note}
                               </div>
                             )}
-                            {/* Error */}
                             {d.error && (
                               <div className="mt-2 p-2.5 bg-rose-100 dark:bg-rose-900/30 rounded-lg font-mono text-[11px] text-rose-800 dark:text-rose-300 break-all leading-relaxed">
                                 {d.error}
@@ -1863,13 +2666,9 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
                         ))}
                       </div>
                     )}
-
                   </motion.div>
                 )}
-
               </div>
-
-              {/* Footer */}
               <div className="p-6 border-t border-slate-200 dark:border-slate-800 flex gap-3 justify-end">
                 <button
                   onClick={() => { setIsSyncModalOpen(false); setSyncResult(null); }}
@@ -1914,13 +2713,7 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
               <div className="p-6 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center shrink-0">
                   <h3 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
                     <UserPlus size={20} className="text-teal-500" />
-                    {activeSubTab === 'subscribers' && t.management.subscribers.add}
-                    {activeSubTab === 'iptv' && t.management.iptv.add}
-                    {activeSubTab === 'suppliers' && t.management.suppliers.add}
-                    {activeSubTab === 'shareholders' && (isRTL ? 'إضافة مساهم' : 'Add Shareholder')}
-                    {activeSubTab === 'directors' && (isRTL ? 'إضافة مدير' : 'Add Director')}
-                    {activeSubTab === 'deputies' && (isRTL ? 'إضافة نائب' : 'Add Deputy')}
-                    {activeSubTab === 'admins' && t.management.admins.add}
+                    {getAddButtonLabel()}
                   </h3>
                 <button onClick={() => setIsAddModalOpen(false)} className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors">
                   <X size={24} />
@@ -1928,22 +2721,103 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
               </div>
 
               <div className="p-8 space-y-6 overflow-y-auto custom-scrollbar flex-1">
-                {activeSubTab !== 'suppliers' && activeSubTab !== 'admins' && (
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{t.management.subscribers.table.name}</label>
-                    <input 
-                      type="text" 
-                      value={newItem.name}
-                      onChange={(e) => setNewItem({ ...newItem, name: e.target.value })}
-                      className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all font-bold"
-                    />
+                {activeSubTab === 'shareholders' && (
+                  <div className="space-y-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="space-y-2 col-span-full">
+                        <label className="text-xs font-black text-slate-500 uppercase tracking-widest">{t.management.investors.table.name}</label>
+                        <input 
+                          type="text" 
+                          value={newItem.name || ''}
+                          onChange={(e) => setNewItem({ ...newItem, name: e.target.value })}
+                          className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-2xl px-5 py-4 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all font-bold text-lg"
+                          placeholder={isRTL ? 'أدخل الاسم الكامل للمستثمر' : 'Enter investor full name'}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-xs font-black text-slate-500 uppercase tracking-widest">{t.management.investors.table.shares}</label>
+                        <input 
+                          type="text" 
+                          inputMode="decimal"
+                          lang="en"
+                          value={newItem.shares ?? 0}
+                          onChange={(e) => {
+                            const val = e.target.value.replace(/[^0-9.]/g, '');
+                            const shares = parseFloat(val) || 0;
+                            const buyPrice = newItem.buyPrice || 0;
+                            setNewItem({ ...newItem, shares: val, investment: shares * buyPrice });
+                          }}
+                          className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-2xl px-5 py-4 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all font-black text-lg font-mono"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-xs font-black text-slate-500 uppercase tracking-widest">{t.management.investors.table.buyPrice}</label>
+                        <input 
+                          type="text" 
+                          inputMode="decimal"
+                          lang="en"
+                          value={newItem.buyPrice ?? 0}
+                          onChange={(e) => {
+                            const val = e.target.value.replace(/[^0-9.]/g, '');
+                            const buyPrice = parseFloat(val) || 0;
+                            const shares = newItem.shares || 0;
+                            setNewItem({ ...newItem, buyPrice: val, investment: shares * buyPrice });
+                          }}
+                          className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-2xl px-5 py-4 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all font-black text-lg font-mono"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-xs font-black text-slate-500 uppercase tracking-widest">{t.management.investors.table.investment}</label>
+                        <input 
+                          type="text" 
+                          inputMode="decimal"
+                          lang="en"
+                          value={newItem.investment ?? 0}
+                          readOnly
+                          className="w-full bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl px-5 py-4 text-teal-600 dark:text-teal-400 font-black text-lg cursor-not-allowed font-mono"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-xs font-black text-slate-500 uppercase tracking-widest">{t.management.investors.table.ownership}</label>
+                        <input 
+                          type="text" 
+                          lang="en"
+                          value={newItem.ownership || '0%'}
+                          onChange={(e) => setNewItem({ ...newItem, ownership: e.target.value })}
+                          className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-2xl px-5 py-4 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all font-bold text-lg font-mono"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-xs font-black text-slate-500 uppercase tracking-widest">{t.management.investors.table.dividends}</label>
+                        <input 
+                          type="text" 
+                          inputMode="decimal"
+                          lang="en"
+                          value={newItem.dividends ?? 0}
+                          onChange={(e) => {
+                            const val = e.target.value.replace(/[^0-9.]/g, '');
+                            setNewItem({ ...newItem, dividends: val });
+                          }}
+                          className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-2xl px-5 py-4 text-emerald-600 font-black text-lg focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all font-mono"
+                        />
+                      </div>
+                    </div>
                   </div>
                 )}
 
                 {activeSubTab === 'subscribers' && (
                   <div className="space-y-4">
                     <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                      {SUBSCRIBER_COLUMNS.filter(col => col.id !== 'id').map((col) => {
+                      <div className="space-y-2 col-span-full">
+                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{t.management.subscribers.table.name}</label>
+                        <input 
+                          type="text" 
+                          value={newItem.name || ''}
+                          onChange={(e) => setNewItem({ ...newItem, name: e.target.value })}
+                          className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all font-bold"
+                        />
+                      </div>
+                      {SUBSCRIBER_COLUMNS.filter(col => !['id', 'firstname', 'lastname', 'name'].includes(col.id)).map((col) => {
                         let fieldType = 'text';
                         if (['balance', 'debt', 'paid', 'bill'].includes(col.id)) fieldType = 'number';
                         if (['startDate', 'expiry'].includes(col.id)) fieldType = 'date';
@@ -1962,7 +2836,6 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
                                 <option value="expired">{t.management.subscribers.statuses.expired}</option>
                               </select>
                             ) : col.id === 'plan' ? (
-                              /* ── Smart Profile Dropdown ── */
                               networkProfiles.length > 0 ? (
                                 <select
                                   value={newItem.plan || newItem['سرعة الخط'] || ''}
@@ -1999,16 +2872,20 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
                                 />
                               )
                             ) : (
-                              <input 
-                                type={fieldType} 
-                                value={newItem[col.id] || newItem[col.key || ''] || ''}
-                                onChange={(e) => {
-                                  let val: any = e.target.value;
-                                  if (fieldType === 'number') val = parseFloat(val) || 0;
-                                  setNewItem({ ...newItem, [col.id]: val, ...(col.key ? { [col.key]: val } : {}) })
-                                }}
-                                className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all"
-                              />
+                            <input 
+                              type={['balance', 'debt', 'paid', 'bill'].includes(col.id) ? "text" : fieldType} 
+                              inputMode={['balance', 'debt', 'paid', 'bill'].includes(col.id) ? "decimal" : undefined}
+                              lang="en"
+                              value={newItem[col.id] || newItem[col.key || ''] || (['balance', 'debt', 'paid', 'bill'].includes(col.id) ? 0 : '')}
+                              onChange={(e) => {
+                                let val: any = e.target.value;
+                                if (['balance', 'debt', 'paid', 'bill'].includes(col.id)) {
+                                  val = val.replace(/[^0-9.]/g, '');
+                                }
+                                setNewItem({ ...newItem, [col.id]: val, ...(col.key ? { [col.key]: val } : {}) })
+                              }}
+                              className={`w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all ${['balance', 'debt', 'paid', 'bill'].includes(col.id) ? 'font-mono' : ''}`}
+                            />
                             )}
                           </div>
                         );
@@ -2083,10 +2960,15 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
                       <div className="space-y-2">
                         <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{t.management.iptv.table.price}</label>
                         <input 
-                          type="number" 
-                          value={newItem.price}
-                          onChange={(e) => setNewItem({ ...newItem, price: Number(e.target.value) })}
-                          className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all"
+                          type="text" 
+                          inputMode="decimal"
+                          lang="en"
+                          value={newItem.price ?? 0}
+                          onChange={(e) => {
+                            const val = e.target.value.replace(/[^0-9.]/g, '');
+                            setNewItem({ ...newItem, price: val });
+                          }}
+                          className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all font-mono"
                         />
                       </div>
                     </div>
@@ -2127,175 +3009,171 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
                   </div>
                 )}
 
-                {activeSubTab === 'shareholders' && (
-                  <div className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{isRTL ? 'الأسهم' : 'Shares'}</label>
-                        <input 
-                          type="number" 
-                          value={newItem.shares}
-                          onChange={(e) => setNewItem({ ...newItem, shares: Number(e.target.value) })}
-                          className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{isRTL ? 'نسبة الملكية' : 'Ownership %'}</label>
-                        <input 
-                          type="text" 
-                          value={newItem.ownership}
-                          onChange={(e) => setNewItem({ ...newItem, ownership: e.target.value })}
-                          className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all"
-                        />
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{isRTL ? 'إجمالي الاستثمار' : 'Total Investment'}</label>
-                        <input 
-                          type="number" 
-                          value={newItem.investment}
-                          onChange={(e) => setNewItem({ ...newItem, investment: Number(e.target.value) })}
-                          className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{isRTL ? 'الأرباح المستلمة' : 'Dividends Paid'}</label>
-                        <input 
-                          type="number" 
-                          value={newItem.dividends}
-                          onChange={(e) => setNewItem({ ...newItem, dividends: Number(e.target.value) })}
-                          className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {(activeSubTab === 'directors' || activeSubTab === 'deputies') && (
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{activeSubTab === 'directors' ? (isRTL ? 'البريد الإلكتروني' : 'Email') : (isRTL ? 'المنصب' : 'Position')}</label>
-                      <input 
-                        type={activeSubTab === 'directors' ? 'email' : 'text'}
-                        value={activeSubTab === 'directors' ? newItem.email : newItem.position}
-                        onChange={(e) => setNewItem({ ...newItem, [activeSubTab === 'directors' ? 'email' : 'position']: e.target.value })}
-                        className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{activeSubTab === 'directors' ? (isRTL ? 'اسم المستخدم' : 'Username') : (isRTL ? 'القسم' : 'Department')}</label>
-                      <input 
-                        type="text" 
-                        value={activeSubTab === 'directors' ? newItem.username : newItem.department}
-                        onChange={(e) => setNewItem({ ...newItem, [activeSubTab === 'directors' ? 'username' : 'department']: e.target.value })}
-                        className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all"
-                      />
-                    </div>
-                    {activeSubTab === 'directors' && (
-                      <>
-                        <div className="space-y-2">
-                          <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{isRTL ? 'كلمة المرور' : 'Password'}</label>
-                          <input 
-                            type="text" 
-                            value={newItem.password}
-                            onChange={(e) => setNewItem({ ...newItem, password: e.target.value })}
-                            className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all"
+                {activeSubTab === 'suppliers' && (
+                  <div className="space-y-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {SUPPLIER_FIELDS.filter(field => field.key !== 'ملاحظات').map(field => (
+                        <div key={field.key} className="space-y-2">
+                          <label className="text-xs font-black text-slate-500 uppercase tracking-widest">{field.label}</label>
+                          <input
+                            type="text"
+                            inputMode={['مدين', 'مسدد', 'الرصيد'].includes(field.key) ? 'decimal' : undefined}
+                            lang={['مدين', 'مسدد', 'الرصيد'].includes(field.key) ? 'en' : undefined}
+                            value={newItem[field.key] ?? ''}
+                            onChange={(e) => setNewItem({ ...newItem, [field.key]: e.target.value })}
+                            placeholder={field.key === 'الرصيد' ? '-' : ''}
+                            className={`w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-2xl px-5 py-4 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all ${['مدين', 'مسدد', 'الرصيد'].includes(field.key) ? 'font-mono text-lg font-black' : 'font-bold'}`}
                           />
                         </div>
-                        <div className="space-y-2">
-                          <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{isRTL ? 'الصلاحية (الرتبة)' : 'Role'}</label>
-                          <select 
-                            value={newItem.role}
-                            onChange={(e) => setNewItem({ ...newItem, role: e.target.value })}
-                            className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all"
-                          >
-                            <option value="super_admin">Super Admin</option>
-                            <option value="admin">Admin</option>
-                          </select>
-                        </div>
-                      </>
-                    )}
-                  </div>
-                )}
-                {activeSubTab === 'deputies' && (
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{isRTL ? 'الاسم الأول' : 'First Name'}</label>
-                      <input 
-                        type="text" 
-                        value={newItem.firstName}
-                        onChange={(e) => setNewItem({ ...newItem, firstName: e.target.value })}
-                        className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all"
-                      />
+                      ))}
                     </div>
                     <div className="space-y-2">
-                      <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{isRTL ? 'اسم العائلة' : 'Last Name'}</label>
-                      <input 
-                        type="text" 
-                        value={newItem.lastName}
-                        onChange={(e) => setNewItem({ ...newItem, lastName: e.target.value })}
-                        className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all"
+                      <label className="text-xs font-black text-slate-500 uppercase tracking-widest">{isRTL ? 'ملاحظات' : 'Notes'}</label>
+                      <textarea
+                        rows={4}
+                        value={newItem['ملاحظات'] ?? ''}
+                        onChange={(e) => setNewItem({ ...newItem, 'ملاحظات': e.target.value })}
+                        className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-2xl px-5 py-4 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all resize-none"
+                        placeholder={isRTL ? 'أضف أي ملاحظات مالية أو تشغيلية عن المورد...' : 'Add financial or operational notes about this supplier...'}
                       />
                     </div>
-                    <div className="space-y-2">
-                      <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{isRTL ? 'رقم الهوية' : 'ID Number'}</label>
-                      <input 
-                        type="text" 
-                        value={newItem.idNumber}
-                        onChange={(e) => setNewItem({ ...newItem, idNumber: e.target.value })}
-                        className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 font-mono text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{isRTL ? 'رقم الهاتف' : 'Phone Number'}</label>
-                      <input 
-                        type="text" 
-                        value={newItem.phone}
-                        onChange={(e) => setNewItem({ ...newItem, phone: e.target.value })}
-                        className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 font-mono text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all"
-                      />
-                    </div>
-                    <div className="space-y-2 col-span-2">
-                      <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{isRTL ? 'العنوان' : 'Address'}</label>
-                      <input 
-                        type="text" 
-                        value={newItem.address}
-                        onChange={(e) => setNewItem({ ...newItem, address: e.target.value })}
-                        className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all"
-                      />
-                    </div>
-                  </div>
-                )}
-                {activeSubTab === 'suppliers' && (
-                  <div className="grid grid-cols-2 gap-4">
-                    {SUPPLIER_FIELDS.map(field => (
-                      <div key={field.key} className="space-y-2">
-                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{field.label}</label>
-                        <input 
-                          type="text" 
-                          value={newItem[field.key] ?? ''}
-                          onChange={(e) => setNewItem({ ...newItem, [field.key]: e.target.value })}
-                          className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all"
-                        />
-                      </div>
-                    ))}
                   </div>
                 )}
 
-                {activeSubTab === 'admins' && (
-                  <div className="grid grid-cols-2 gap-4">
-                    {MANAGER_FIELDS.map(field => (
-                      <div key={field.key} className="space-y-2">
-                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{field.label}</label>
+                {activeSubTab === 'managers' && (
+                  <div className="space-y-6">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{isRTL ? 'الاسم الاول' : 'First Name'}</label>
                         <input 
                           type="text" 
-                          value={newItem[field.key] ?? ''}
-                          onChange={(e) => setNewItem({ ...newItem, [field.key]: e.target.value })}
+                          value={newItem.firstName || ''}
+                          onChange={(e) => setNewItem({ ...newItem, firstName: e.target.value, 'الاسم الاول': e.target.value, name: `${e.target.value} ${newItem.lastName || newItem['الاسم الثاني'] || ''}`.trim() })}
                           className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all"
                         />
                       </div>
-                    ))}
+                      <div className="space-y-2">
+                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{isRTL ? 'الاسم الثاني' : 'Last Name'}</label>
+                        <input 
+                          type="text" 
+                          value={newItem.lastName || ''}
+                          onChange={(e) => setNewItem({ ...newItem, lastName: e.target.value, 'الاسم الثاني': e.target.value, name: `${newItem.firstName || newItem['الاسم الاول'] || ''} ${e.target.value}`.trim() })}
+                          className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{isRTL ? 'اسم الدخول' : 'Username'}</label>
+                        <input 
+                          type="text" 
+                          value={newItem.username || ''}
+                          onChange={(e) => setNewItem({ ...newItem, username: e.target.value, 'اسم الدخول': e.target.value })}
+                          className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all font-mono"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{isRTL ? 'الرقم السري' : 'Password'}</label>
+                        <input 
+                          type="password" 
+                          value={newItem.password || ''}
+                          onChange={(e) => setNewItem({ ...newItem, password: e.target.value })}
+                          className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all font-mono"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{isRTL ? 'رقم الهوية' : 'ID Number'}</label>
+                        <input 
+                          type="text" 
+                          value={newItem.idNumber || ''}
+                          onChange={(e) => setNewItem({ ...newItem, idNumber: e.target.value })}
+                          className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all font-mono"
+                        />
+                      </div>
+                      {MANAGER_FIELDS.map(field => (
+                        <div key={field.key} className="space-y-2">
+                          <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{field.label}</label>
+                          {field.key === 'الصلاحية' ? (
+                            <select
+                              value={newItem[field.key] || ''}
+                              onChange={(e) => {
+                                const group = state.securityGroups.find(g => g.name === e.target.value);
+                                setNewItem({ 
+                                  ...newItem, 
+                                  [field.key]: e.target.value,
+                                  'الصلاحية': e.target.value,
+                                  role: e.target.value, // Mapping for display
+                                  groupId: group?.id || ''
+                                });
+                              }}
+                              className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all font-bold"
+                            >
+                              <option value="">{isRTL ? '-- اختر المجموعة --' : '-- Select Group --'}</option>
+                              {state.securityGroups.map(group => (
+                                <option key={group.id} value={group.name}>{group.name}</option>
+                              ))}
+                            </select>
+                          ) : field.key === 'تابع لـ' ? (
+                            <select
+                              value={newItem[field.key] || ''}
+                              onChange={(e) => setNewItem({ ...newItem, [field.key]: e.target.value })}
+                              className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all font-bold"
+                            >
+                              <option value="">{isRTL ? '-- لا يوجد (مدير رئيسي) --' : '-- None (Top Level) --'}</option>
+                              {managers.map(m => (
+                                <option key={m.id} value={m.name || m.username || m['اسم الدخول']}>
+                                  {m.name || m.username || m['اسم الدخول']}
+                                </option>
+                              ))}
+                            </select>
+                          ) : (
+                            <input 
+                              type="text" 
+                              value={newItem[field.key] ?? ''}
+                              onChange={(e) => setNewItem({ ...newItem, [field.key]: e.target.value })}
+                              className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all"
+                            />
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                    
+                    <div className="p-4 bg-teal-500/5 border border-teal-500/10 rounded-2xl space-y-4">
+                      <h4 className="text-sm font-bold text-teal-600 dark:text-teal-400 flex items-center gap-2">
+                        <CreditCard size={18} />
+                        {isRTL ? 'الحوكمة والقيود المالية' : 'Financial Governance & Limits'}
+                      </h4>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                            {isRTL ? 'سقف العملية (الشحن)' : 'Max Transaction Limit'}
+                          </label>
+                          <input 
+                            type="text" 
+                            inputMode="decimal"
+                            lang="en"
+                            value={newItem.maxTxLimit ?? 0}
+                            onChange={(e) => {
+                              const val = e.target.value.replace(/[^0-9.]/g, '');
+                              setNewItem({ ...newItem, maxTxLimit: val });
+                            }}
+                            className="w-full bg-white dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all font-mono"
+                          />
+                        </div>
+                        <div className="flex items-center gap-3 h-full pt-6">
+                           <label className="relative inline-flex items-center cursor-pointer">
+                            <input 
+                              type="checkbox" 
+                              checked={newItem.isLimitEnabled || false}
+                              onChange={(e) => setNewItem({ ...newItem, isLimitEnabled: e.target.checked })}
+                              className="sr-only peer"
+                            />
+                            <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-teal-300 dark:peer-focus:ring-teal-800 rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-slate-600 peer-checked:bg-teal-600"></div>
+                            <span className="ms-3 text-sm font-bold text-slate-600 dark:text-slate-400">
+                              {isRTL ? 'تفعيل الرقابة' : 'Enable Limit'}
+                            </span>
+                          </label>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
@@ -2348,7 +3226,7 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
               </div>
 
               <div className="p-8 space-y-6 overflow-y-auto custom-scrollbar flex-1">
-                {activeSubTab !== 'suppliers' && activeSubTab !== 'admins' && activeSubTab !== 'deputies' && (
+                {activeSubTab !== 'suppliers' && activeSubTab !== 'admins' && activeSubTab !== 'managers' && activeSubTab !== 'shareholders' && (
                   <div className="space-y-2">
                     <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{t.management.subscribers.table.name}</label>
                     <input 
@@ -2360,6 +3238,138 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
                   </div>
                 )}
 
+                {activeSubTab === 'shareholders' && (
+                  <div className="space-y-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="space-y-2 col-span-full">
+                        <label className="text-xs font-black text-slate-500 uppercase tracking-widest">{t.management.investors.table.name}</label>
+                        <input 
+                          type="text" 
+                          value={editingItem.name || ''}
+                          onChange={(e) => setEditingItem({ ...editingItem, name: e.target.value })}
+                          className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-2xl px-5 py-4 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all font-bold text-lg"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-xs font-black text-slate-500 uppercase tracking-widest">{t.management.investors.table.shares}</label>
+                        <input 
+                          type="text" 
+                          inputMode="decimal"
+                          lang="en"
+                          value={editingItem.shares ?? 0}
+                          onChange={(e) => {
+                            const val = e.target.value.replace(/[^0-9.]/g, '');
+                            const shares = parseFloat(val) || 0;
+                            const buyPrice = editingItem.buyPrice || 0;
+                            setEditingItem({ ...editingItem, shares: val, investment: shares * buyPrice });
+                          }}
+                          className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-2xl px-5 py-4 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all font-black text-lg font-mono"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-xs font-black text-slate-500 uppercase tracking-widest">{t.management.investors.table.buyPrice}</label>
+                        <input 
+                          type="text" 
+                          inputMode="decimal"
+                          lang="en"
+                          value={editingItem.buyPrice ?? 0}
+                          onChange={(e) => {
+                            const val = e.target.value.replace(/[^0-9.]/g, '');
+                            const buyPrice = parseFloat(val) || 0;
+                            const shares = editingItem.shares || 0;
+                            setEditingItem({ ...editingItem, buyPrice: val, investment: shares * buyPrice });
+                          }}
+                          className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-2xl px-5 py-4 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all font-black text-lg font-mono"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-xs font-black text-slate-500 uppercase tracking-widest">{t.management.investors.table.investment}</label>
+                        <input 
+                          type="text" 
+                          inputMode="decimal"
+                          lang="en"
+                          value={editingItem.investment ?? 0}
+                          readOnly
+                          className="w-full bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl px-5 py-4 text-teal-600 dark:text-teal-400 font-black text-lg cursor-not-allowed font-mono"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-xs font-black text-slate-500 uppercase tracking-widest">{t.management.investors.table.ownership}</label>
+                        <input 
+                          type="text" 
+                          lang="en"
+                          value={editingItem.ownership || '0%'}
+                          onChange={(e) => setEditingItem({ ...editingItem, ownership: e.target.value })}
+                          className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-2xl px-5 py-4 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all font-bold text-lg font-mono"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-xs font-black text-slate-500 uppercase tracking-widest">{t.management.investors.table.dividends}</label>
+                        <input 
+                          type="text" 
+                          inputMode="decimal"
+                          lang="en"
+                          value={editingItem.dividends ?? 0}
+                          onChange={(e) => {
+                            const val = e.target.value.replace(/[^0-9.]/g, '');
+                            setEditingItem({ ...editingItem, dividends: val });
+                          }}
+                          className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-2xl px-5 py-4 text-emerald-600 font-black text-lg focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all font-mono"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {activeSubTab === 'suppliers' && (
+                  <div className="space-y-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      {SUPPLIER_FIELDS.filter(field => field.key !== 'ملاحظات').map(field => (
+                        <div key={field.key} className={`space-y-2 ${field.key === 'اسم المورد' ? 'md:col-span-2' : ''}`}>
+                          <label className="text-xs font-black text-slate-500 uppercase tracking-widest">{field.label}</label>
+                          <input
+                            type="text"
+                            inputMode={['مدين', 'مسدد', 'الرصيد'].includes(field.key) ? 'decimal' : undefined}
+                            lang={['مدين', 'مسدد', 'الرصيد'].includes(field.key) ? 'en' : undefined}
+                            value={editingItem[field.key] ?? ''}
+                            onChange={(e) => setEditingItem({ ...editingItem, [field.key]: e.target.value })}
+                            placeholder={field.key === 'الرصيد' ? '-' : ''}
+                            className={`w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-2xl px-5 py-4 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all ${['مدين', 'مسدد', 'الرصيد'].includes(field.key) ? 'font-mono text-lg font-black' : 'font-bold'}`}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                    <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/40 p-4">
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div>
+                          <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{isRTL ? 'مدين' : 'Debt'}</p>
+                          <p className="mt-2 text-lg font-black text-rose-600 dark:text-rose-400">{formatSupplierAmount(editingItem['مدين'])}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{isRTL ? 'مسدد' : 'Paid'}</p>
+                          <p className="mt-2 text-lg font-black text-emerald-600 dark:text-emerald-400">{formatSupplierAmount(editingItem['مسدد'])}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{isRTL ? 'الرصيد' : 'Balance'}</p>
+                          <p className={`mt-2 text-lg font-black ${parseSupplierAmount(editingItem['الرصيد']) < 0 ? 'text-amber-600 dark:text-amber-400' : 'text-teal-600 dark:text-teal-400'}`}>
+                            {formatSupplierAmount(editingItem['الرصيد'])}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-xs font-black text-slate-500 uppercase tracking-widest">{isRTL ? 'ملاحظات' : 'Notes'}</label>
+                      <textarea
+                        rows={4}
+                        value={editingItem['ملاحظات'] ?? ''}
+                        onChange={(e) => setEditingItem({ ...editingItem, 'ملاحظات': e.target.value })}
+                        className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-2xl px-5 py-4 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all resize-none"
+                        placeholder={isRTL ? 'أضف أي ملاحظات مالية أو تشغيلية عن المورد...' : 'Add financial or operational notes about this supplier...'}
+                      />
+                    </div>
+                  </div>
+                )}
+
                 {activeSubTab === 'subscribers' && (
                   <div className="space-y-4">
                     <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
@@ -2367,7 +3377,6 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
                         let fieldType = 'text';
                         if (['balance', 'debt', 'paid', 'bill'].includes(col.id)) fieldType = 'number';
                         if (['startDate', 'expiry'].includes(col.id)) fieldType = 'date';
-                        if (['expiry_time'].includes(col.id)) fieldType = 'text';
                         
                         return (
                           <div key={col.id} className="space-y-2">
@@ -2383,55 +3392,57 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
                                 <option value="expired">{t.management.subscribers.statuses.expired}</option>
                               </select>
                             ) : col.id === 'plan' ? (
-                              /* ── Smart Profile Dropdown (Edit) ── */
-                              networkProfiles.length > 0 ? (
-                                <select
-                                  value={editingItem.plan || editingItem['سرعة الخط'] || ''}
-                                  onChange={(e) => {
-                                    const selected = networkProfiles.find((p: any) => p.name === e.target.value);
-                                    let subType = 'pppoe';
-                                    if (selected && (selected.type === 'hotspot' || selected.type === 'both')) subType = 'hotspot';
+                               networkProfiles.length > 0 ? (
+                                 <select
+                                   value={editingItem.plan || editingItem['سرعة الخط'] || ''}
+                                   onChange={(e) => {
+                                     const selected = networkProfiles.find((p: any) => p.name === e.target.value);
+                                     let subType = 'pppoe';
+                                     if (selected && (selected.type === 'hotspot' || selected.type === 'both')) subType = 'hotspot';
 
-                                    setEditingItem({
-                                      ...editingItem,
-                                      plan: e.target.value,
-                                      'سرعة الخط': e.target.value,
-                                      subType: subType,
-                                      'نوع الاشتراك': subType === 'pppoe' ? 'PPPoE' : 'Hotspot',
-                                      ...(selected ? { 'قيمة الفاتورة': selected.price, bill: selected.price } : {})
-                                    });
-                                  }}
-                                  className="w-full bg-slate-50 dark:bg-[#18181B] border border-indigo-300 dark:border-indigo-600 rounded-xl px-4 py-3 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all font-medium"
-                                >
-                                  <option value="">{isRTL ? '-- اختر الباقة --' : '-- Select Plan --'}</option>
-                                  {networkProfiles.map((p: any) => (
-                                    <option key={p.id} value={p.name}>
-                                      {p.name}{p.downloadSpeed && p.uploadSpeed ? ` (↓${p.downloadSpeed} / ↑${p.uploadSpeed})` : ''}{p.price ? ` — ${p.price} ILS` : ''}
-                                    </option>
-                                  ))}
-                                </select>
-                              ) : (
-                                <input
-                                  type="text"
-                                  value={editingItem.plan || editingItem['سرعة الخط'] || ''}
-                                  onChange={(e) => setEditingItem({ ...editingItem, plan: e.target.value, 'سرعة الخط': e.target.value })}
-                                  placeholder={isRTL ? 'أدخل اسم الباقة يدوياً' : 'Enter plan name manually'}
-                                  className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all"
-                                />
-                              )
+                                     setEditingItem({
+                                       ...editingItem,
+                                       plan: e.target.value,
+                                       'سرعة الخط': e.target.value,
+                                       subType: subType,
+                                       'نوع الاشتراك': subType === 'pppoe' ? 'PPPoE' : 'Hotspot',
+                                       ...(selected ? { 'قيمة الفاتورة': selected.price, bill: selected.price } : {})
+                                     });
+                                   }}
+                                   className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all font-medium"
+                                 >
+                                   <option value="">{isRTL ? '-- اختر الباقة --' : '-- Select Plan --'}</option>
+                                   {networkProfiles.map((p: any) => (
+                                     <option key={p.id} value={p.name}>
+                                       {p.name}{p.downloadSpeed && p.uploadSpeed ? ` (↓${p.downloadSpeed} / ↑${p.uploadSpeed})` : ''}{p.price ? ` — ${p.price} ILS` : ''}
+                                     </option>
+                                   ))}
+                                 </select>
+                               ) : (
+                                 <input
+                                   type="text"
+                                   value={editingItem.plan || editingItem['سرعة الخط'] || ''}
+                                   onChange={(e) => setEditingItem({ ...editingItem, plan: e.target.value, 'سرعة الخط': e.target.value })}
+                                   placeholder={isRTL ? 'أدخل اسم الباقة يدوياً' : 'Enter plan name manually'}
+                                   className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all"
+                                 />
+                               )
                             ) : (
                               <input 
-                                type={fieldType} 
-                                value={editingItem[col.id] || editingItem[col.key || ''] || ''}
+                                type={['balance', 'debt', 'paid', 'bill'].includes(col.id) ? "text" : fieldType} 
+                                inputMode={['balance', 'debt', 'paid', 'bill'].includes(col.id) ? "decimal" : undefined}
+                                lang="en"
+                                value={editingItem[col.id] || editingItem[col.key || ''] || (['balance', 'debt', 'paid', 'bill'].includes(col.id) ? 0 : '')}
                                 onChange={(e) => {
                                   let val: any = e.target.value;
-                                  if (fieldType === 'number') val = parseFloat(val) || 0;
+                                  if (['balance', 'debt', 'paid', 'bill'].includes(col.id)) {
+                                    val = val.replace(/[^0-9.]/g, '');
+                                  }
                                   setEditingItem({ ...editingItem, [col.id]: val, ...(col.key ? { [col.key]: val } : {}) })
                                 }}
-                                className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all"
+                                className={`w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all ${['balance', 'debt', 'paid', 'bill'].includes(col.id) ? 'font-mono' : ''}`}
                               />
                             )}
-
                           </div>
                         );
                       })}
@@ -2441,315 +3452,143 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
 
                 {activeSubTab === 'iptv' && (
                   <div className="space-y-4">
+                    {/* ... IPTV fields ... */}
+                  </div>
+                )}
+
+                {activeSubTab === 'managers' && (
+                  <div className="space-y-6">
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
-                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{t.management.iptv.table.phone}</label>
+                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{isRTL ? 'الاسم الاول' : 'First Name'}</label>
                         <input 
                           type="text" 
-                          value={editingItem.phone}
-                          onChange={(e) => setEditingItem({ ...editingItem, phone: e.target.value })}
+                          value={editingItem.firstName || ''}
+                          onChange={(e) => setEditingItem({ ...editingItem, firstName: e.target.value, 'الاسم الاول': e.target.value, name: `${e.target.value} ${editingItem.lastName || editingItem['الاسم الثاني'] || ''}`.trim() })}
+                          className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{isRTL ? 'الاسم الثاني' : 'Last Name'}</label>
+                        <input 
+                          type="text" 
+                          value={editingItem.lastName || ''}
+                          onChange={(e) => setEditingItem({ ...editingItem, lastName: e.target.value, 'الاسم الثاني': e.target.value, name: `${editingItem.firstName || editingItem['الاسم الاول'] || ''} ${e.target.value}`.trim() })}
+                          className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{isRTL ? 'اسم الدخول' : 'Username'}</label>
+                        <input 
+                          type="text" 
+                          value={editingItem.username || ''}
+                          onChange={(e) => setEditingItem({ ...editingItem, username: e.target.value, 'اسم الدخول': e.target.value })}
                           className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all font-mono"
                         />
                       </div>
                       <div className="space-y-2">
-                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{isRTL ? 'رقم القناة' : 'Channel Number'}</label>
+                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{isRTL ? 'الرقم السري' : 'Password'}</label>
                         <input 
-                          type="text" 
-                          value={editingItem.channelNumber || ''}
-                          onChange={(e) => setEditingItem({ ...editingItem, channelNumber: e.target.value })}
-                          className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all"
-                        />
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{t.management.iptv.table.host}</label>
-                        <input 
-                          type="text" 
-                          value={editingItem.host}
-                          onChange={(e) => setEditingItem({ ...editingItem, host: e.target.value })}
-                          className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{t.management.iptv.table.username}</label>
-                        <input 
-                          type="text" 
-                          value={editingItem.username}
-                          onChange={(e) => setEditingItem({ ...editingItem, username: e.target.value })}
-                          className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all"
-                        />
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{t.management.iptv.table.password}</label>
-                        <input 
-                          type="text" 
-                          value={editingItem.password}
+                          type="password" 
+                          value={editingItem.password || ''}
                           onChange={(e) => setEditingItem({ ...editingItem, password: e.target.value })}
-                          className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all"
-                        />
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{t.management.iptv.table.expiry}</label>
-                        <input 
-                          type="date" 
-                          value={editingItem.expiry}
-                          onChange={(e) => setEditingItem({ ...editingItem, expiry: e.target.value })}
-                          className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all"
+                          className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all font-mono"
                         />
                       </div>
                       <div className="space-y-2">
-                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{t.management.iptv.table.price}</label>
-                        <input 
-                          type="number" 
-                          value={editingItem.price}
-                          onChange={(e) => setEditingItem({ ...editingItem, price: Number(e.target.value) })}
-                          className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all"
-                        />
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{t.management.iptv.table.provider}</label>
+                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{isRTL ? 'رقم الهوية' : 'ID Number'}</label>
                         <input 
                           type="text" 
-                          value={editingItem.platform}
-                          onChange={(e) => setEditingItem({ ...editingItem, platform: e.target.value })}
-                          className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all"
+                          value={editingItem.idNumber || ''}
+                          onChange={(e) => setEditingItem({ ...editingItem, idNumber: e.target.value })}
+                          className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all font-mono"
                         />
                       </div>
-                      <div className="space-y-2">
-                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{t.management.iptv.table.status}</label>
-                        <select 
-                          value={editingItem.status}
-                          onChange={(e) => setEditingItem({ ...editingItem, status: e.target.value })}
-                          className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all"
-                        >
-                          <option value="active">{t.management.iptv.statuses.active}</option>
-                          <option value="suspended">{t.management.iptv.statuses.suspended}</option>
-                          <option value="expired">{t.management.iptv.statuses.expired}</option>
-                        </select>
-                      </div>
+                      {MANAGER_FIELDS.map(field => (
+                        <div key={field.key} className="space-y-2">
+                          <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{field.label}</label>
+                          {field.key === 'الصلاحية' ? (
+                            <select
+                              value={editingItem[field.key] || ''}
+                              onChange={(e) => {
+                                const group = state.securityGroups.find(g => g.name === e.target.value);
+                                setEditingItem({ 
+                                  ...editingItem, 
+                                  [field.key]: e.target.value,
+                                  'الصلاحية': e.target.value,
+                                  role: e.target.value, // Mapping for display
+                                  groupId: group?.id || ''
+                                });
+                              }}
+                              className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all font-bold"
+                            >
+                              <option value="">{isRTL ? '-- اختر المجموعة --' : '-- Select Group --'}</option>
+                              {state.securityGroups.map(group => (
+                                <option key={group.id} value={group.name}>{group.name}</option>
+                              ))}
+                            </select>
+                          ) : field.key === 'تابع لـ' ? (
+                            <select
+                              value={editingItem[field.key] || ''}
+                              onChange={(e) => setEditingItem({ ...editingItem, [field.key]: e.target.value })}
+                              className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all font-bold"
+                            >
+                              <option value="">{isRTL ? '-- لا يوجد (مدير رئيسي) --' : '-- None (Top Level) --'}</option>
+                              {managers.filter(m => m.id !== editingItem.id).map(m => (
+                                <option key={m.id} value={m.name || m.username || m['اسم الدخول']}>
+                                  {m.name || m.username || m['اسم الدخول']}
+                                </option>
+                              ))}
+                            </select>
+                          ) : (
+                            <input 
+                              type="text" 
+                              value={editingItem[field.key] ?? ''}
+                              onChange={(e) => setEditingItem({ ...editingItem, [field.key]: e.target.value })}
+                              className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all"
+                            />
+                          )}
+                        </div>
+                      ))}
                     </div>
-                    <div className="space-y-2">
-                      <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{isRTL ? 'ملاحظات' : 'Notes'}</label>
-                      <textarea 
-                        value={editingItem.notes || ''}
-                        onChange={(e) => setEditingItem({ ...editingItem, notes: e.target.value })}
-                        rows={3}
-                        className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all resize-none"
-                        placeholder={isRTL ? 'أضف ملاحظات حول هذا المشترك...' : 'Add notes about this subscriber...'}
-                      />
-                    </div>
-                  </div>
-                )}
 
-                {activeSubTab === 'shareholders' && (
-                  <div className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{isRTL ? 'الأسهم' : 'Shares'}</label>
-                        <input 
-                          type="number" 
-                          value={editingItem.shares}
-                          onChange={(e) => setEditingItem({ ...editingItem, shares: Number(e.target.value) })}
-                          className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{isRTL ? 'نسبة الملكية' : 'Ownership %'}</label>
-                        <input 
-                          type="text" 
-                          value={editingItem.ownership}
-                          onChange={(e) => setEditingItem({ ...editingItem, ownership: e.target.value })}
-                          className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all"
-                        />
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{isRTL ? 'إجمالي الاستثمار' : 'Total Investment'}</label>
-                        <input 
-                          type="number" 
-                          value={editingItem.investment}
-                          onChange={(e) => setEditingItem({ ...editingItem, investment: Number(e.target.value) })}
-                          className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{isRTL ? 'الأرباح المستلمة' : 'Dividends Paid'}</label>
-                        <input 
-                          type="number" 
-                          value={editingItem.dividends}
-                          onChange={(e) => setEditingItem({ ...editingItem, dividends: Number(e.target.value) })}
-                          className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all"
-                        />
+                    <div className="p-4 bg-teal-500/5 border border-teal-500/10 rounded-2xl space-y-4">
+                      <h4 className="text-sm font-bold text-teal-600 dark:text-teal-400 flex items-center gap-2">
+                        <CreditCard size={18} />
+                        {isRTL ? 'الحوكمة والقيود المالية' : 'Financial Governance & Limits'}
+                      </h4>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{isRTL ? 'سقف العملية' : 'Max Limit'}</label>
+                          <input 
+                            type="text" 
+                            inputMode="decimal"
+                            lang="en"
+                            value={editingItem.maxTxLimit ?? 0}
+                            onChange={(e) => {
+                              const val = e.target.value.replace(/[^0-9.]/g, '');
+                              setEditingItem({ ...editingItem, maxTxLimit: val });
+                            }}
+                            className="w-full bg-white dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all font-mono"
+                          />
+                        </div>
+                        <div className="flex items-center gap-3 pt-6">
+                           <label className="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" checked={editingItem.isLimitEnabled || false} onChange={(e) => setEditingItem({ ...editingItem, isLimitEnabled: e.target.checked })} className="sr-only peer" />
+                            <div className="w-11 h-6 bg-slate-200 peer-focus:ring-teal-300 dark:peer-focus:ring-teal-800 rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:bg-teal-600 after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all"></div>
+                            <span className="ms-3 text-sm font-bold text-slate-600 dark:text-slate-400">{isRTL ? 'تفعيل الرقابة' : 'Enable Limit'}</span>
+                          </label>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                )}
-
-                {activeSubTab === 'directors' && (
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{isRTL ? 'البريد الإلكتروني' : 'Email'}</label>
-                      <input 
-                        type="email" 
-                        value={editingItem.email}
-                        onChange={(e) => setEditingItem({ ...editingItem, email: e.target.value })}
-                        className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{isRTL ? 'اسم المستخدم' : 'Username'}</label>
-                      <input 
-                        type="text" 
-                        value={editingItem.username}
-                        onChange={(e) => setEditingItem({ ...editingItem, username: e.target.value })}
-                        className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{isRTL ? 'كلمة المرور' : 'Password'}</label>
-                      <input 
-                        type="text" 
-                        value={editingItem.password}
-                        onChange={(e) => setEditingItem({ ...editingItem, password: e.target.value })}
-                        className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{isRTL ? 'الصلاحية (الرتبة)' : 'Role'}</label>
-                      <select 
-                        value={editingItem.role}
-                        onChange={(e) => setEditingItem({ ...editingItem, role: e.target.value })}
-                        className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all"
-                      >
-                        <option value="super_admin">Super Admin</option>
-                        <option value="admin">Admin</option>
-                      </select>
-                    </div>
-                  </div>
-                )}
-
-                {activeSubTab === 'deputies' && (
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{isRTL ? 'الاسم الأول' : 'First Name'}</label>
-                      <input 
-                        type="text" 
-                        value={editingItem.firstName || ''}
-                        onChange={(e) => setEditingItem({ ...editingItem, firstName: e.target.value })}
-                        className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{isRTL ? 'اسم العائلة' : 'Last Name'}</label>
-                      <input 
-                        type="text" 
-                        value={editingItem.lastName || ''}
-                        onChange={(e) => setEditingItem({ ...editingItem, lastName: e.target.value })}
-                        className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{isRTL ? 'المنصب' : 'Position'}</label>
-                      <input 
-                        type="text" 
-                        value={editingItem.position}
-                        onChange={(e) => setEditingItem({ ...editingItem, position: e.target.value })}
-                        className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{isRTL ? 'القسم' : 'Department'}</label>
-                      <input 
-                        type="text" 
-                        value={editingItem.department}
-                        onChange={(e) => setEditingItem({ ...editingItem, department: e.target.value })}
-                        className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{isRTL ? 'رقم الهوية' : 'ID Number'}</label>
-                      <input 
-                        type="text" 
-                        value={editingItem.idNumber || ''}
-                        onChange={(e) => setEditingItem({ ...editingItem, idNumber: e.target.value })}
-                        className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 font-mono text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{isRTL ? 'رقم الهاتف' : 'Phone Number'}</label>
-                      <input 
-                        type="text" 
-                        value={editingItem.phone || ''}
-                        onChange={(e) => setEditingItem({ ...editingItem, phone: e.target.value })}
-                        className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 font-mono text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all"
-                      />
-                    </div>
-                    <div className="space-y-2 col-span-2">
-                      <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{isRTL ? 'العنوان' : 'Address'}</label>
-                      <input 
-                        type="text" 
-                        value={editingItem.address || ''}
-                        onChange={(e) => setEditingItem({ ...editingItem, address: e.target.value })}
-                        className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all"
-                      />
-                    </div>
-                  </div>
-                )}
-
-                {activeSubTab === 'suppliers' && (
-                  <div className="grid grid-cols-2 gap-4">
-                    {SUPPLIER_FIELDS.map(field => (
-                      <div key={field.key} className="space-y-2">
-                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{field.label}</label>
-                        <input 
-                          type="text" 
-                          value={editingItem[field.key] ?? ''}
-                          onChange={(e) => setEditingItem({ ...editingItem, [field.key]: e.target.value })}
-                          className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all"
-                        />
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {activeSubTab === 'admins' && (
-                  <div className="grid grid-cols-2 gap-4">
-                    {MANAGER_FIELDS.map(field => (
-                      <div key={field.key} className="space-y-2">
-                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{field.label}</label>
-                        <input 
-                          type="text" 
-                          value={editingItem[field.key] ?? ''}
-                          onChange={(e) => setEditingItem({ ...editingItem, [field.key]: e.target.value })}
-                          className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all"
-                        />
-                      </div>
-                    ))}
                   </div>
                 )}
               </div>
 
               <div className="p-6 bg-slate-50 dark:bg-[#18181B] border-t border-slate-200 dark:border-slate-800 flex justify-end gap-3 shrink-0">
-                <button 
-                  onClick={() => setIsEditModalOpen(false)}
-                  className="px-6 py-2.5 text-sm font-bold text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 transition-colors"
-                >
-                  {t.management.cancel}
-                </button>
-                <button 
-                  onClick={handleSave}
-                  className="px-8 py-2.5 bg-teal-500 hover:bg-teal-600 text-white rounded-xl text-sm font-bold transition-all shadow-lg shadow-teal-500/20 flex items-center gap-2"
-                >
-                  <Save size={18} />
-                  {t.management.save}
+                <button onClick={() => setIsEditModalOpen(false)} className="px-6 py-2.5 text-sm font-bold text-slate-600 dark:text-slate-400">{t.management.cancel}</button>
+                <button onClick={handleSave} className="px-8 py-2.5 bg-teal-500 hover:bg-teal-600 text-white rounded-xl text-sm font-bold shadow-lg shadow-teal-500/20 flex items-center gap-2">
+                  <Save size={18} /> {t.management.save}
                 </button>
               </div>
             </motion.div>
@@ -3006,7 +3845,55 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
             </motion.div>
           </div>
         )}
+        {/* Top Up Modal */}
+        {isTopUpModalOpen && topUpTarget && (
+          <div key="topup-modal" className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm" onClick={() => setIsTopUpModalOpen(false)} />
+            <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }} className="relative w-full max-w-md bg-white dark:bg-[#09090B] rounded-[2.5rem] shadow-2xl overflow-hidden border border-slate-200 dark:border-slate-800 text-left" dir={isRTL ? 'rtl' : 'ltr'}>
+              <div className="p-8 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-gradient-to-r from-emerald-500/10 to-teal-500/10">
+                <h3 className="text-2xl font-black text-slate-900 dark:text-white flex items-center gap-3">
+                  <Coins className="text-emerald-500 w-8 h-8" />
+                  {t.financial.topUp}
+                </h3>
+                <button onClick={() => setIsTopUpModalOpen(false)} className="p-2 hover:bg-white dark:hover:bg-slate-800 rounded-xl transition-all"><X size={24} /></button>
+              </div>
+              <div className="p-8 space-y-6">
+                <div className="p-4 bg-emerald-50 dark:bg-emerald-500/5 rounded-2xl border border-emerald-100 dark:border-emerald-500/20">
+                  <p className="text-xs font-black text-emerald-600 uppercase tracking-widest mb-1">{isRTL ? 'المستلم:' : 'Recipient:'}</p>
+                  <p className="text-lg font-black text-slate-800 dark:text-white">{topUpTarget.name || topUpTarget['اسم الدخول'] || topUpTarget.username}</p>
+                </div>
+                <div className="space-y-3">
+                  <label className="text-xs font-black text-slate-400 uppercase tracking-widest">{t.financial.amount}:</label>
+                  <div className="relative">
+                    <input 
+                      type="text" 
+                      inputMode="decimal"
+                      lang="en"
+                      value={topUpAmount}
+                      onChange={(e) => {
+                        const val = e.target.value.replace(/[^0-9.]/g, '');
+                        setTopUpAmount(val);
+                      }}
+                      placeholder="0.00"
+                      className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl px-6 py-5 text-3xl font-black text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 transition-all outline-none text-center"
+                    />
+                    <span className="absolute right-6 top-1/2 -translate-y-1/2 font-black text-slate-400">{state.currency}</span>
+                  </div>
+                </div>
+                <button 
+                  onClick={handleTopUpManager}
+                  disabled={!topUpAmount || parseFloat(topUpAmount) <= 0}
+                  className="w-full py-5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-2xl font-black text-xl shadow-xl shadow-emerald-500/20 transition-all flex items-center justify-center gap-3 disabled:opacity-50"
+                >
+                  <ShieldCheck size={24} />
+                  {isRTL ? 'تأكيد الشحن الآن' : 'Confirm Recharge'}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
       </AnimatePresence>
+
     </motion.div>
   );
 }
