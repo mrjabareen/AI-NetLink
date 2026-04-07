@@ -157,6 +157,31 @@ export interface WhatsAppStatus {
   status?: string;
 }
 
+export interface SystemDashboardMetrics {
+  timestamp: string;
+  appUptimeSec: number;
+  osUptimeSec: number;
+  nodeVersion: string;
+  platform: string;
+  database: {
+    exists: boolean;
+    path: string;
+  };
+  storage: {
+    path: string;
+    totalBytes: number;
+    usedBytes: number;
+    freeBytes: number;
+    usedPercent: number;
+  };
+  memory: {
+    totalBytes: number;
+    freeBytes: number;
+    usedBytes: number;
+    usedPercent: number;
+  };
+}
+
 export interface VersionInfo {
   version: string;
   buildDate: string;

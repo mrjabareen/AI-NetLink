@@ -398,15 +398,9 @@ function buildAuthenticatedUrl(repoUrl, token) {
   return String(repoUrl).trim().replace(/^https:\/\//i, `https://${String(token).trim()}@`);
 }
 
-async function getRemoteVersionData(repoUrl, token) {
-  if (!repoUrl || !String(repoUrl).trim()) {
-    return null;
-  }
+const REMOTE_VERSION_PATH = 'AI NetLink Interface/ai-net-link/public/version.json';
 
-  const repo = getGitHubRepoInfo(repoUrl);
-  const remotePath = 'AI NetLink Interface/ai-net-link/public/version.json';
-  const apiUrl = `https://api.github.com/repos/${repo.owner}/${repo.name}/contents/${encodeURIComponent(remotePath)}?ref=main`;
-
+function getGitHubHeaders(token) {
   const headers = {
     Accept: 'application/vnd.github+json',
     'User-Agent': 'NetLinkPublisher',
@@ -414,13 +408,52 @@ async function getRemoteVersionData(repoUrl, token) {
   if (token && String(token).trim()) {
     headers.Authorization = `token ${String(token).trim()}`;
   }
+  return headers;
+}
 
-  const response = await fetch(apiUrl, { headers });
+async function getGitHubContentMeta(repoUrl, token, remotePath, ref = 'main') {
+  const repo = getGitHubRepoInfo(repoUrl);
+  const apiUrl = `https://api.github.com/repos/${repo.owner}/${repo.name}/contents/${encodeURIComponent(remotePath)}?ref=${encodeURIComponent(ref)}`;
+  const response = await fetch(apiUrl, { headers: getGitHubHeaders(token) });
   if (!response.ok) {
-    throw new Error(`GitHub version fetch failed (${response.status})`);
+    const errorBody = await response.text().catch(() => '');
+    throw new Error(`GitHub content fetch failed (${response.status}) ${errorBody}`.trim());
+  }
+  return response.json();
+}
+
+async function updateGitHubFile(repoUrl, token, remotePath, contentUtf8, message, branch = 'main') {
+  const repo = getGitHubRepoInfo(repoUrl);
+  const meta = await getGitHubContentMeta(repoUrl, token, remotePath, branch);
+  const apiUrl = `https://api.github.com/repos/${repo.owner}/${repo.name}/contents/${encodeURIComponent(remotePath)}`;
+  const response = await fetch(apiUrl, {
+    method: 'PUT',
+    headers: {
+      ...getGitHubHeaders(token),
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      message,
+      content: Buffer.from(String(contentUtf8 || ''), 'utf8').toString('base64'),
+      sha: meta.sha,
+      branch,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorBody = await response.text().catch(() => '');
+    throw new Error(`GitHub update failed (${response.status}) ${errorBody}`.trim());
   }
 
-  const meta = await response.json();
+  return response.json();
+}
+
+async function getRemoteVersionData(repoUrl, token) {
+  if (!repoUrl || !String(repoUrl).trim()) {
+    return null;
+  }
+
+  const meta = await getGitHubContentMeta(repoUrl, token, REMOTE_VERSION_PATH, 'main');
   if (!meta.content) {
     throw new Error('Could not read the current GitHub version.');
   }
@@ -480,31 +513,25 @@ async function publishRelease(input) {
     throw new Error('The version number is still the same as GitHub. Change the version before publishing.');
   }
 
-  const authenticatedUrl = buildAuthenticatedUrl(repoUrl, token);
-  const secrets = [authenticatedUrl, token];
+  const versionPayload = saveVersionData(context.versionPath, version, buildDate, changelog);
 
   try {
-    await runGit(['pull', '--rebase', '--autostash', authenticatedUrl, 'main'], context.repoRoot);
-    saveVersionData(context.versionPath, version, buildDate, changelog);
-
-    await runGit(['config', 'user.email', 'admin@aljabareen.com'], context.repoRoot);
-    await runGit(['config', 'user.name', 'NetLink Windows Publisher'], context.repoRoot);
-    await runGit(['config', 'core.longpaths', 'true'], context.repoRoot);
-    await stagePublishableChanges(context.repoRoot);
-
-    try {
-      await runGit(['commit', '-m', `release: v${version}`], context.repoRoot);
-    } catch (error) {
-      const message = sanitizeSecrets(error.message, secrets);
-      if (!/nothing to commit|no changes added/i.test(message)) {
-        throw new Error(message);
-      }
-    }
-
-    await runGit(['push', authenticatedUrl, 'HEAD:main'], context.repoRoot);
+    const rawContent = JSON.stringify(versionPayload, null, 2);
+    await updateGitHubFile(
+      repoUrl,
+      token,
+      REMOTE_VERSION_PATH,
+      rawContent,
+      `release: v${version}`,
+      'main'
+    );
     return getProjectState(input);
   } catch (error) {
-    throw new Error(sanitizeSecrets(error.message, secrets));
+    const message = String(error?.message || error || '');
+    if (/ENOTFOUND|Could not resolve host|Failed to fetch|fetch failed/i.test(message)) {
+      throw new Error('Could not reach GitHub. Check your internet connection or DNS settings, then try again.');
+    }
+    throw new Error(sanitizeSecrets(message, [token]));
   }
 }
 

@@ -1,5 +1,6 @@
 import express from 'express';
 import fs from 'fs';
+import os from 'os';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import multer from 'multer';
@@ -3013,6 +3014,64 @@ import { exec } from 'child_process';
 // ==========================================
 // System Update API
 // ==========================================
+app.get('/api/system/metrics', async (req, res) => {
+  try {
+    const projectRoot = path.resolve(__dirname, '../../');
+    const metricsPath = fs.existsSync(projectRoot) ? projectRoot : __dirname;
+    const dbExists = fs.existsSync(DB_PATH);
+    const dbPath = dbExists ? DB_PATH : getSafePath(__dirname, 'System');
+
+    let totalBytes = 0;
+    let freeBytes = 0;
+    let usedBytes = 0;
+    let usedPercent = 0;
+
+    try {
+      const stats = fs.statfsSync(metricsPath);
+      totalBytes = Number(stats.blocks) * Number(stats.bsize);
+      freeBytes = Number(stats.bavail) * Number(stats.bsize);
+      usedBytes = Math.max(0, totalBytes - freeBytes);
+      usedPercent = totalBytes > 0 ? Number(((usedBytes / totalBytes) * 100).toFixed(1)) : 0;
+    } catch (storageError) {
+      console.error('Storage metrics failed:', storageError);
+    }
+
+    const totalMem = os.totalmem();
+    const freeMem = os.freemem();
+    const usedMem = Math.max(0, totalMem - freeMem);
+
+    res.json({
+      data: {
+        timestamp: new Date().toISOString(),
+        appUptimeSec: Math.floor(process.uptime()),
+        osUptimeSec: Math.floor(os.uptime()),
+        nodeVersion: process.version,
+        platform: `${os.platform()} ${os.release()}`,
+        database: {
+          exists: dbExists,
+          path: dbPath,
+        },
+        storage: {
+          path: metricsPath,
+          totalBytes,
+          usedBytes,
+          freeBytes,
+          usedPercent,
+        },
+        memory: {
+          totalBytes: totalMem,
+          freeBytes: freeMem,
+          usedBytes: usedMem,
+          usedPercent: totalMem > 0 ? Number(((usedMem / totalMem) * 100).toFixed(1)) : 0,
+        },
+      }
+    });
+  } catch (err) {
+    console.error('System Metrics Error:', err);
+    res.status(500).json({ error: err?.message || 'Failed to collect system metrics.' });
+  }
+});
+
 app.get('/api/system/check-update', async (req, res) => {
   try {
     const configPath = path.join(__dirname, 'git_config.json');

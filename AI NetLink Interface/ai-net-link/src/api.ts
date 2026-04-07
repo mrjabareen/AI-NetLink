@@ -610,6 +610,16 @@ export const startSystemUpdate = async () => {
     return await res.json();
 };
 
+export const getSystemDashboardMetrics = async () => {
+    const res = await fetch(`${BASE_URL}/system/metrics`);
+    if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || 'Failed to fetch system metrics');
+    }
+    const data = await res.json();
+    return data.data;
+};
+
 export const testAiProvider = async (payload: any) => {
     const res = await fetch(`${BASE_URL}/ai/test-provider`, {
         method: 'POST',
