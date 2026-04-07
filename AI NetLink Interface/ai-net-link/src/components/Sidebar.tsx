@@ -4,9 +4,9 @@
  * Website: aljabareen.com
  * Contact: admin@aljabareen.com | +970597409040
  */
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { motion } from 'motion/react';
-import { LayoutDashboard, MessageSquare, Search, Settings, FolderClosed, Sun, Moon, Globe, Activity, ChevronRight, ChevronLeft, Network, ShieldAlert, BarChart3, Briefcase, CreditCard, Package, Users, Map, PieChart, LayoutTemplate, TrendingUp, Truck, Calendar, Coins, ShieldCheck, Crown, LogOut, Server } from 'lucide-react';
+import { LayoutDashboard, MessageSquare, Search, Settings, FolderClosed, Sun, Moon, Globe, Activity, ChevronRight, ChevronLeft, ChevronDown, Network, ShieldAlert, BarChart3, Briefcase, CreditCard, Package, Users, Map, PieChart, LayoutTemplate, TrendingUp, Truck, Calendar, Coins, ShieldCheck, LogOut, Server } from 'lucide-react';
 import { AppState, Currency, Role } from '../types';
 import { dict } from '../dict';
 
@@ -19,6 +19,13 @@ export default function Sidebar({ state, setState }: SidebarProps) {
   const t = dict[state.lang];
   const isRTL = state.lang === 'ar';
   const [hoveredTooltip, setHoveredTooltip] = useState<{label: string, top: number, right: number, left: number} | null>(null);
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({
+    operations: true,
+    customers: true,
+    network: true,
+    insights: false,
+    system: true,
+  });
 
   const handleMouseEnter = (e: React.MouseEvent, label: string) => {
     if (!state.sidebarOpen) {
@@ -61,6 +68,39 @@ export default function Sidebar({ state, setState }: SidebarProps) {
     return hasPermission(item.permission);
   });
 
+  const navGroups = useMemo(() => ([
+    {
+      id: 'operations',
+      label: isRTL ? 'العمليات الذكية' : 'Smart Operations',
+      items: ['dashboard', 'executive', 'chat', 'search'],
+    },
+    {
+      id: 'customers',
+      label: isRTL ? 'العملاء والإدارة' : 'Customers & Management',
+      items: ['crm', 'management', 'suppliers', 'investors', 'billing', 'boi_expiry'],
+    },
+    {
+      id: 'network',
+      label: isRTL ? 'الشبكة والبنية' : 'Network & Infrastructure',
+      items: ['topology', 'network_radius', 'inventory', 'field'],
+    },
+    {
+      id: 'insights',
+      label: isRTL ? 'التحليلات والمنصات' : 'Insights & Platforms',
+      items: ['analytics', 'reports', 'portal'],
+    },
+    {
+      id: 'system',
+      label: isRTL ? 'النظام والأدوات' : 'System & Tools',
+      items: ['files', 'security', 'settings'],
+    },
+  ].map(group => ({
+    ...group,
+    items: group.items
+      .map(itemId => navItems.find(item => item.id === itemId))
+      .filter(Boolean),
+  })).filter(group => group.items.length > 0)), [isRTL, navItems]);
+
   const toggleTheme = () => setState(prev => ({ ...prev, theme: prev.theme === 'light' ? 'dark' : 'light' }));
   const toggleLang = () => setState(prev => ({ ...prev, lang: prev.lang === 'en' ? 'ar' : 'en' }));
   const handleLogout = () => {
@@ -73,6 +113,40 @@ export default function Sidebar({ state, setState }: SidebarProps) {
     const currentIndex = currencies.indexOf(state.currency);
     const nextIndex = (currentIndex + 1) % currencies.length;
     setState(prev => ({ ...prev, currency: currencies[nextIndex] }));
+  };
+
+  const renderNavButton = (item: any) => {
+    const Icon = item.icon;
+    const isActive = state.activeTab === item.id;
+
+    return (
+      <button
+        key={item.id}
+        onClick={() => setState(prev => ({ ...prev, activeTab: item.id as any }))}
+        onMouseEnter={(e) => handleMouseEnter(e, item.label)}
+        onMouseLeave={handleMouseLeave}
+        className={`w-full flex items-center gap-4 px-3 py-3 rounded-xl transition-all duration-200 group relative overflow-hidden cursor-pointer text-sm
+          ${isActive 
+            ? 'bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 font-semibold' 
+            : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/50 hover:text-slate-900 dark:hover:text-slate-200'
+          }`}
+      >
+        {isActive && (
+          <motion.div layoutId="activeNav" className="absolute inset-0 bg-blue-100/50 dark:bg-blue-500/10 border border-blue-200/50 dark:border-blue-500/20 rounded-xl z-0" />
+        )}
+        <Icon className={`w-6 h-6 shrink-0 z-10 ${isActive ? 'text-blue-600 dark:text-blue-400' : 'group-hover:text-blue-500'}`} strokeWidth={isActive ? 2.5 : 2} />
+        {state.sidebarOpen && (
+          <div className="flex-1 flex items-center justify-between z-10 truncate">
+            <span className="truncate text-sm leading-6">{item.label}</span>
+            {item.id === 'management' && (
+              <span className="px-2 py-0.5 bg-amber-500/20 text-amber-600 dark:text-amber-400 text-[11px] font-bold rounded-full">
+                {state.role === 'sas4_manager' ? (isRTL ? 'حدلق' : 'Hadlaq') : (isRTL ? 'مدير' : 'Admin')}
+              </span>
+            )}
+          </div>
+        )}
+      </button>
+    );
   };
 
   return (
@@ -93,45 +167,33 @@ export default function Sidebar({ state, setState }: SidebarProps) {
             <h1 className="text-xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-violet-600 dark:from-blue-400 dark:to-violet-400">
               {t.title}
             </h1>
-            <p className="text-[10px] text-slate-500 dark:text-slate-400 font-medium uppercase tracking-wider">{t.subtitle}</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">{t.subtitle}</p>
           </motion.div>
         )}
       </div>
 
-      <nav className="flex-1 px-4 py-6 space-y-2 overflow-y-auto custom-scrollbar">
-        {navItems.map((item) => {
-          const Icon = item.icon;
-          const isActive = state.activeTab === item.id;
-          return (
-            <button
-              key={item.id}
-              onClick={() => setState(prev => ({ ...prev, activeTab: item.id as any }))}
-              onMouseEnter={(e) => handleMouseEnter(e, item.label)}
-              onMouseLeave={handleMouseLeave}
-              className={`w-full flex items-center gap-4 px-3 py-3 rounded-xl transition-all duration-200 group relative overflow-hidden cursor-pointer
-                ${isActive 
-                  ? 'bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 font-semibold' 
-                  : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/50 hover:text-slate-900 dark:hover:text-slate-200'
-                }`}
-            >
-              {isActive && (
-                <motion.div layoutId="activeNav" className="absolute inset-0 bg-blue-100/50 dark:bg-blue-500/10 border border-blue-200/50 dark:border-blue-500/20 rounded-xl z-0" />
-              )}
-              <Icon className={`w-6 h-6 shrink-0 z-10 ${isActive ? 'text-blue-600 dark:text-blue-400' : 'group-hover:text-blue-500'}`} strokeWidth={isActive ? 2.5 : 2} />
-              {state.sidebarOpen && (
-                <div className="flex-1 flex items-center justify-between z-10 truncate">
-                  <span className="truncate">{item.label}</span>
-                  {item.id === 'management' && (
-                    <span className="px-2 py-0.5 bg-amber-500/20 text-amber-600 dark:text-amber-400 text-[10px] font-bold rounded-full uppercase tracking-tighter">
-                      {state.role === 'sas4_manager' ? (isRTL ? 'حدلق' : 'Hadlaq') : (isRTL ? 'مدير' : 'Admin')}
-                    </span>
-                  )}
+      <nav className="flex-1 px-4 py-6 space-y-4 overflow-y-auto custom-scrollbar">
+        {state.sidebarOpen ? (
+          navGroups.map((group) => (
+            <div key={group.id} className="space-y-2">
+              <button
+                onClick={() => setExpandedGroups(prev => ({ ...prev, [group.id]: !prev[group.id] }))}
+                className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl bg-slate-100/80 dark:bg-slate-800/50 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors"
+              >
+                <span className="text-sm font-bold">{group.label}</span>
+                <ChevronDown size={16} className={`transition-transform ${expandedGroups[group.id] ? 'rotate-180' : ''}`} />
+              </button>
+
+              {expandedGroups[group.id] && (
+                <div className="space-y-1.5">
+                  {group.items.map((item: any) => renderNavButton(item))}
                 </div>
               )}
-              {/* Legacy inline tooltip removed, handled globally at bottom of sidebar */}
-            </button>
-          );
-        })}
+            </div>
+          ))
+        ) : (
+          navItems.map((item) => renderNavButton(item))
+        )}
       </nav>
 
       <div className="p-4 border-t border-slate-200/50 dark:border-slate-800/50 space-y-4">
@@ -151,7 +213,7 @@ export default function Sidebar({ state, setState }: SidebarProps) {
              className="relative p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 transition-colors flex items-center gap-2 cursor-pointer group"
           >
             <Globe size={18} />
-            {state.sidebarOpen && <span className="text-xs font-medium uppercase">{state.lang === 'en' ? 'AR' : 'EN'}</span>}
+            {state.sidebarOpen && <span className="text-sm font-medium uppercase">{state.lang === 'en' ? 'AR' : 'EN'}</span>}
           </button>
           <button 
              onClick={cycleCurrency} 
@@ -160,18 +222,18 @@ export default function Sidebar({ state, setState }: SidebarProps) {
              className="relative p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 transition-colors flex items-center gap-2 cursor-pointer group"
           >
             <Coins size={18} />
-            {state.sidebarOpen && <span className="text-xs font-medium uppercase">{t.currencies[state.currency]}</span>}
+            {state.sidebarOpen && <span className="text-sm font-medium uppercase">{t.currencies[state.currency]}</span>}
           </button>
         </div>
         
         {state.sidebarOpen && (
-          <div className="flex items-center gap-3 px-2 py-2 rounded-lg bg-slate-100/50 dark:bg-slate-800/30 border border-slate-200/50 dark:border-slate-700/50">
+          <div className="flex items-center gap-3 px-3 py-3 rounded-xl bg-slate-100/50 dark:bg-slate-800/30 border border-slate-200/50 dark:border-slate-700/50">
             <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-xs font-bold shrink-0">
               {state.currentUser?.name.charAt(0)}
             </div>
             <div className="flex flex-col min-w-0">
-              <span className="text-xs font-bold text-slate-900 dark:text-white truncate">{state.currentUser?.name}</span>
-              <span className="text-[10px] text-slate-500 dark:text-slate-400 truncate uppercase tracking-tighter">{t.roles[state.role]}</span>
+              <span className="text-sm font-bold text-slate-900 dark:text-white truncate">{state.currentUser?.name}</span>
+              <span className="text-xs text-slate-500 dark:text-slate-400 truncate">{t.roles[state.role]}</span>
             </div>
             <button 
               onClick={handleLogout}
@@ -187,8 +249,8 @@ export default function Sidebar({ state, setState }: SidebarProps) {
       <div className="px-6 py-4 mt-auto border-t border-slate-200/50 dark:border-slate-800/50">
         {state.sidebarOpen ? (
           <div className="flex flex-col gap-1">
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">© 2026 NetLink</p>
-            <p className="text-[9px] text-slate-500 dark:text-slate-400">Developed by Muhammad Rateb Jabarin</p>
+            <p className="text-xs font-bold text-slate-400">© 2026 NetLink</p>
+            <p className="text-[11px] text-slate-500 dark:text-slate-400">Developed by Muhammad Rateb Jabarin</p>
           </div>
         ) : (
           <div className="flex justify-center">

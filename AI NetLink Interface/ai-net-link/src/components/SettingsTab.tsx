@@ -11,6 +11,7 @@ import { AppState } from '../types';
 import { dict } from '../dict';
 import { formatNumber, normalizeDigits, parseNumericInput } from '../utils/format';
 import { getGatewaysConfig, saveGatewaysConfig, getWhatsappStatus, restartWhatsappEngine, getNetworkConfig, saveNetworkConfig, testMikrotikConnection, BASE_URL, checkSystemUpdate, startSystemUpdate, testAiProvider } from '../api';
+import { showAppToast } from '../utils/notify';
 import NumericInput from './NumericInput';
 import DateInput from './DateInput';
 
@@ -67,6 +68,11 @@ export default function SettingsTab({ state, setState }: SettingsTabProps) {
         if (res.ok) {
           const data = await res.json();
           if ((targetVersion && data.version === targetVersion) || (!targetVersion && data.version !== currentVersion)) {
+            sessionStorage.setItem('sas4_update_success_toast', JSON.stringify({
+              type: 'success',
+              title: isRTL ? 'تم التحديث' : 'Update Completed',
+              message: isRTL ? 'تم تحديث النظام بنجاح.' : 'The system was updated successfully.',
+            }));
             window.location.reload();
             return;
           }
@@ -76,6 +82,11 @@ export default function SettingsTab({ state, setState }: SettingsTabProps) {
       }
 
       if (attempts >= 36) {
+        sessionStorage.setItem('sas4_update_success_toast', JSON.stringify({
+          type: 'success',
+          title: isRTL ? 'اكتمل التحديث' : 'Update Finished',
+          message: isRTL ? 'اكتملت عملية التحديث وسيتم تحميل الواجهة من جديد.' : 'The update process finished and the interface will reload now.',
+        }));
         window.location.reload();
         return;
       }
@@ -88,7 +99,11 @@ export default function SettingsTab({ state, setState }: SettingsTabProps) {
 
   const handleSaveAllSettings = () => {
     localStorage.setItem('sas4_ai_settings', JSON.stringify(state.aiSettings));
-    alert(isRTL ? 'تم حفظ الإعدادات محليًا.' : 'Settings saved locally.');
+    showAppToast({
+      type: 'success',
+      title: isRTL ? 'تم الحفظ' : 'Saved',
+      message: isRTL ? 'تم حفظ الإعدادات محليًا.' : 'Settings saved locally.',
+    });
   };
 
   const handleTestAiConnection = async (providerId: string) => {
@@ -100,13 +115,19 @@ export default function SettingsTab({ state, setState }: SettingsTabProps) {
         language: state.lang,
       });
 
-      alert(
-        isRTL
-          ? `نجح الاتصال: ${result.provider?.name || providerId}`
-          : `Connection succeeded: ${result.provider?.name || providerId}`
-      );
+      showAppToast({
+        type: 'success',
+        title: isRTL ? 'نجح الاتصال' : 'Connection Succeeded',
+        message: isRTL
+          ? `تم الاتصال بنجاح: ${result.provider?.name || providerId}`
+          : `Connected successfully: ${result.provider?.name || providerId}`,
+      });
     } catch (error: any) {
-      alert(isRTL ? `فشل الاتصال: ${error.message}` : `Connection failed: ${error.message}`);
+      showAppToast({
+        type: 'error',
+        title: isRTL ? 'فشل الاتصال' : 'Connection Failed',
+        message: isRTL ? `فشل الاتصال: ${error.message}` : `Connection failed: ${error.message}`,
+      });
     } finally {
       setAiTestingProviderId(null);
     }
@@ -140,7 +161,11 @@ export default function SettingsTab({ state, setState }: SettingsTabProps) {
       }));
 
       if (!hasUpdate) {
-        alert(t.settings.update.upToDate);
+        showAppToast({
+          type: 'info',
+          title: isRTL ? 'لا يوجد تحديث' : 'No Update',
+          message: t.settings.update.upToDate,
+        });
       }
     } catch (err: any) {
       setState(prev => ({ 
@@ -158,10 +183,20 @@ export default function SettingsTab({ state, setState }: SettingsTabProps) {
     try {
       const result = await startSystemUpdate();
       setState(prev => ({ ...prev, updateStatus: { ...prev.updateStatus, checking: false } }));
-      alert(result.message || (isRTL ? 'بدأ التحديث! سيتم تحديث الصفحة تلقائياً بعد اكتمال التثبيت.' : 'Update started! The page will refresh automatically after installation.'));
+      showAppToast({
+        type: 'info',
+        title: isRTL ? 'بدأ التحديث' : 'Update Started',
+        message: result.message || (isRTL ? 'بدأ التحديث. ستتم إعادة تحميل الصفحة تلقائياً بعد اكتمال التثبيت.' : 'Update started. The page will refresh automatically after installation.'),
+        duration: 4500,
+      });
       waitForUpdatedVersionAndReload(targetVersion);
     } catch (err: any) {
       setState(prev => ({ ...prev, updateStatus: { ...prev.updateStatus, checking: false, error: err?.message || 'Update failed' } }));
+      showAppToast({
+        type: 'error',
+        title: isRTL ? 'فشل التحديث' : 'Update Failed',
+        message: err?.message || (isRTL ? 'فشلت عملية التحديث.' : 'The update process failed.'),
+      });
     }
   };
 

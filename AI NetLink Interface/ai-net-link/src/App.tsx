@@ -31,6 +31,7 @@ import ManagementTab from './components/ManagementTab';
 import NetworkRadiusTab from './components/NetworkRadiusTab';
 import Login from './components/Login';
 import { fetchManagers } from './api';
+import { AppToastPayload } from './utils/notify';
 
 const DEFAULT_AI_SETTINGS = {
   primaryModel: 'gemini-3-flash-preview',
@@ -66,6 +67,7 @@ const getInitialAiSettings = () => {
 };
 
 export default function App() {
+  const [toasts, setToasts] = useState<Array<AppToastPayload & { id: number }>>([]);
   const [state, setState] = useState<AppState>({
     lang: 'ar',
     theme: 'dark',
@@ -220,6 +222,38 @@ export default function App() {
     localStorage.setItem('sas4_ai_settings', JSON.stringify(state.aiSettings));
   }, [state.aiSettings]);
 
+  useEffect(() => {
+    const handleToast = (event: Event) => {
+      const customEvent = event as CustomEvent<AppToastPayload>;
+      const payload = customEvent.detail;
+      if (!payload?.message) return;
+
+      const toastId = Date.now() + Math.floor(Math.random() * 1000);
+      setToasts((prev) => [...prev, { id: toastId, type: 'info', duration: 3500, ...payload }]);
+
+      window.setTimeout(() => {
+        setToasts((prev) => prev.filter((item) => item.id !== toastId));
+      }, payload.duration || 3500);
+    };
+
+    window.addEventListener('app-toast', handleToast as EventListener);
+
+    const pendingUpdateToast = sessionStorage.getItem('sas4_update_success_toast');
+    if (pendingUpdateToast) {
+      sessionStorage.removeItem('sas4_update_success_toast');
+      try {
+        const payload = JSON.parse(pendingUpdateToast) as AppToastPayload;
+        handleToast(new CustomEvent('app-toast', { detail: payload }));
+      } catch {
+        // Ignore invalid session toast payload.
+      }
+    }
+
+    return () => {
+      window.removeEventListener('app-toast', handleToast as EventListener);
+    };
+  }, []);
+
   // Handle font family based on language
   const fontClass = isRTL ? 'font-[Cairo]' : 'font-[Inter]';
 
@@ -262,6 +296,26 @@ export default function App() {
       
       <Sidebar state={state} setState={setState} />
       <Header state={state} setState={setState} />
+
+      <div className={`fixed top-5 z-[100] flex flex-col gap-3 ${state.lang === 'ar' ? 'left-5' : 'right-5'}`}>
+        <AnimatePresence>
+          {toasts.map((toast) => (
+            <div
+              key={toast.id}
+              className={`min-w-[280px] max-w-[360px] rounded-2xl border shadow-2xl backdrop-blur-xl px-4 py-3 ${
+                toast.type === 'success'
+                  ? 'bg-emerald-500/10 border-emerald-400/30 text-emerald-100'
+                  : toast.type === 'error'
+                    ? 'bg-rose-500/10 border-rose-400/30 text-rose-100'
+                    : 'bg-slate-900/90 border-slate-700 text-slate-100'
+              }`}
+            >
+              {toast.title && <div className="text-sm font-bold mb-1">{toast.title}</div>}
+              <div className="text-sm leading-6">{toast.message}</div>
+            </div>
+          ))}
+        </AnimatePresence>
+      </div>
 
       {/* --- Main Content Area --- */}
       <main className="flex-1 h-full flex flex-col pt-16 md:pt-0 relative bg-slate-50/50 dark:bg-slate-950/50 overflow-hidden">
