@@ -632,10 +632,16 @@ async function publishRelease(input) {
     await runGit(['commit', '-m', `release: v${version}`], context.repoRoot);
 
     const authenticatedUrl = buildAuthenticatedUrl(repoUrl, token);
-    await runGit(['push', authenticatedUrl, 'HEAD:main'], context.repoRoot);
+    await runGit(['remote', 'set-url', 'origin', authenticatedUrl], context.repoRoot);
+    await runGit(['fetch', 'origin', 'main'], context.repoRoot);
+    await runGit(['pull', '--rebase', 'origin', 'main'], context.repoRoot);
+    await runGit(['push', 'origin', 'HEAD:main'], context.repoRoot);
     return getProjectState(input);
   } catch (error) {
     const message = String(error?.message || error || '');
+    if (/could not apply|CONFLICT/i.test(message)) {
+      throw new Error('Git rebase conflict detected. Please run a manual pull/rebase once, resolve conflicts if any, then publish again.');
+    }
     if (/ENOTFOUND|Could not resolve host|Failed to fetch|fetch failed/i.test(message)) {
       throw new Error('Could not reach GitHub. Check your internet connection or DNS settings, then try again.');
     }
