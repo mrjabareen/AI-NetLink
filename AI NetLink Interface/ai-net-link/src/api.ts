@@ -663,6 +663,15 @@ export const toggleBackupHistoryProtection = async (backupId: string, isProtecte
   return data.data;
 };
 
+export const deleteLocalBackupHistoryItem = async (backupId: string) => {
+  const res = await fetch(`${BASE_URL}/system/backup/history/${encodeURIComponent(backupId)}`, {
+    method: 'DELETE',
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || 'Failed to delete local backup item');
+  return data.data;
+};
+
 export const runSystemBackup = async (payload: { uploadToDrive?: boolean; trigger?: 'manual' | 'automatic' | 'restore_point' } = {}) => {
   const res = await fetch(`${BASE_URL}/system/backup/run`, {
     method: 'POST',

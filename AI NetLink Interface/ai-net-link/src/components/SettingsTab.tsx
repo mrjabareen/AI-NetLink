@@ -10,7 +10,7 @@ import { Settings, User, Network, Cpu, CreditCard, Users, Shield, Save, Key, Dat
 import { AppState, BackupDatasetId, BackupExportFormat, BackupHistoryItem, BackupRestorePreview, Currency, GatewayConfig, Permission, Role, SettingsCategoryId, TeamMember, WhatsAppStatus } from '../types';
 import { dict } from '../dict';
 import { formatNumber, normalizeDigits, parseNumericInput } from '../utils/format';
-import { getGatewaysConfig, saveGatewaysConfig, getWhatsappStatus, restartWhatsappEngine, getNetworkConfig, saveNetworkConfig, testMikrotikConnection, BASE_URL, checkSystemUpdate, startSystemUpdate, testAiProvider, exportBackupDataset, getBackupOverview, previewRestoreArchive, restoreSystemBackup, runSystemBackup, saveBackupConfig, testGoogleDriveBackupConnection, toggleBackupHistoryProtection } from '../api';
+import { getGatewaysConfig, saveGatewaysConfig, getWhatsappStatus, restartWhatsappEngine, getNetworkConfig, saveNetworkConfig, testMikrotikConnection, BASE_URL, checkSystemUpdate, startSystemUpdate, testAiProvider, exportBackupDataset, getBackupOverview, previewRestoreArchive, restoreSystemBackup, runSystemBackup, saveBackupConfig, testGoogleDriveBackupConnection, toggleBackupHistoryProtection, deleteLocalBackupHistoryItem } from '../api';
 import { showAppToast, toastError, toastInfo, toastSuccess } from '../utils/notify';
 import NumericInput from './NumericInput';
 import DateInput from './DateInput';
@@ -49,6 +49,7 @@ export default function SettingsTab({ state, setState }: SettingsTabProps) {
   const [isSmsPromptOpen, setIsSmsPromptOpen] = useState(false);
   const [isEmailPromptOpen, setIsEmailPromptOpen] = useState(false);
   const [memberToDelete, setMemberToDelete] = useState<TeamMember | null>(null);
+  const [backupHistoryItemToDelete, setBackupHistoryItemToDelete] = useState<BackupHistoryItem | null>(null);
   const [backupOverview, setBackupOverview] = useState<{ history?: BackupHistoryItem[]; nextRunAt?: string | null; storage?: { localFileCount?: number; totalBytes?: number }; datasets?: Array<{ id: string; label: string; records: number }> } | null>(null);
   const [backupActionId, setBackupActionId] = useState<string | null>(null);
   const [restoreFile, setRestoreFile] = useState<File | null>(null);
@@ -540,6 +541,26 @@ export default function SettingsTab({ state, setState }: SettingsTabProps) {
     }
   };
 
+  const handleDeleteBackupHistoryItem = async () => {
+    if (!backupHistoryItemToDelete) return;
+
+    try {
+      setBackupActionId(`delete-${backupHistoryItemToDelete.id}`);
+      await deleteLocalBackupHistoryItem(backupHistoryItemToDelete.id);
+      setBackupHistoryItemToDelete(null);
+      await loadBackupCenter();
+      toastSuccess(
+        isRTL ? 'تم حذف النسخة الاحتياطية المحلية من التخزين والسجل.' : 'The local backup was deleted from storage and history.',
+        isRTL ? 'تم الحذف' : 'Deleted'
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : (isRTL ? 'تعذر حذف النسخة الاحتياطية المحلية.' : 'Failed to delete the local backup.');
+      toastError(message, isRTL ? 'فشل الحذف' : 'Delete Failed');
+    } finally {
+      setBackupActionId(null);
+    }
+  };
+
   const categories = useMemo<SettingsCategory[]>(() => [
     { id: 'profile', icon: User, label: t.settings.categories.profile },
     { id: 'gateways', icon: Send, label: isRTL ? 'إدارة البوابات' : 'Gateways', permission: 'manage_team' as Permission },
@@ -733,7 +754,51 @@ export default function SettingsTab({ state, setState }: SettingsTabProps) {
         : ['Upload the archive and review the preview/comparison screen.', 'Decide whether you need full or selective restore.', 'Confirm the password if the backup is encrypted.', 'It is best to create a fresh backup first or keep restore-point mode enabled.'],
     },
     {
-      title: isRTL ? '7. ملاحظات أمان مهمة' : '7. Important Safety Notes',
+      title: isRTL ? '7. كيف أربط Google Drive خطوة بخطوة؟' : '7. How Do I Connect Google Drive Step By Step?',
+      content: isRTL
+        ? [
+            'ادخل أولًا إلى Google Cloud Console وأنشئ مشروعًا جديدًا أو استخدم مشروعًا موجودًا.',
+            'فعّل Google Drive API داخل المشروع.',
+            'اذهب إلى OAuth Consent Screen وأكمل البيانات الأساسية للتطبيق.',
+            'أنشئ OAuth Client ID من نوع Web application أو Desktop app حسب الإعداد الذي ستستخدمه للحصول على التوكن.',
+            'احفظ Client ID وClient Secret لأنك ستضعهما داخل البرنامج لاحقًا.',
+            'أنشئ مجلدًا مخصصًا في Google Drive لتخزين النسخ الاحتياطية وانسخ Folder ID من رابط المجلد.',
+          ]
+        : [
+            'First open Google Cloud Console and create a new project or use an existing one.',
+            'Enable Google Drive API inside that project.',
+            'Go to OAuth Consent Screen and complete the basic app information.',
+            'Create an OAuth Client ID using Web application or Desktop app depending on the flow you will use for tokens.',
+            'Save the Client ID and Client Secret because you will enter them into the app later.',
+            'Create a dedicated folder in Google Drive for backups and copy the Folder ID from its URL.',
+          ],
+    },
+    {
+      title: isRTL ? '8. كيف أحصل على Refresh Token وأدخله في البرنامج؟' : '8. How Do I Get A Refresh Token And Enter It Into The App?',
+      content: isRTL
+        ? [
+            'أسهل طريقة للمبتدئ هي استخدام Google OAuth Playground للحصول على Refresh Token.',
+            'في OAuth Playground فعّل خيار استخدام بياناتك الخاصة، ثم أدخل Client ID وClient Secret الخاصين بك.',
+            'اختر صلاحية Google Drive المناسبة ثم اسمح بالوصول من حساب Google الذي تريد التخزين عليه.',
+            'بعد الموافقة ستظهر لك أكواد OAuth، ومن بينها Refresh Token. انسخه كما هو.',
+            'ارجع إلى البرنامج وافتح قسم Google Drive Integration داخل النسخ الاحتياطي.',
+            'ضع القيم بالترتيب: Folder ID ثم Client ID ثم Client Secret ثم Refresh Token ثم Redirect URI.',
+            'اضغط اختبار الربط. إذا ظهر اتصال ناجح فالتكامل أصبح جاهزًا.',
+            'بعد نجاح الاختبار يمكنك تفعيل رفع تلقائي بعد كل نسخة أو تنفيذ نسخة + رفع إلى Drive يدويًا.',
+          ]
+        : [
+            'The easiest beginner-friendly way is to use Google OAuth Playground to obtain a Refresh Token.',
+            'In OAuth Playground, enable the option to use your own OAuth credentials, then enter your Client ID and Client Secret.',
+            'Select the proper Google Drive scope and grant access from the Google account you want to store backups in.',
+            'After approval, OAuth Playground will show your tokens, including the Refresh Token. Copy it exactly as returned.',
+            'Return to the app and open Google Drive Integration inside the backup center.',
+            'Fill the fields in order: Folder ID, Client ID, Client Secret, Refresh Token, and Redirect URI.',
+            'Press Test Connection. If the result says connected successfully, the integration is ready.',
+            'After that you can enable Auto Upload After Every Backup or run Backup + Drive Upload manually.',
+          ],
+    },
+    {
+      title: isRTL ? '9. ملاحظات أمان مهمة' : '9. Important Safety Notes',
       content: isRTL
         ? ['لا تشارك كلمة مرور التشفير مع أي شخص غير مخول.', 'احفظ نسخة من بيانات Google Drive في مكان آمن.', 'افحص السجل بانتظام للتأكد من نجاح النسخ التلقائي.', 'جرّب الاستعادة على بيئة اختبارية إذا كانت البيانات شديدة الحساسية.']
         : ['Never share the encryption password with unauthorized users.', 'Keep a safe record of your Google Drive credentials.', 'Review history regularly to confirm scheduled backups are succeeding.', 'Test restore on a staging environment if the data is highly sensitive.'],
@@ -1958,6 +2023,17 @@ export default function SettingsTab({ state, setState }: SettingsTabProps) {
                                 : (isRTL ? 'حماية من الحذف التلقائي' : 'Protect From Auto Delete')}
                           </button>
                         )}
+                        {item.fileName && (
+                          <button
+                            onClick={() => setBackupHistoryItemToDelete(item)}
+                            disabled={backupActionId === `delete-${item.id}`}
+                            className="px-4 py-2 rounded-xl text-xs font-bold border bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-500/10 dark:text-rose-300 dark:border-rose-500/20 disabled:opacity-50"
+                          >
+                            {backupActionId === `delete-${item.id}`
+                              ? (isRTL ? 'جاري الحذف...' : 'Deleting...')
+                              : (isRTL ? 'حذف من اللوكال' : 'Delete Local Copy')}
+                          </button>
+                        )}
                         {item.downloadUrl && (
                           <button
                             onClick={() => window.open(resolveApiFileUrl(item.downloadUrl || ''), '_blank', 'noopener,noreferrer')}
@@ -2776,6 +2852,20 @@ export default function SettingsTab({ state, setState }: SettingsTabProps) {
         title={isRTL ? 'حذف المستخدم' : 'Delete User'}
         description={isRTL ? `سيتم حذف المستخدم ${memberToDelete?.name || ''} من الفريق نهائيًا.` : `The user ${memberToDelete?.name || ''} will be permanently removed from the team.`}
         confirmLabel={isRTL ? 'تأكيد الحذف' : 'Confirm Delete'}
+        cancelLabel={isRTL ? 'إلغاء' : 'Cancel'}
+        variant="danger"
+        isRTL={isRTL}
+      />
+
+      <AppConfirmDialog
+        open={Boolean(backupHistoryItemToDelete)}
+        onClose={() => setBackupHistoryItemToDelete(null)}
+        onConfirm={handleDeleteBackupHistoryItem}
+        title={isRTL ? 'حذف النسخة الاحتياطية المحلية' : 'Delete Local Backup'}
+        description={isRTL
+          ? `سيتم حذف النسخة المحلية ${backupHistoryItemToDelete?.fileName || ''} من التخزين المحلي ومن سجل العمليات. لا يمكن التراجع عن هذه العملية.`
+          : `The local backup ${backupHistoryItemToDelete?.fileName || ''} will be removed from local storage and backup history. This action cannot be undone.`}
+        confirmLabel={isRTL ? 'تأكيد الحذف النهائي' : 'Confirm Permanent Delete'}
         cancelLabel={isRTL ? 'إلغاء' : 'Cancel'}
         variant="danger"
         isRTL={isRTL}

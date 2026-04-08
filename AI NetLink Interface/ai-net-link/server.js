@@ -566,6 +566,35 @@ const toggleBackupHistoryProtection = (backupId, isProtected) => {
   return history[targetIndex];
 };
 
+const deleteLocalBackupHistoryItem = (backupId) => {
+  const history = getBackupHistory();
+  const targetIndex = history.findIndex((item) => item.id === backupId);
+  if (targetIndex === -1) {
+    throw new Error('Backup history item not found.');
+  }
+
+  const targetItem = history[targetIndex];
+  if (!targetItem.fileName) {
+    throw new Error('This history entry has no local file to delete.');
+  }
+
+  const targetPath = path.join(BACKUP_LOCAL_DIR, path.basename(targetItem.fileName));
+  if (fs.existsSync(targetPath)) {
+    try {
+      fs.unlinkSync(targetPath);
+    } catch (error) {
+      throw new Error(error?.message || 'Failed to delete the local backup file.');
+    }
+  }
+
+  history.splice(targetIndex, 1);
+  saveBackupHistory(history);
+  return {
+    deletedId: backupId,
+    deletedFileName: targetItem.fileName,
+  };
+};
+
 const waitMs = (duration) => new Promise((resolve) => setTimeout(resolve, duration));
 
 const copyFileWithRetry = async (sourcePath, targetPath, attempts = 5) => {
@@ -3745,6 +3774,15 @@ app.post('/api/system/backup/history/:backupId/protect', (req, res) => {
     res.json({ data });
   } catch (error) {
     res.status(404).json({ error: error?.message || 'Failed to update backup protection.' });
+  }
+});
+
+app.delete('/api/system/backup/history/:backupId', (req, res) => {
+  try {
+    const data = deleteLocalBackupHistoryItem(req.params.backupId);
+    res.json({ data });
+  } catch (error) {
+    res.status(404).json({ error: error?.message || 'Failed to delete local backup item.' });
   }
 });
 
