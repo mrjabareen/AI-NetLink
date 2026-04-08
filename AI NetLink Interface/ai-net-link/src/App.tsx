@@ -7,7 +7,7 @@
 import React, { useState, useEffect } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { AlertCircle, CheckCircle2, Info } from 'lucide-react';
-import { AppState, Permission } from './types';
+import { AppState, Permission, SettingsCategoryId } from './types';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
 import DashboardTab from './components/DashboardTab';
@@ -68,12 +68,24 @@ const getInitialAiSettings = () => {
   }
 };
 
+const getInitialSettingsCategory = (): SettingsCategoryId => {
+  if (typeof window === 'undefined') return 'profile';
+
+  const savedCategory = window.localStorage.getItem('sas4_active_settings_category');
+  const allowedCategories: SettingsCategoryId[] = ['profile', 'gateways', 'ai', 'billing', 'investors', 'backup', 'team', 'security', 'about'];
+
+  return allowedCategories.includes(savedCategory as SettingsCategoryId)
+    ? (savedCategory as SettingsCategoryId)
+    : 'profile';
+};
+
 export default function App() {
   const [toasts, setToasts] = useState<Array<AppToastPayload & { id: number }>>([]);
   const [state, setState] = useState<AppState>({
     lang: 'ar',
     theme: 'dark',
     activeTab: localStorage.getItem('sas4_active_tab') || 'dashboard',
+    activeSettingsCategory: getInitialSettingsCategory(),
     sidebarOpen: false,
     mobileMenuOpen: false,
     role: 'user',
@@ -205,9 +217,28 @@ export default function App() {
     },
     backupSettings: {
       enabled: true,
-      frequency: 'daily',
-      lastBackup: '2026-03-28 12:00:00',
       automatic: true,
+      frequency: 'daily',
+      scheduledTime: '02:00',
+      retentionCount: 14,
+      compressionLevel: 'balanced',
+      verifyAfterBackup: true,
+      createRestorePointBeforeRestore: true,
+      includeUploadsDirectory: true,
+      lastBackup: '2026-03-28 12:00:00',
+      lastRestore: null,
+      googleDrive: {
+        enabled: false,
+        folderId: '',
+        clientId: '',
+        clientSecret: '',
+        refreshToken: '',
+        redirectUri: 'https://developers.google.com/oauthplayground',
+        autoUpload: false,
+        lastSyncAt: null,
+        connectionStatus: 'idle',
+        connectionMessage: ''
+      }
     },
     aiSettings: getInitialAiSettings(),
     versionInfo: {
@@ -324,6 +355,10 @@ export default function App() {
       localStorage.setItem('sas4_active_tab', state.activeTab);
     }
   }, [state.activeTab]);
+
+  useEffect(() => {
+    localStorage.setItem('sas4_active_settings_category', state.activeSettingsCategory);
+  }, [state.activeSettingsCategory]);
 
   // Check for updates
   useEffect(() => {

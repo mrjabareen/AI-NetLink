@@ -1,16 +1,21 @@
 import express from 'express';
+import crypto from 'crypto';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import multer from 'multer';
 import axios from 'axios';
+import archiver from 'archiver';
 import nodemailer from 'nodemailer';
+import unzipper from 'unzipper';
 import pkg from 'whatsapp-web.js';
 const { Client, LocalAuth } = pkg;
 import qrcode from 'qrcode-terminal';
 import mysql from 'mysql2/promise';
 import { RouterOSAPI } from 'node-routeros';
+import { google } from 'googleapis';
+import XLSX from 'xlsx';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -92,6 +97,524 @@ const readJson = (filePath) => {
 };
 
 const sanitizeFileName = (value) => String(value || '').replace(/[\\/:*?"<>|]/g, '').trim();
+
+// ==========================================
+// Backup & Recovery Engine
+// ==========================================
+const BACKUP_STORAGE_ROOT = getSafePath(__dirname, 'backup-storage');
+const BACKUP_LOCAL_DIR = getSafePath(BACKUP_STORAGE_ROOT, 'local');
+const BACKUP_TEMP_DIR = getSafePath(BACKUP_STORAGE_ROOT, 'temp');
+const BACKUP_HISTORY_PATH = getSafePath(BACKUP_STORAGE_ROOT, 'history.json');
+const BACKUP_CONFIG_PATH = getSafePath(DB_PATH, 'System', 'backup_config.json');
+const backupUpload = multer({ dest: BACKUP_TEMP_DIR });
+
+const getDefaultBackupConfig = () => ({
+  enabled: true,
+  automatic: true,
+  frequency: 'daily',
+  scheduledTime: '02:00',
+  retentionCount: 14,
+  compressionLevel: 'balanced',
+  verifyAfterBackup: true,
+  createRestorePointBeforeRestore: true,
+  includeUploadsDirectory: true,
+  lastBackup: null,
+  lastRestore: null,
+  googleDrive: {
+    enabled: false,
+    folderId: '',
+    clientId: '',
+    clientSecret: '',
+    refreshToken: '',
+    redirectUri: 'https://developers.google.com/oauthplayground',
+    autoUpload: false,
+    lastSyncAt: null,
+    connectionStatus: 'idle',
+    connectionMessage: '',
+  },
+});
+
+const readJsonSafeWithFallback = (filePath, fallbackValue) => {
+  try {
+    if (!fs.existsSync(filePath)) return fallbackValue;
+    return JSON.parse(stripBom(fs.readFileSync(filePath, 'utf-8')));
+  } catch {
+    return fallbackValue;
+  }
+};
+
+const writeJsonSafe = (filePath, data) => {
+  fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8');
+};
+
+const mergeBackupConfig = (rawConfig = {}) => ({
+  ...getDefaultBackupConfig(),
+  ...rawConfig,
+  googleDrive: {
+    ...getDefaultBackupConfig().googleDrive,
+    ...(rawConfig.googleDrive || {}),
+  },
+});
+
+const getBackupConfig = () => mergeBackupConfig(readJsonSafeWithFallback(BACKUP_CONFIG_PATH, getDefaultBackupConfig()));
+const saveBackupConfig = (config) => {
+  const merged = mergeBackupConfig(config);
+  writeJsonSafe(BACKUP_CONFIG_PATH, merged);
+  return merged;
+};
+
+const getBackupHistory = () => readJsonSafeWithFallback(BACKUP_HISTORY_PATH, []);
+const saveBackupHistory = (historyItems) => writeJsonSafe(BACKUP_HISTORY_PATH, historyItems.slice(0, 300));
+const appendBackupHistory = (item) => {
+  const history = [item, ...getBackupHistory()];
+  saveBackupHistory(history);
+  return item;
+};
+
+const getTimestampStamp = () => new Date().toISOString().replace(/[:.]/g, '-');
+const createBackupId = () => `bkp_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
+
+const getCompressionLevelValue = (level = 'balanced') => (
+  level === 'fast' ? 3 : level === 'maximum' ? 9 : 6
+);
+
+const buildDownloadUrl = (fileName = '') => `/api/system/backup/download/${encodeURIComponent(path.basename(fileName))}`;
+
+const hashFileSha256 = (filePath) => new Promise((resolve, reject) => {
+  const hash = crypto.createHash('sha256');
+  const stream = fs.createReadStream(filePath);
+  stream.on('data', (chunk) => hash.update(chunk));
+  stream.on('end', () => resolve(hash.digest('hex')));
+  stream.on('error', reject);
+});
+
+const collectFilesRecursively = (targetPath, rootPath = targetPath, results = []) => {
+  if (!fs.existsSync(targetPath)) return results;
+  const entries = fs.readdirSync(targetPath, { withFileTypes: true });
+  for (const entry of entries) {
+    const fullPath = path.join(targetPath, entry.name);
+    if (entry.isDirectory()) {
+      collectFilesRecursively(fullPath, rootPath, results);
+      continue;
+    }
+    const stat = fs.statSync(fullPath);
+    results.push({
+      path: path.relative(rootPath, fullPath).replace(/\\/g, '/'),
+      sizeBytes: stat.size,
+      modifiedAt: stat.mtime.toISOString(),
+    });
+  }
+  return results;
+};
+
+const createZipArchive = ({ outputPath, compressionLevel = 'balanced', directoryEntries = [], bufferEntries = [] }) => new Promise((resolve, reject) => {
+  const output = fs.createWriteStream(outputPath);
+  const archive = archiver('zip', { zlib: { level: getCompressionLevelValue(compressionLevel) } });
+
+  output.on('close', resolve);
+  output.on('error', reject);
+  archive.on('error', reject);
+  archive.pipe(output);
+
+  for (const entry of directoryEntries) {
+    if (fs.existsSync(entry.source)) {
+      archive.directory(entry.source, entry.target);
+    }
+  }
+
+  for (const entry of bufferEntries) {
+    archive.append(entry.content, { name: entry.target });
+  }
+
+  archive.finalize();
+});
+
+const BACKUP_DATASETS = [
+  { id: 'subscribers', label: 'Subscribers', type: 'directory', path: getSafePath(DB_PATH, 'Subscribers') },
+  { id: 'investors', label: 'Investors', type: 'directory', path: getSafePath(DB_PATH, 'Financial', 'Investors') },
+  { id: 'suppliers', label: 'Suppliers', type: 'directory', path: getSafePath(DB_PATH, 'Financial', 'Suppliers') },
+  { id: 'managers', label: 'Managers', type: 'directory', path: getSafePath(DB_PATH, 'Financial', 'System_Managers') },
+  { id: 'directors', label: 'Directors', type: 'directory', path: getSafePath(DB_PATH, 'Staff', 'Directors') },
+  { id: 'deputies', label: 'Deputies', type: 'directory', path: getSafePath(DB_PATH, 'Staff', 'Deputies') },
+  { id: 'iptv', label: 'IPTV', type: 'directory', path: getSafePath(DB_PATH, 'System_IPTV', 'Subscribers') },
+  { id: 'profiles', label: 'Profiles', type: 'file', path: getSafePath(DB_PATH, 'CRM', 'profiles.json') },
+];
+
+const getDatasetDefinition = (datasetId) => BACKUP_DATASETS.find((item) => item.id === datasetId);
+
+const readDatasetRecords = (datasetId) => {
+  if (datasetId === 'all_tables') {
+    return BACKUP_DATASETS.reduce((acc, item) => {
+      acc[item.id] = readDatasetRecords(item.id);
+      return acc;
+    }, {});
+  }
+
+  const dataset = getDatasetDefinition(datasetId);
+  if (!dataset) return [];
+
+  if (dataset.type === 'file') {
+    const data = readJsonSafeWithFallback(dataset.path, []);
+    if (Array.isArray(data)) return data;
+    if (data && typeof data === 'object') return [data];
+    return [];
+  }
+
+  if (!fs.existsSync(dataset.path)) return [];
+  return fs.readdirSync(dataset.path)
+    .filter((file) => file.endsWith('.json'))
+    .map((file) => ({
+      __fileName: file,
+      ...readJsonSafeWithFallback(path.join(dataset.path, file), {}),
+    }));
+};
+
+const flattenForTable = (input, prefix = '', output = {}) => {
+  if (Array.isArray(input)) {
+    output[prefix || 'value'] = JSON.stringify(input);
+    return output;
+  }
+  if (input && typeof input === 'object') {
+    Object.entries(input).forEach(([key, value]) => {
+      const nextPrefix = prefix ? `${prefix}.${key}` : key;
+      if (value && typeof value === 'object' && !Array.isArray(value)) {
+        flattenForTable(value, nextPrefix, output);
+      } else if (Array.isArray(value)) {
+        output[nextPrefix] = JSON.stringify(value);
+      } else {
+        output[nextPrefix] = value ?? '';
+      }
+    });
+    return output;
+  }
+  output[prefix || 'value'] = input ?? '';
+  return output;
+};
+
+const toCsv = (rows = []) => {
+  const flattened = rows.map((row) => flattenForTable(row));
+  const headers = [...new Set(flattened.flatMap((row) => Object.keys(row)))];
+  const escapeCell = (value) => `"${String(value ?? '').replace(/"/g, '""')}"`;
+  const lines = [
+    headers.map(escapeCell).join(','),
+    ...flattened.map((row) => headers.map((header) => escapeCell(row[header])).join(',')),
+  ];
+  return lines.join('\n');
+};
+
+const getStorageDirectorySummary = () => {
+  const files = fs.existsSync(BACKUP_LOCAL_DIR)
+    ? fs.readdirSync(BACKUP_LOCAL_DIR).filter((file) => file.endsWith('.zip') || file.endsWith('.json') || file.endsWith('.csv') || file.endsWith('.xlsx'))
+    : [];
+  const totalBytes = files.reduce((sum, file) => sum + fs.statSync(path.join(BACKUP_LOCAL_DIR, file)).size, 0);
+  return {
+    localFileCount: files.length,
+    totalBytes,
+  };
+};
+
+const getDatasetStats = () => BACKUP_DATASETS.map((dataset) => ({
+  id: dataset.id,
+  label: dataset.label,
+  records: Array.isArray(readDatasetRecords(dataset.id)) ? readDatasetRecords(dataset.id).length : 0,
+}));
+
+const getScheduledDate = (timeValue = '02:00', baseDate = new Date()) => {
+  const [hours, minutes] = String(timeValue || '02:00').split(':').map((part) => parseInt(part, 10) || 0);
+  const date = new Date(baseDate);
+  date.setHours(hours, minutes, 0, 0);
+  return date;
+};
+
+const getNextBackupDueAt = (config = getBackupConfig()) => {
+  if (!config.enabled || !config.automatic) return null;
+  if (!config.lastBackup) return getScheduledDate(config.scheduledTime);
+
+  const base = getScheduledDate(config.scheduledTime, new Date(config.lastBackup));
+  if (config.frequency === 'daily') base.setDate(base.getDate() + 1);
+  if (config.frequency === 'weekly') base.setDate(base.getDate() + 7);
+  if (config.frequency === 'monthly') base.setMonth(base.getMonth() + 1);
+  return base;
+};
+
+const getGoogleDriveClient = (settings = {}) => {
+  const oauth2Client = new google.auth.OAuth2(
+    settings.clientId,
+    settings.clientSecret,
+    settings.redirectUri || 'https://developers.google.com/oauthplayground'
+  );
+  oauth2Client.setCredentials({ refresh_token: settings.refreshToken });
+  return google.drive({ version: 'v3', auth: oauth2Client });
+};
+
+const uploadBackupToGoogleDrive = async (filePath, fileName, settings) => {
+  const drive = getGoogleDriveClient(settings);
+  const fileMetadata = {
+    name: fileName,
+    ...(settings.folderId ? { parents: [settings.folderId] } : {}),
+  };
+
+  const response = await drive.files.create({
+    requestBody: fileMetadata,
+    media: {
+      mimeType: 'application/zip',
+      body: fs.createReadStream(filePath),
+    },
+    fields: 'id,name,webViewLink,webContentLink',
+  });
+
+  return response.data;
+};
+
+const pruneOldBackupArtifacts = () => {
+  const config = getBackupConfig();
+  const history = getBackupHistory();
+  const backupEntries = history.filter((item) => item.action === 'backup' && item.fileName);
+  const keepSet = new Set(
+    backupEntries
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .slice(0, Math.max(1, Number(config.retentionCount) || 14))
+      .map((item) => item.fileName)
+  );
+
+  const removable = backupEntries.filter((item) => item.fileName && !keepSet.has(item.fileName));
+  removable.forEach((item) => {
+    const targetPath = path.join(BACKUP_LOCAL_DIR, path.basename(item.fileName));
+    if (fs.existsSync(targetPath)) {
+      try { fs.unlinkSync(targetPath); } catch {}
+    }
+  });
+
+  const filteredHistory = history.filter((item) => item.action !== 'backup' || !item.fileName || keepSet.has(item.fileName));
+  saveBackupHistory(filteredHistory);
+};
+
+const createFullSystemBackup = async ({ trigger = 'manual', uploadToDrive = false } = {}) => {
+  const config = getBackupConfig();
+  const createdAt = new Date().toISOString();
+  const backupId = createBackupId();
+  const fileName = `netlink-full-backup-${getTimestampStamp()}.zip`;
+  const outputPath = path.join(BACKUP_LOCAL_DIR, fileName);
+  const systemFiles = collectFilesRecursively(DB_PATH);
+
+  const manifest = {
+    backupId,
+    createdAt,
+    trigger,
+    scope: 'full_system',
+    dbPath: DB_PATH,
+    fileCount: systemFiles.length,
+    files: systemFiles,
+    datasetStats: getDatasetStats(),
+  };
+
+  await createZipArchive({
+    outputPath,
+    compressionLevel: config.compressionLevel,
+    directoryEntries: [{ source: DB_PATH, target: 'database' }],
+    bufferEntries: [{ target: 'manifest.json', content: Buffer.from(JSON.stringify(manifest, null, 2), 'utf-8') }],
+  });
+
+  const sizeBytes = fs.statSync(outputPath).size;
+  const checksum = await hashFileSha256(outputPath);
+  let provider = 'local';
+  let uploadInfo = null;
+
+  if (config.googleDrive.enabled && (uploadToDrive || config.googleDrive.autoUpload)) {
+    uploadInfo = await uploadBackupToGoogleDrive(outputPath, fileName, config.googleDrive);
+    provider = uploadToDrive ? 'hybrid' : 'hybrid';
+    config.googleDrive.lastSyncAt = createdAt;
+    config.googleDrive.connectionStatus = 'connected';
+    config.googleDrive.connectionMessage = uploadInfo?.name ? `Drive upload completed: ${uploadInfo.name}` : 'Drive upload completed';
+  }
+
+  config.lastBackup = createdAt;
+  saveBackupConfig(config);
+
+  const historyItem = appendBackupHistory({
+    id: backupId,
+    action: 'backup',
+    status: 'success',
+    provider,
+    format: 'backup_zip',
+    dataset: 'full_system',
+    createdAt,
+    fileName,
+    sizeBytes,
+    checksum,
+    message: trigger === 'restore_point' ? 'Restore point created successfully.' : 'System backup completed successfully.',
+    downloadUrl: buildDownloadUrl(fileName),
+  });
+
+  pruneOldBackupArtifacts();
+
+  return {
+    historyItem,
+    downloadUrl: historyItem.downloadUrl,
+    googleDrive: uploadInfo,
+  };
+};
+
+const exportDatasetBundle = async ({ dataset, format }) => {
+  const createdAt = new Date().toISOString();
+  const exportId = createBackupId();
+  const baseName = `netlink-${dataset}-${getTimestampStamp()}`;
+  const data = readDatasetRecords(dataset);
+  let fileName = '';
+  let outputPath = '';
+
+  if (dataset === 'all_tables' && (format === 'csv' || format === 'zip')) {
+    fileName = `${baseName}.zip`;
+    outputPath = path.join(BACKUP_LOCAL_DIR, fileName);
+    const entries = BACKUP_DATASETS.map((item) => ({
+      target: `${item.id}.${format === 'csv' ? 'csv' : 'json'}`,
+      content: Buffer.from(
+        format === 'csv'
+          ? toCsv(readDatasetRecords(item.id))
+          : JSON.stringify(readDatasetRecords(item.id), null, 2),
+        'utf-8'
+      ),
+    }));
+    await createZipArchive({ outputPath, compressionLevel: 'balanced', bufferEntries: entries });
+  } else if (format === 'json') {
+    fileName = `${baseName}.json`;
+    outputPath = path.join(BACKUP_LOCAL_DIR, fileName);
+    writeJsonSafe(outputPath, data);
+  } else if (format === 'csv') {
+    fileName = `${baseName}.csv`;
+    outputPath = path.join(BACKUP_LOCAL_DIR, fileName);
+    fs.writeFileSync(outputPath, toCsv(Array.isArray(data) ? data : []), 'utf-8');
+  } else if (format === 'xlsx') {
+    fileName = `${baseName}.xlsx`;
+    outputPath = path.join(BACKUP_LOCAL_DIR, fileName);
+    const workbook = XLSX.utils.book_new();
+    if (dataset === 'all_tables') {
+      BACKUP_DATASETS.forEach((item) => {
+        const rows = readDatasetRecords(item.id).map((row) => flattenForTable(row));
+        const sheet = XLSX.utils.json_to_sheet(rows.length ? rows : [{}]);
+        XLSX.utils.book_append_sheet(workbook, sheet, item.id.slice(0, 31));
+      });
+    } else {
+      const rows = (Array.isArray(data) ? data : []).map((row) => flattenForTable(row));
+      const sheet = XLSX.utils.json_to_sheet(rows.length ? rows : [{}]);
+      XLSX.utils.book_append_sheet(workbook, sheet, dataset.slice(0, 31));
+    }
+    XLSX.writeFile(workbook, outputPath);
+  } else {
+    fileName = `${baseName}.zip`;
+    outputPath = path.join(BACKUP_LOCAL_DIR, fileName);
+    const payload = dataset === 'all_tables'
+      ? BACKUP_DATASETS.map((item) => ({ target: `${item.id}.json`, content: Buffer.from(JSON.stringify(readDatasetRecords(item.id), null, 2), 'utf-8') }))
+      : [{ target: `${dataset}.json`, content: Buffer.from(JSON.stringify(data, null, 2), 'utf-8') }];
+    await createZipArchive({ outputPath, compressionLevel: 'balanced', bufferEntries: payload });
+  }
+
+  const sizeBytes = fs.statSync(outputPath).size;
+  const checksum = await hashFileSha256(outputPath);
+  const historyItem = appendBackupHistory({
+    id: exportId,
+    action: 'export',
+    status: 'success',
+    provider: 'local',
+    format,
+    dataset,
+    createdAt,
+    fileName,
+    sizeBytes,
+    checksum,
+    message: `Dataset export completed for ${dataset}.`,
+    downloadUrl: buildDownloadUrl(fileName),
+  });
+
+  return {
+    historyItem,
+    downloadUrl: historyItem.downloadUrl,
+  };
+};
+
+const restoreBackupArchive = async (archivePath) => {
+  const config = getBackupConfig();
+  const createdAt = new Date().toISOString();
+
+  if (config.createRestorePointBeforeRestore) {
+    await createFullSystemBackup({ trigger: 'restore_point', uploadToDrive: false });
+  }
+
+  const extractionDir = path.join(BACKUP_TEMP_DIR, createBackupId());
+  fs.mkdirSync(extractionDir, { recursive: true });
+  await fs.createReadStream(archivePath).pipe(unzipper.Extract({ path: extractionDir })).promise();
+
+  const restoreSource = path.join(extractionDir, 'database');
+  if (!fs.existsSync(restoreSource)) {
+    throw new Error('The uploaded archive does not contain a valid full-system backup.');
+  }
+
+  fs.rmSync(DB_PATH, { recursive: true, force: true });
+  fs.mkdirSync(DB_PATH, { recursive: true });
+  fs.cpSync(restoreSource, DB_PATH, { recursive: true });
+
+  const refreshedConfig = getBackupConfig();
+  refreshedConfig.lastRestore = createdAt;
+  saveBackupConfig(refreshedConfig);
+
+  const restoredFileName = path.basename(archivePath);
+  const historyItem = appendBackupHistory({
+    id: createBackupId(),
+    action: 'restore',
+    status: 'success',
+    provider: 'local',
+    format: 'backup_zip',
+    dataset: 'full_system',
+    createdAt,
+    fileName: restoredFileName,
+    message: 'Full system restore completed successfully.',
+  });
+
+  try { fs.rmSync(extractionDir, { recursive: true, force: true }); } catch {}
+  return historyItem;
+};
+
+const getBackupOverview = () => {
+  const config = getBackupConfig();
+  const history = getBackupHistory().slice(0, 12);
+  const storage = getStorageDirectorySummary();
+  return {
+    config,
+    history,
+    storage,
+    nextRunAt: getNextBackupDueAt(config)?.toISOString() || null,
+    datasets: getDatasetStats(),
+  };
+};
+
+let backupJobRunning = false;
+const runAutomaticBackupIfDue = async () => {
+  if (backupJobRunning) return;
+  const config = getBackupConfig();
+  if (!config.enabled || !config.automatic) return;
+
+  const nextRunAt = getNextBackupDueAt(config);
+  if (!nextRunAt || nextRunAt.getTime() > Date.now()) return;
+
+  backupJobRunning = true;
+  try {
+    await createFullSystemBackup({ trigger: 'automatic', uploadToDrive: false });
+  } catch (error) {
+    appendBackupHistory({
+      id: createBackupId(),
+      action: 'backup',
+      status: 'failed',
+      provider: 'local',
+      format: 'backup_zip',
+      dataset: 'full_system',
+      createdAt: new Date().toISOString(),
+      fileName: `automatic-backup-${getTimestampStamp()}.zip`,
+      message: error?.message || 'Automatic backup failed.',
+    });
+  } finally {
+    backupJobRunning = false;
+  }
+};
 
 // ==========================================
 // Executive AI Helpers
@@ -2722,6 +3245,131 @@ app.post('/api/ai/executive-chat', async (req, res) => {
 });
 
 // ==========================================
+// Backup & Recovery API
+// ==========================================
+app.get('/api/system/backup/config', (req, res) => {
+  res.json({ data: getBackupConfig() });
+});
+
+app.post('/api/system/backup/config', (req, res) => {
+  try {
+    const data = saveBackupConfig(req.body || {});
+    res.json({ data });
+  } catch (error) {
+    res.status(500).json({ error: error?.message || 'Failed to save backup configuration.' });
+  }
+});
+
+app.get('/api/system/backup/overview', (req, res) => {
+  try {
+    res.json({ data: getBackupOverview() });
+  } catch (error) {
+    res.status(500).json({ error: error?.message || 'Failed to load backup overview.' });
+  }
+});
+
+app.post('/api/system/backup/google-drive/test', async (req, res) => {
+  try {
+    const settings = mergeBackupConfig({ googleDrive: req.body || {} }).googleDrive;
+    if (!settings.clientId || !settings.clientSecret || !settings.refreshToken) {
+      return res.status(400).json({ error: 'Google Drive credentials are incomplete.' });
+    }
+
+    const drive = getGoogleDriveClient(settings);
+    let folderInfo = null;
+    if (settings.folderId) {
+      const folderRes = await drive.files.get({ fileId: settings.folderId, fields: 'id,name,mimeType' });
+      folderInfo = folderRes.data;
+    } else {
+      const listRes = await drive.files.list({ pageSize: 1, fields: 'files(id,name)' });
+      folderInfo = listRes.data.files?.[0] || null;
+    }
+
+    const config = getBackupConfig();
+    config.googleDrive = {
+      ...config.googleDrive,
+      ...settings,
+      connectionStatus: 'connected',
+      connectionMessage: folderInfo?.name
+        ? `Google Drive connected successfully: ${folderInfo.name}`
+        : 'Google Drive connected successfully.',
+    };
+    saveBackupConfig(config);
+
+    res.json({
+      data: {
+        ok: true,
+        folder: folderInfo,
+        message: config.googleDrive.connectionMessage,
+      }
+    });
+  } catch (error) {
+    const config = getBackupConfig();
+    config.googleDrive.connectionStatus = 'error';
+    config.googleDrive.connectionMessage = error?.message || 'Google Drive connection failed.';
+    saveBackupConfig(config);
+    res.status(500).json({ error: error?.message || 'Google Drive connection failed.' });
+  }
+});
+
+app.post('/api/system/backup/run', async (req, res) => {
+  try {
+    const payload = req.body || {};
+    const data = await createFullSystemBackup({
+      trigger: payload.trigger || 'manual',
+      uploadToDrive: Boolean(payload.uploadToDrive),
+    });
+    res.json({ data });
+  } catch (error) {
+    res.status(500).json({ error: error?.message || 'Failed to run system backup.' });
+  }
+});
+
+app.post('/api/system/backup/export', async (req, res) => {
+  try {
+    const { dataset, format } = req.body || {};
+    if (!dataset || !format) {
+      return res.status(400).json({ error: 'Dataset and format are required.' });
+    }
+    const data = await exportDatasetBundle({ dataset, format });
+    res.json({ data });
+  } catch (error) {
+    res.status(500).json({ error: error?.message || 'Failed to export dataset.' });
+  }
+});
+
+app.post('/api/system/backup/restore', backupUpload.single('backupFile'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'Backup file is required.' });
+    }
+
+    const historyItem = await restoreBackupArchive(req.file.path);
+    try { fs.unlinkSync(req.file.path); } catch {}
+    res.json({
+      data: {
+        historyItem,
+        message: 'System restore completed successfully. Refresh the interface to load restored data.',
+      }
+    });
+  } catch (error) {
+    if (req.file?.path && fs.existsSync(req.file.path)) {
+      try { fs.unlinkSync(req.file.path); } catch {}
+    }
+    res.status(500).json({ error: error?.message || 'Failed to restore backup.' });
+  }
+});
+
+app.get('/api/system/backup/download/:fileName', (req, res) => {
+  const safeFileName = path.basename(req.params.fileName || '');
+  const targetPath = path.join(BACKUP_LOCAL_DIR, safeFileName);
+  if (!safeFileName || !fs.existsSync(targetPath)) {
+    return res.status(404).json({ error: 'Backup file not found.' });
+  }
+  res.download(targetPath);
+});
+
+// ==========================================
 // FILE MANAGER API ENDPOINTS
 // ==========================================
 
@@ -3038,6 +3686,9 @@ async function checkSubscriberExpiries() {
 // Start background check every 5 seconds
 setInterval(checkSubscriberExpiries, 5000);
 console.log(`[System] Background Expiry Monitoring Service is active.`);
+setInterval(runAutomaticBackupIfDue, 60000);
+runAutomaticBackupIfDue().catch(() => {});
+console.log(`[System] Automated Backup Scheduler is active.`);
 
 import { exec } from 'child_process';
 

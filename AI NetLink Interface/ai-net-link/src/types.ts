@@ -1,6 +1,13 @@
 export type Lang = 'en' | 'ar';
 export type Theme = 'light' | 'dark';
 export type Tab = 'dashboard' | 'chat' | 'search' | 'settings' | 'files' | 'topology' | 'security' | 'analytics' | 'executive' | 'billing' | 'inventory' | 'crm' | 'field' | 'reports' | 'portal' | 'investors' | 'suppliers' | 'boi_expiry' | 'management' | 'network_radius' | 'financial';
+export type SettingsCategoryId = 'profile' | 'gateways' | 'ai' | 'billing' | 'investors' | 'backup' | 'team' | 'security' | 'about';
+export type BackupFrequency = 'daily' | 'weekly' | 'monthly';
+export type BackupCompressionLevel = 'fast' | 'balanced' | 'maximum';
+export type BackupExportFormat = 'json' | 'csv' | 'xlsx' | 'zip';
+export type BackupDatasetId = 'subscribers' | 'investors' | 'suppliers' | 'managers' | 'directors' | 'deputies' | 'iptv' | 'profiles' | 'all_tables';
+export type BackupProvider = 'local' | 'google_drive' | 'hybrid';
+export type BackupJobStatus = 'idle' | 'running' | 'success' | 'failed';
 /**
  * © 2026 SAS NET. All Rights Reserved.
  * Developer: Muhammad Rateb Jabarin
@@ -197,6 +204,49 @@ export interface UpdateStatus {
   error?: string;
 }
 
+export interface BackupGoogleDriveSettings {
+  enabled: boolean;
+  folderId: string;
+  clientId: string;
+  clientSecret: string;
+  refreshToken: string;
+  redirectUri: string;
+  autoUpload: boolean;
+  lastSyncAt: string | null;
+  connectionStatus: 'idle' | 'connected' | 'error';
+  connectionMessage?: string;
+}
+
+export interface BackupSettings {
+  enabled: boolean;
+  automatic: boolean;
+  frequency: BackupFrequency;
+  scheduledTime: string;
+  retentionCount: number;
+  compressionLevel: BackupCompressionLevel;
+  verifyAfterBackup: boolean;
+  createRestorePointBeforeRestore: boolean;
+  includeUploadsDirectory: boolean;
+  lastBackup: string | null;
+  lastRestore: string | null;
+  googleDrive: BackupGoogleDriveSettings;
+}
+
+export interface BackupHistoryItem {
+  id: string;
+  action: 'backup' | 'export' | 'restore';
+  status: Exclude<BackupJobStatus, 'idle'>;
+  provider: BackupProvider;
+  format: BackupExportFormat | 'backup_zip';
+  dataset?: BackupDatasetId | 'full_system';
+  createdAt: string;
+  fileName: string;
+  sizeBytes?: number;
+  checksum?: string;
+  message?: string;
+  downloadUrl?: string;
+}
+
 export interface User {
   id: string;
   name: string;
@@ -272,6 +322,7 @@ export interface AppState {
   lang: Lang;
   theme: Theme;
   activeTab: Tab;
+  activeSettingsCategory: SettingsCategoryId;
   sidebarOpen: boolean;
   mobileMenuOpen: boolean;
   role: Role;
@@ -298,9 +349,17 @@ export interface AppState {
   };
   backupSettings: {
     enabled: boolean;
-    frequency: 'daily' | 'weekly' | 'monthly';
-    lastBackup: string | null;
     automatic: boolean;
+    frequency: BackupFrequency;
+    scheduledTime: string;
+    retentionCount: number;
+    compressionLevel: BackupCompressionLevel;
+    verifyAfterBackup: boolean;
+    createRestorePointBeforeRestore: boolean;
+    includeUploadsDirectory: boolean;
+    lastBackup: string | null;
+    lastRestore: string | null;
+    googleDrive: BackupGoogleDriveSettings;
   };
   aiSettings: {
     primaryModel: string;

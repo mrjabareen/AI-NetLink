@@ -4,6 +4,8 @@
  * Website: aljabareen.com
  * Contact: admin@aljabareen.com | +970597409040
  */
+import type { BackupDatasetId, BackupExportFormat, BackupSettings } from './types';
+
 const getDefaultBaseUrl = () => {
   if (typeof window === 'undefined') return 'http://localhost:3001/api';
   const { protocol, hostname } = window.location;
@@ -618,6 +620,82 @@ export const getSystemDashboardMetrics = async () => {
     }
     const data = await res.json();
     return data.data;
+};
+
+export const getBackupConfig = async (): Promise<BackupSettings | null> => {
+  try {
+    const res = await fetch(`${BASE_URL}/system/backup/config`);
+    if (!res.ok) throw new Error('Failed to fetch backup config');
+    const data = await res.json();
+    return data.data;
+  } catch (error) {
+    console.error(error);
+    return null;
+  }
+};
+
+export const saveBackupConfig = async (config: BackupSettings) => {
+  const res = await fetch(`${BASE_URL}/system/backup/config`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(config),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || 'Failed to save backup config');
+  return data.data;
+};
+
+export const getBackupOverview = async () => {
+  const res = await fetch(`${BASE_URL}/system/backup/overview`);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || 'Failed to fetch backup overview');
+  return data.data;
+};
+
+export const runSystemBackup = async (payload: { uploadToDrive?: boolean; trigger?: 'manual' | 'automatic' | 'restore_point' } = {}) => {
+  const res = await fetch(`${BASE_URL}/system/backup/run`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || 'Failed to create backup');
+  return data.data;
+};
+
+export const exportBackupDataset = async (payload: { dataset: BackupDatasetId; format: BackupExportFormat }) => {
+  const res = await fetch(`${BASE_URL}/system/backup/export`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || 'Failed to export dataset');
+  return data.data;
+};
+
+export const testGoogleDriveBackupConnection = async (googleDriveSettings: BackupSettings['googleDrive']) => {
+  const res = await fetch(`${BASE_URL}/system/backup/google-drive/test`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(googleDriveSettings),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || 'Failed to test Google Drive connection');
+  return data.data;
+};
+
+export const restoreSystemBackup = async (file: File) => {
+  const formData = new FormData();
+  formData.append('backupFile', file);
+
+  const res = await fetch(`${BASE_URL}/system/backup/restore`, {
+    method: 'POST',
+    body: formData,
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || 'Failed to restore backup');
+  return data.data;
 };
 
 export const testAiProvider = async (payload: any) => {

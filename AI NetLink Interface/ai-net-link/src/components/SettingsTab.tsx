@@ -4,13 +4,13 @@
  * Website: aljabareen.com
  * Contact: admin@aljabareen.com | +970597409040
  */
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { motion } from 'motion/react';
-import { Settings, User, Network, Cpu, CreditCard, Users, Shield, Save, Key, Database, Server, Lock, Bell, Globe, Moon, Sun, Plus, Trash2, TrendingUp, RefreshCw, Clock, CheckCircle2, XCircle, DollarSign, Calendar, Percent, Eye, EyeOff, Mail, Send, Smartphone, ScanLine, Activity, MessageSquare, QrCode, ShieldCheck, Search, Download } from 'lucide-react';
-import { AppState, Currency, GatewayConfig, Permission, Role, TeamMember, WhatsAppStatus } from '../types';
+import { Settings, User, Network, Cpu, CreditCard, Users, Shield, Save, Key, Database, Server, Lock, Bell, Globe, Moon, Sun, Plus, Trash2, TrendingUp, RefreshCw, Clock, CheckCircle2, XCircle, DollarSign, Calendar, Percent, Eye, EyeOff, Mail, Send, Smartphone, ScanLine, Activity, MessageSquare, QrCode, ShieldCheck, Search, Download, Upload, Cloud, FileJson, FileSpreadsheet, ArchiveRestore, HardDrive } from 'lucide-react';
+import { AppState, BackupDatasetId, BackupExportFormat, BackupHistoryItem, Currency, GatewayConfig, Permission, Role, SettingsCategoryId, TeamMember, WhatsAppStatus } from '../types';
 import { dict } from '../dict';
 import { formatNumber, normalizeDigits, parseNumericInput } from '../utils/format';
-import { getGatewaysConfig, saveGatewaysConfig, getWhatsappStatus, restartWhatsappEngine, getNetworkConfig, saveNetworkConfig, testMikrotikConnection, BASE_URL, checkSystemUpdate, startSystemUpdate, testAiProvider } from '../api';
+import { getGatewaysConfig, saveGatewaysConfig, getWhatsappStatus, restartWhatsappEngine, getNetworkConfig, saveNetworkConfig, testMikrotikConnection, BASE_URL, checkSystemUpdate, startSystemUpdate, testAiProvider, exportBackupDataset, getBackupOverview, restoreSystemBackup, runSystemBackup, saveBackupConfig, testGoogleDriveBackupConnection } from '../api';
 import { showAppToast, toastError, toastInfo, toastSuccess } from '../utils/notify';
 import NumericInput from './NumericInput';
 import DateInput from './DateInput';
@@ -23,7 +23,7 @@ interface SettingsTabProps {
 }
 
 type SettingsCategory = {
-  id: string;
+  id: SettingsCategoryId;
   icon: React.ComponentType<{ size?: number; className?: string }>;
   label: string;
   permission?: Permission;
@@ -36,7 +36,6 @@ export default function SettingsTab({ state, setState }: SettingsTabProps) {
   const userPermissions = state.currentUser?.permissions || [];
   const hasPermission = (perm: Permission) => state.role === 'super_admin' || userPermissions.includes('all') || userPermissions.includes(perm);
 
-  const [activeCategory, setActiveCategory] = useState('profile');
   const [pin, setPin] = useState('');
   const [showPin, setShowPin] = useState(false);
   const [pinError, setPinError] = useState(false);
@@ -50,13 +49,29 @@ export default function SettingsTab({ state, setState }: SettingsTabProps) {
   const [isSmsPromptOpen, setIsSmsPromptOpen] = useState(false);
   const [isEmailPromptOpen, setIsEmailPromptOpen] = useState(false);
   const [memberToDelete, setMemberToDelete] = useState<TeamMember | null>(null);
+  const [backupOverview, setBackupOverview] = useState<{ history?: BackupHistoryItem[]; nextRunAt?: string | null; storage?: { localFileCount?: number; totalBytes?: number }; datasets?: Array<{ id: string; label: string; records: number }> } | null>(null);
+  const [backupActionId, setBackupActionId] = useState<string | null>(null);
+  const [restoreFile, setRestoreFile] = useState<File | null>(null);
+  const [selectedBackupDataset, setSelectedBackupDataset] = useState<BackupDatasetId>('subscribers');
+  const [selectedBackupFormat, setSelectedBackupFormat] = useState<BackupExportFormat>('xlsx');
+
+  const activeCategory = state.activeSettingsCategory;
 
   React.useEffect(() => {
+    let interval: ReturnType<typeof setInterval> | undefined;
+
     if (activeCategory === 'gateways') {
       loadGatewaysOnce();
-      const interval = setInterval(loadWaStatusOnly, 3000);
-      return () => clearInterval(interval);
+      interval = setInterval(loadWaStatusOnly, 3000);
     }
+
+    if (activeCategory === 'backup') {
+      loadBackupCenter();
+    }
+
+    return () => {
+      if (interval) clearInterval(interval);
+    };
   }, [activeCategory]);
 
   const loadGatewaysOnce = async () => {
@@ -69,6 +84,33 @@ export default function SettingsTab({ state, setState }: SettingsTabProps) {
   const loadWaStatusOnly = async () => {
     const w = await getWhatsappStatus();
     if (w) setWaStatus(w);
+  };
+
+  const resolveApiFileUrl = (relativeUrl: string) => (
+    relativeUrl.startsWith('http') ? relativeUrl : `${BASE_URL.replace(/\/api$/, '')}${relativeUrl}`
+  );
+
+  const loadBackupCenter = async () => {
+    try {
+      const overview = await getBackupOverview();
+      setBackupOverview(overview);
+      if (overview?.config) {
+        setState(prev => ({
+          ...prev,
+          backupSettings: {
+            ...prev.backupSettings,
+            ...overview.config,
+            googleDrive: {
+              ...prev.backupSettings.googleDrive,
+              ...(overview.config.googleDrive || {}),
+            },
+          },
+        }));
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : (isRTL ? 'تعذر تحميل مركز النسخ الاحتياطي.' : 'Failed to load backup center.');
+      toastError(message, isRTL ? 'خطأ في التحميل' : 'Load Failed');
+    }
   };
 
   const waitForUpdatedVersionAndReload = (targetVersion?: string | null) => {
@@ -278,7 +320,116 @@ export default function SettingsTab({ state, setState }: SettingsTabProps) {
     toastSuccess(isRTL ? 'تم حذف المستخدم من الفريق.' : 'The user was removed from the team.', isRTL ? 'تم الحذف' : 'User Removed');
   };
 
-  const categories: SettingsCategory[] = [
+  const handleSaveBackupSettings = async () => {
+    try {
+      setBackupActionId('save-backup-settings');
+      await saveBackupConfig(state.backupSettings);
+      await loadBackupCenter();
+      toastSuccess(isRTL ? 'تم حفظ إعدادات النسخ الاحتياطي والاستعادة.' : 'Backup and recovery settings were saved successfully.', isRTL ? 'تم الحفظ' : 'Saved');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : (isRTL ? 'تعذر حفظ إعدادات النسخ الاحتياطي.' : 'Failed to save backup settings.');
+      toastError(message, isRTL ? 'فشل الحفظ' : 'Save Failed');
+    } finally {
+      setBackupActionId(null);
+    }
+  };
+
+  const handleRunBackup = async (uploadToDrive = false) => {
+    try {
+      setBackupActionId(uploadToDrive ? 'run-backup-drive' : 'run-backup-local');
+      const result = await runSystemBackup({ uploadToDrive, trigger: 'manual' });
+      await loadBackupCenter();
+      toastSuccess(
+        uploadToDrive
+          ? (isRTL ? 'تم إنشاء النسخة الاحتياطية ورفعها إلى Google Drive.' : 'Backup created and uploaded to Google Drive.')
+          : (isRTL ? 'تم إنشاء النسخة الاحتياطية الكاملة بنجاح.' : 'Full system backup was created successfully.'),
+        isRTL ? 'اكتمل النسخ' : 'Backup Completed'
+      );
+      if (result?.downloadUrl) {
+        window.open(resolveApiFileUrl(result.downloadUrl), '_blank', 'noopener,noreferrer');
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : (isRTL ? 'تعذر إنشاء النسخة الاحتياطية.' : 'Failed to create backup.');
+      toastError(message, isRTL ? 'فشل النسخ' : 'Backup Failed');
+    } finally {
+      setBackupActionId(null);
+    }
+  };
+
+  const handleExportDataset = async () => {
+    try {
+      setBackupActionId('export-dataset');
+      const result = await exportBackupDataset({ dataset: selectedBackupDataset, format: selectedBackupFormat });
+      await loadBackupCenter();
+      toastSuccess(isRTL ? 'تم تجهيز ملف التصدير بنجاح.' : 'Export file prepared successfully.', isRTL ? 'نجح التصدير' : 'Export Ready');
+      if (result?.downloadUrl) {
+        window.open(resolveApiFileUrl(result.downloadUrl), '_blank', 'noopener,noreferrer');
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : (isRTL ? 'تعذر تصدير البيانات.' : 'Failed to export data.');
+      toastError(message, isRTL ? 'فشل التصدير' : 'Export Failed');
+    } finally {
+      setBackupActionId(null);
+    }
+  };
+
+  const handleTestBackupDrive = async () => {
+    try {
+      setBackupActionId('test-drive');
+      const result = await testGoogleDriveBackupConnection(state.backupSettings.googleDrive);
+      setState(prev => ({
+        ...prev,
+        backupSettings: {
+          ...prev.backupSettings,
+          googleDrive: {
+            ...prev.backupSettings.googleDrive,
+            connectionStatus: 'connected',
+            connectionMessage: result?.message || (isRTL ? 'تم الاتصال بنجاح.' : 'Connected successfully.'),
+          },
+        },
+      }));
+      await loadBackupCenter();
+      toastSuccess(result?.message || (isRTL ? 'تم ربط Google Drive بنجاح.' : 'Google Drive connected successfully.'), isRTL ? 'تم الربط' : 'Connected');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : (isRTL ? 'تعذر الاتصال بـ Google Drive.' : 'Failed to connect to Google Drive.');
+      setState(prev => ({
+        ...prev,
+        backupSettings: {
+          ...prev.backupSettings,
+          googleDrive: {
+            ...prev.backupSettings.googleDrive,
+            connectionStatus: 'error',
+            connectionMessage: message,
+          },
+        },
+      }));
+      toastError(message, isRTL ? 'فشل الاتصال' : 'Connection Failed');
+    } finally {
+      setBackupActionId(null);
+    }
+  };
+
+  const handleRestoreBackup = async () => {
+    if (!restoreFile) {
+      toastInfo(isRTL ? 'اختر ملف نسخة احتياطية أولًا.' : 'Select a backup file first.', isRTL ? 'ملف مطلوب' : 'File Required');
+      return;
+    }
+
+    try {
+      setBackupActionId('restore-backup');
+      await restoreSystemBackup(restoreFile);
+      setRestoreFile(null);
+      await loadBackupCenter();
+      toastSuccess(isRTL ? 'تمت استعادة النظام بنجاح. قم بتحديث الصفحة لتحميل البيانات المستعادة.' : 'System restore completed successfully. Refresh the page to load restored data.', isRTL ? 'اكتملت الاستعادة' : 'Restore Completed');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : (isRTL ? 'تعذرت استعادة النسخة الاحتياطية.' : 'Failed to restore backup.');
+      toastError(message, isRTL ? 'فشل الاستعادة' : 'Restore Failed');
+    } finally {
+      setBackupActionId(null);
+    }
+  };
+
+  const categories = useMemo<SettingsCategory[]>(() => [
     { id: 'profile', icon: User, label: t.settings.categories.profile },
     { id: 'gateways', icon: Send, label: isRTL ? 'إدارة البوابات' : 'Gateways', permission: 'manage_team' as Permission },
     { id: 'ai', icon: Cpu, label: t.settings.categories.ai, permission: 'manage_ai' as Permission },
@@ -288,7 +439,35 @@ export default function SettingsTab({ state, setState }: SettingsTabProps) {
     { id: 'team', icon: Users, label: t.settings.categories.team, permission: 'manage_team' as Permission },
     { id: 'security', icon: Shield, label: t.settings.categories.security, permission: 'view_security' as Permission },
     { id: 'about', icon: Activity, label: t.settings.categories.about },
-  ].filter(cat => !cat.permission || hasPermission(cat.permission));
+  ].filter(cat => !cat.permission || hasPermission(cat.permission)), [hasPermission, isRTL, t.settings.categories]);
+
+  React.useEffect(() => {
+    if (!categories.some((category) => category.id === activeCategory)) {
+      setState(prev => ({ ...prev, activeSettingsCategory: categories[0]?.id || 'profile' }));
+    }
+  }, [activeCategory, categories, setState]);
+
+  const activeCategoryMeta = categories.find((category) => category.id === activeCategory);
+  const backupHistory = backupOverview?.history || [];
+  const backupDatasets = useMemo<Array<{ id: BackupDatasetId; label: string }>>(() => ([
+    { id: 'subscribers', label: isRTL ? 'جدول المشتركين' : 'Subscribers Table' },
+    { id: 'investors', label: isRTL ? 'جدول المستثمرين' : 'Investors Table' },
+    { id: 'suppliers', label: isRTL ? 'جدول الموردين' : 'Suppliers Table' },
+    { id: 'managers', label: isRTL ? 'جدول المدراء' : 'Managers Table' },
+    { id: 'directors', label: isRTL ? 'جدول المديرين' : 'Directors Table' },
+    { id: 'deputies', label: isRTL ? 'جدول النواب' : 'Deputies Table' },
+    { id: 'iptv', label: isRTL ? 'جدول IPTV' : 'IPTV Table' },
+    { id: 'profiles', label: isRTL ? 'ملفات البروفايلات' : 'Profiles File' },
+    { id: 'all_tables', label: isRTL ? 'كل الجداول دفعة واحدة' : 'All Tables Bundle' },
+  ]), [isRTL]);
+
+  const formatBytes = (bytes?: number) => {
+    if (!bytes) return isRTL ? '0 بايت' : '0 B';
+    if (bytes < 1024) return `${bytes} ${isRTL ? 'بايت' : 'B'}`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} ${isRTL ? 'ك.ب' : 'KB'}`;
+    if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} ${isRTL ? 'م.ب' : 'MB'}`;
+    return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} ${isRTL ? 'ج.ب' : 'GB'}`;
+  };
 
   const handleRoleSwitch = () => {
     const normalizedPin = normalizeDigits(pin);
@@ -801,68 +980,380 @@ export default function SettingsTab({ state, setState }: SettingsTabProps) {
 
       case 'backup':
         return (
-          <div className="space-y-6">
-            <h3 className="text-xl font-bold text-slate-800 dark:text-slate-100 mb-4">{t.settings.backup.title}</h3>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl">
-                <div>
-                  <h4 className="font-semibold text-slate-800 dark:text-slate-200 text-sm">{t.settings.backup.enabled}</h4>
-                </div>
-                <div 
-                  onClick={() => setState(prev => ({ ...prev, backupSettings: { ...prev.backupSettings, enabled: !prev.backupSettings.enabled } }))}
-                  className={`w-12 h-6 rounded-full relative cursor-pointer transition-colors ${state.backupSettings.enabled ? 'bg-teal-500' : 'bg-slate-300 dark:bg-slate-700'}`}
-                >
-                  <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${state.backupSettings.enabled ? (isRTL ? 'left-1' : 'right-1') : (isRTL ? 'right-1' : 'left-1')}`}></div>
-                </div>
-              </div>
-
-              <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl">
-                <div>
-                  <h4 className="font-semibold text-slate-800 dark:text-slate-200 text-sm">{t.settings.backup.automatic}</h4>
-                </div>
-                <div 
-                  onClick={() => setState(prev => ({ ...prev, backupSettings: { ...prev.backupSettings, automatic: !prev.backupSettings.automatic } }))}
-                  className={`w-12 h-6 rounded-full relative cursor-pointer transition-colors ${state.backupSettings.automatic ? 'bg-teal-500' : 'bg-slate-300 dark:bg-slate-700'}`}
-                >
-                  <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${state.backupSettings.automatic ? (isRTL ? 'left-1' : 'right-1') : (isRTL ? 'right-1' : 'left-1')}`}></div>
-                </div>
-              </div>
-
+          <div className="space-y-8">
+            <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
               <div className="space-y-2">
-                <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">{t.settings.backup.frequency}</label>
-                <select 
-                  value={state.backupSettings.frequency}
-                  onChange={(e) => setState(prev => ({ ...prev, backupSettings: { ...prev.backupSettings, frequency: e.target.value as AppState['backupSettings']['frequency'] } }))}
-                  className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2.5 text-slate-800 dark:text-slate-200 focus:outline-none focus:border-teal-500 transition-all"
-                >
-                  <option value="daily">{isRTL ? 'يومي' : 'Daily'}</option>
-                  <option value="weekly">{isRTL ? 'أسبوعي' : 'Weekly'}</option>
-                  <option value="monthly">{isRTL ? 'شهري' : 'Monthly'}</option>
-                </select>
+                <h3 className="text-xl font-bold text-slate-800 dark:text-slate-100">{t.settings.backup.title}</h3>
+                <p className="text-sm text-slate-500 dark:text-slate-400 max-w-3xl">
+                  {isRTL
+                    ? 'مركز نسخ احتياطي واستعادة احترافي يشمل نسخة كاملة للنظام، تصدير الجداول بصيغ متعددة، وجدولة تلقائية مع دعم الربط والرفع إلى Google Drive.'
+                    : 'Professional backup and recovery center with full-system snapshots, multi-format exports, automated scheduling, and Google Drive integration.'}
+                </p>
               </div>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={() => handleRunBackup(false)}
+                  disabled={backupActionId !== null}
+                  className="px-4 py-2.5 bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 rounded-xl text-sm font-bold flex items-center gap-2 hover:opacity-90 transition-opacity disabled:opacity-50"
+                >
+                  <Database size={16} />
+                  {backupActionId === 'run-backup-local' ? (isRTL ? 'جاري النسخ...' : 'Backing Up...') : (isRTL ? 'نسخة كاملة محلية' : 'Local Full Backup')}
+                </button>
+                <button
+                  onClick={() => handleRunBackup(true)}
+                  disabled={backupActionId !== null || !state.backupSettings.googleDrive.enabled}
+                  className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-bold flex items-center gap-2 transition-colors disabled:opacity-50"
+                >
+                  <Cloud size={16} />
+                  {backupActionId === 'run-backup-drive' ? (isRTL ? 'جاري الرفع...' : 'Uploading...') : (isRTL ? 'نسخ + رفع إلى Drive' : 'Backup + Drive Upload')}
+                </button>
+              </div>
+            </div>
 
-              <div className="p-4 bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl">
-                <h4 className="text-xs font-bold text-slate-500 uppercase mb-1">{t.settings.backup.lastBackup}</h4>
-                <div className="flex items-center gap-2 text-slate-800 dark:text-slate-200 font-mono text-sm">
-                  <Clock size={14} className="text-teal-500" />
-                  {state.backupSettings.lastBackup || 'Never'}
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+              <div className="p-5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#09090B]">
+                <div className="flex items-center gap-3 mb-3">
+                  <Database className="text-teal-500" size={18} />
+                  <span className="text-xs font-bold uppercase tracking-wider text-slate-500">{isRTL ? 'آخر نسخة' : 'Last Backup'}</span>
+                </div>
+                <div className="text-sm font-bold text-slate-900 dark:text-white">{state.backupSettings.lastBackup || (isRTL ? 'لا يوجد بعد' : 'Not Available')}</div>
+              </div>
+              <div className="p-5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#09090B]">
+                <div className="flex items-center gap-3 mb-3">
+                  <ArchiveRestore className="text-violet-500" size={18} />
+                  <span className="text-xs font-bold uppercase tracking-wider text-slate-500">{isRTL ? 'آخر استعادة' : 'Last Restore'}</span>
+                </div>
+                <div className="text-sm font-bold text-slate-900 dark:text-white">{state.backupSettings.lastRestore || (isRTL ? 'لا يوجد بعد' : 'Not Available')}</div>
+              </div>
+              <div className="p-5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#09090B]">
+                <div className="flex items-center gap-3 mb-3">
+                  <Clock className="text-amber-500" size={18} />
+                  <span className="text-xs font-bold uppercase tracking-wider text-slate-500">{isRTL ? 'النسخة التالية' : 'Next Run'}</span>
+                </div>
+                <div className="text-sm font-bold text-slate-900 dark:text-white">{backupOverview?.nextRunAt || (isRTL ? 'غير مجدول' : 'Not Scheduled')}</div>
+              </div>
+              <div className="p-5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#09090B]">
+                <div className="flex items-center gap-3 mb-3">
+                  <HardDrive className="text-blue-500" size={18} />
+                  <span className="text-xs font-bold uppercase tracking-wider text-slate-500">{isRTL ? 'التخزين المحلي' : 'Local Storage'}</span>
+                </div>
+                <div className="text-sm font-bold text-slate-900 dark:text-white">
+                  {`${backupOverview?.storage?.localFileCount || 0} ${isRTL ? 'ملف' : 'files'} • ${formatBytes(backupOverview?.storage?.totalBytes)}`}
                 </div>
               </div>
             </div>
 
-            <div className="p-6 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#09090B] flex flex-col items-center text-center space-y-4">
-              <div className="w-16 h-16 rounded-full bg-teal-500/10 flex items-center justify-center text-teal-500">
-                <Database size={32} />
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+              <div className="p-6 rounded-3xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-[#09090B]/70 space-y-5">
+                <div className="flex items-center justify-between">
+                  <h4 className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                    <ShieldCheck className="text-teal-500" size={18} />
+                    {isRTL ? 'سياسات النسخ الذكي' : 'Smart Backup Policy'}
+                  </h4>
+                  <button
+                    onClick={handleSaveBackupSettings}
+                    disabled={backupActionId !== null}
+                    className="px-4 py-2 bg-teal-500 hover:bg-teal-600 text-white rounded-xl text-xs font-bold flex items-center gap-2 disabled:opacity-50"
+                  >
+                    <Save size={14} />
+                    {backupActionId === 'save-backup-settings' ? (isRTL ? 'جاري الحفظ...' : 'Saving...') : (isRTL ? 'حفظ الإعدادات' : 'Save Settings')}
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="flex items-center justify-between p-4 rounded-2xl bg-white dark:bg-[#18181B] border border-slate-200 dark:border-slate-800">
+                    <div>
+                      <div className="font-semibold text-slate-800 dark:text-slate-200 text-sm">{isRTL ? 'تفعيل المركز' : 'Enable Center'}</div>
+                      <div className="text-xs text-slate-500">{isRTL ? 'تشغيل خدمات النسخ الاحتياطي والاستعادة' : 'Turn on backup and recovery services'}</div>
+                    </div>
+                    <div onClick={() => setState(prev => ({ ...prev, backupSettings: { ...prev.backupSettings, enabled: !prev.backupSettings.enabled } }))} className={`w-12 h-6 rounded-full relative cursor-pointer transition-colors ${state.backupSettings.enabled ? 'bg-teal-500' : 'bg-slate-300 dark:bg-slate-700'}`}>
+                      <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${state.backupSettings.enabled ? (isRTL ? 'left-1' : 'right-1') : (isRTL ? 'right-1' : 'left-1')}`}></div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between p-4 rounded-2xl bg-white dark:bg-[#18181B] border border-slate-200 dark:border-slate-800">
+                    <div>
+                      <div className="font-semibold text-slate-800 dark:text-slate-200 text-sm">{isRTL ? 'الجدولة التلقائية' : 'Auto Scheduling'}</div>
+                      <div className="text-xs text-slate-500">{isRTL ? 'إنشاء نسخ دورية تلقائيًا' : 'Create scheduled backups automatically'}</div>
+                    </div>
+                    <div onClick={() => setState(prev => ({ ...prev, backupSettings: { ...prev.backupSettings, automatic: !prev.backupSettings.automatic } }))} className={`w-12 h-6 rounded-full relative cursor-pointer transition-colors ${state.backupSettings.automatic ? 'bg-teal-500' : 'bg-slate-300 dark:bg-slate-700'}`}>
+                      <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${state.backupSettings.automatic ? (isRTL ? 'left-1' : 'right-1') : (isRTL ? 'right-1' : 'left-1')}`}></div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{isRTL ? 'تكرار النسخ' : 'Frequency'}</label>
+                    <select
+                      value={state.backupSettings.frequency}
+                      onChange={(e) => setState(prev => ({ ...prev, backupSettings: { ...prev.backupSettings, frequency: e.target.value as AppState['backupSettings']['frequency'] } }))}
+                      className="w-full bg-white dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2.5 text-slate-800 dark:text-slate-200 focus:outline-none focus:border-teal-500"
+                    >
+                      <option value="daily">{isRTL ? 'يومي' : 'Daily'}</option>
+                      <option value="weekly">{isRTL ? 'أسبوعي' : 'Weekly'}</option>
+                      <option value="monthly">{isRTL ? 'شهري' : 'Monthly'}</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{isRTL ? 'وقت التنفيذ' : 'Scheduled Time'}</label>
+                    <input
+                      type="time"
+                      value={state.backupSettings.scheduledTime}
+                      onChange={(e) => setState(prev => ({ ...prev, backupSettings: { ...prev.backupSettings, scheduledTime: e.target.value } }))}
+                      className="w-full bg-white dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2.5 text-slate-800 dark:text-slate-200 focus:outline-none focus:border-teal-500"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{isRTL ? 'عدد النسخ المحتفظ بها' : 'Retention Count'}</label>
+                    <input
+                      type="number"
+                      min={1}
+                      value={state.backupSettings.retentionCount}
+                      onChange={(e) => setState(prev => ({ ...prev, backupSettings: { ...prev.backupSettings, retentionCount: Math.max(1, parseInt(e.target.value, 10) || 1) } }))}
+                      className="w-full bg-white dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2.5 text-slate-800 dark:text-slate-200 focus:outline-none focus:border-teal-500"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{isRTL ? 'مستوى الضغط' : 'Compression Level'}</label>
+                    <select
+                      value={state.backupSettings.compressionLevel}
+                      onChange={(e) => setState(prev => ({ ...prev, backupSettings: { ...prev.backupSettings, compressionLevel: e.target.value as AppState['backupSettings']['compressionLevel'] } }))}
+                      className="w-full bg-white dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2.5 text-slate-800 dark:text-slate-200 focus:outline-none focus:border-teal-500"
+                    >
+                      <option value="fast">{isRTL ? 'سريع' : 'Fast'}</option>
+                      <option value="balanced">{isRTL ? 'متوازن' : 'Balanced'}</option>
+                      <option value="maximum">{isRTL ? 'أقصى ضغط' : 'Maximum'}</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <button
+                    onClick={() => setState(prev => ({ ...prev, backupSettings: { ...prev.backupSettings, verifyAfterBackup: !prev.backupSettings.verifyAfterBackup } }))}
+                    className={`p-4 rounded-2xl border text-sm font-semibold transition-colors ${state.backupSettings.verifyAfterBackup ? 'bg-teal-50 text-teal-700 border-teal-200 dark:bg-teal-500/10 dark:text-teal-400 dark:border-teal-500/20' : 'bg-white dark:bg-[#18181B] text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-800'}`}
+                  >
+                    {isRTL ? 'تحقق بعد الإنشاء' : 'Verify After Backup'}
+                  </button>
+                  <button
+                    onClick={() => setState(prev => ({ ...prev, backupSettings: { ...prev.backupSettings, createRestorePointBeforeRestore: !prev.backupSettings.createRestorePointBeforeRestore } }))}
+                    className={`p-4 rounded-2xl border text-sm font-semibold transition-colors ${state.backupSettings.createRestorePointBeforeRestore ? 'bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-500/10 dark:text-violet-400 dark:border-violet-500/20' : 'bg-white dark:bg-[#18181B] text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-800'}`}
+                  >
+                    {isRTL ? 'نقطة استعادة قبل الاسترجاع' : 'Restore Point Before Restore'}
+                  </button>
+                  <button
+                    onClick={() => setState(prev => ({ ...prev, backupSettings: { ...prev.backupSettings, includeUploadsDirectory: !prev.backupSettings.includeUploadsDirectory } }))}
+                    className={`p-4 rounded-2xl border text-sm font-semibold transition-colors ${state.backupSettings.includeUploadsDirectory ? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20' : 'bg-white dark:bg-[#18181B] text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-800'}`}
+                  >
+                    {isRTL ? 'تضمين ملفات الرفع' : 'Include Uploads'}
+                  </button>
+                </div>
               </div>
-              <div>
-                <h4 className="font-bold text-slate-900 dark:text-white">{t.settings.backup.status}</h4>
-                <p className="text-sm text-slate-500">{isRTL ? 'النظام جاهز للنسخ الاحتياطي' : 'System is ready for backup'}</p>
+
+              <div className="p-6 rounded-3xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-[#09090B]/70 space-y-5">
+                <div className="flex items-center justify-between">
+                  <h4 className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                    <Cloud className="text-blue-500" size={18} />
+                    {isRTL ? 'ربط Google Drive' : 'Google Drive Integration'}
+                  </h4>
+                  <span className={`px-3 py-1 rounded-full text-[11px] font-bold ${state.backupSettings.googleDrive.connectionStatus === 'connected' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400' : state.backupSettings.googleDrive.connectionStatus === 'error' ? 'bg-rose-100 text-rose-700 dark:bg-rose-500/10 dark:text-rose-400' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300'}`}>
+                    {state.backupSettings.googleDrive.connectionStatus === 'connected' ? (isRTL ? 'متصل' : 'Connected') : state.backupSettings.googleDrive.connectionStatus === 'error' ? (isRTL ? 'خطأ' : 'Error') : (isRTL ? 'غير مفعل' : 'Idle')}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="flex items-center justify-between p-4 rounded-2xl bg-white dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 md:col-span-2">
+                    <div>
+                      <div className="font-semibold text-slate-800 dark:text-slate-200 text-sm">{isRTL ? 'تفعيل الربط' : 'Enable Drive Sync'}</div>
+                      <div className="text-xs text-slate-500">{isRTL ? 'استخدم Google Drive كوجهة رفع تلقائي وحفظ خارجي' : 'Use Google Drive as your cloud backup destination'}</div>
+                    </div>
+                    <div onClick={() => setState(prev => ({ ...prev, backupSettings: { ...prev.backupSettings, googleDrive: { ...prev.backupSettings.googleDrive, enabled: !prev.backupSettings.googleDrive.enabled } } }))} className={`w-12 h-6 rounded-full relative cursor-pointer transition-colors ${state.backupSettings.googleDrive.enabled ? 'bg-blue-500' : 'bg-slate-300 dark:bg-slate-700'}`}>
+                      <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${state.backupSettings.googleDrive.enabled ? (isRTL ? 'left-1' : 'right-1') : (isRTL ? 'right-1' : 'left-1')}`}></div>
+                    </div>
+                  </div>
+
+                  <input value={state.backupSettings.googleDrive.folderId} onChange={(e) => setState(prev => ({ ...prev, backupSettings: { ...prev.backupSettings, googleDrive: { ...prev.backupSettings.googleDrive, folderId: e.target.value } } }))} placeholder={isRTL ? 'Google Drive Folder ID' : 'Google Drive Folder ID'} className="w-full bg-white dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2.5 text-sm text-slate-800 dark:text-slate-200 focus:outline-none focus:border-blue-500 font-mono" />
+                  <input value={state.backupSettings.googleDrive.clientId} onChange={(e) => setState(prev => ({ ...prev, backupSettings: { ...prev.backupSettings, googleDrive: { ...prev.backupSettings.googleDrive, clientId: e.target.value } } }))} placeholder={isRTL ? 'Client ID' : 'Client ID'} className="w-full bg-white dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2.5 text-sm text-slate-800 dark:text-slate-200 focus:outline-none focus:border-blue-500 font-mono" />
+                  <input type="password" value={state.backupSettings.googleDrive.clientSecret} onChange={(e) => setState(prev => ({ ...prev, backupSettings: { ...prev.backupSettings, googleDrive: { ...prev.backupSettings.googleDrive, clientSecret: e.target.value } } }))} placeholder={isRTL ? 'Client Secret' : 'Client Secret'} className="w-full bg-white dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2.5 text-sm text-slate-800 dark:text-slate-200 focus:outline-none focus:border-blue-500 font-mono" />
+                  <input type="password" value={state.backupSettings.googleDrive.refreshToken} onChange={(e) => setState(prev => ({ ...prev, backupSettings: { ...prev.backupSettings, googleDrive: { ...prev.backupSettings.googleDrive, refreshToken: e.target.value } } }))} placeholder={isRTL ? 'Refresh Token' : 'Refresh Token'} className="w-full bg-white dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2.5 text-sm text-slate-800 dark:text-slate-200 focus:outline-none focus:border-blue-500 font-mono" />
+                  <input value={state.backupSettings.googleDrive.redirectUri} onChange={(e) => setState(prev => ({ ...prev, backupSettings: { ...prev.backupSettings, googleDrive: { ...prev.backupSettings.googleDrive, redirectUri: e.target.value } } }))} placeholder={isRTL ? 'Redirect URI' : 'Redirect URI'} className="w-full bg-white dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2.5 text-sm text-slate-800 dark:text-slate-200 focus:outline-none focus:border-blue-500 font-mono md:col-span-2" />
+                </div>
+
+                <div className="flex flex-wrap gap-3">
+                  <button
+                    onClick={handleTestBackupDrive}
+                    disabled={backupActionId !== null}
+                    className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-bold flex items-center gap-2 disabled:opacity-50"
+                  >
+                    <Globe size={16} />
+                    {backupActionId === 'test-drive' ? (isRTL ? 'جاري الاختبار...' : 'Testing...') : (isRTL ? 'اختبار الربط' : 'Test Connection')}
+                  </button>
+                  <button
+                    onClick={() => setState(prev => ({ ...prev, backupSettings: { ...prev.backupSettings, googleDrive: { ...prev.backupSettings.googleDrive, autoUpload: !prev.backupSettings.googleDrive.autoUpload } } }))}
+                    className={`px-4 py-2.5 rounded-xl text-sm font-bold border ${state.backupSettings.googleDrive.autoUpload ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20' : 'bg-white dark:bg-[#18181B] text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-800'}`}
+                  >
+                    {isRTL ? 'رفع تلقائي بعد كل نسخة' : 'Auto Upload After Every Backup'}
+                  </button>
+                </div>
+
+                <div className="text-xs text-slate-500 dark:text-slate-400 leading-6 rounded-2xl bg-white dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 px-4 py-3">
+                  {state.backupSettings.googleDrive.connectionMessage || (isRTL ? 'أدخل بيانات OAuth الخاصة بـ Google Drive ثم اختبر الربط. يمكن استخدام Google OAuth Playground للحصول على Refresh Token.' : 'Enter Google Drive OAuth credentials, then test the connection. You can use Google OAuth Playground to obtain a refresh token.')}
+                </div>
               </div>
-              <button className="px-6 py-2.5 bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 rounded-xl text-sm font-bold flex items-center gap-2 hover:opacity-90 transition-opacity">
-                <RefreshCw size={16} />
-                {t.settings.backup.runNow}
-              </button>
+            </div>
+
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+              <div className="p-6 rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#09090B] space-y-5">
+                <div className="flex items-center gap-2">
+                  <FileSpreadsheet className="text-violet-500" size={18} />
+                  <h4 className="font-bold text-slate-900 dark:text-white">{isRTL ? 'مركز تصدير الجداول' : 'Dataset Export Center'}</h4>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{isRTL ? 'الجدول أو الحزمة' : 'Dataset Bundle'}</label>
+                    <select value={selectedBackupDataset} onChange={(e) => setSelectedBackupDataset(e.target.value as BackupDatasetId)} className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2.5 text-slate-800 dark:text-slate-200 focus:outline-none focus:border-violet-500">
+                      {backupDatasets.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{isRTL ? 'صيغة التصدير' : 'Export Format'}</label>
+                    <select value={selectedBackupFormat} onChange={(e) => setSelectedBackupFormat(e.target.value as BackupExportFormat)} className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2.5 text-slate-800 dark:text-slate-200 focus:outline-none focus:border-violet-500">
+                      <option value="json">JSON</option>
+                      <option value="csv">CSV</option>
+                      <option value="xlsx">XLSX</option>
+                      <option value="zip">ZIP</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div className="p-4 rounded-2xl bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 text-sm text-slate-600 dark:text-slate-300">
+                    <div className="font-bold mb-1 flex items-center gap-2"><FileJson size={15} /> JSON</div>
+                    <div>{isRTL ? 'مثالي للأرشفة البرمجية والدمج بين الأنظمة' : 'Best for structured archival and integrations'}</div>
+                  </div>
+                  <div className="p-4 rounded-2xl bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 text-sm text-slate-600 dark:text-slate-300">
+                    <div className="font-bold mb-1 flex items-center gap-2"><FileSpreadsheet size={15} /> CSV / XLSX</div>
+                    <div>{isRTL ? 'مناسب للتحليل والإكسل والتقارير المتقدمة' : 'Ideal for Excel, analytics, and reporting'}</div>
+                  </div>
+                  <div className="p-4 rounded-2xl bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 text-sm text-slate-600 dark:text-slate-300">
+                    <div className="font-bold mb-1 flex items-center gap-2"><Download size={15} /> ZIP</div>
+                    <div>{isRTL ? 'لتجميع ملفات متعددة أو كل الجداول دفعة واحدة' : 'For bundled exports and multi-file delivery'}</div>
+                  </div>
+                </div>
+
+                <button
+                  onClick={handleExportDataset}
+                  disabled={backupActionId !== null}
+                  className="w-full py-3 bg-violet-600 hover:bg-violet-700 text-white rounded-2xl text-sm font-bold flex items-center justify-center gap-2 transition-colors disabled:opacity-50"
+                >
+                  <Download size={16} />
+                  {backupActionId === 'export-dataset' ? (isRTL ? 'جاري تجهيز الملف...' : 'Preparing Export...') : (isRTL ? 'تصدير وتحميل' : 'Export & Download')}
+                </button>
+              </div>
+
+              <div className="p-6 rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#09090B] space-y-5">
+                <div className="flex items-center gap-2">
+                  <ArchiveRestore className="text-rose-500" size={18} />
+                  <h4 className="font-bold text-slate-900 dark:text-white">{isRTL ? 'الاستعادة الشاملة' : 'Full Recovery Center'}</h4>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 text-sm text-rose-700 dark:text-rose-300 leading-6">
+                  {isRTL
+                    ? 'الاستعادة الكاملة تستبدل بيانات النظام الحالية ببيانات النسخة الاحتياطية المرفوعة. إذا كان خيار نقطة الاستعادة مفعّلًا فسيتم إنشاء Restore Point تلقائيًا قبل الاسترجاع.'
+                    : 'A full restore replaces the current system data with the uploaded backup. When restore-point mode is enabled, a recovery snapshot is created automatically before restore.'}
+                </div>
+
+                <div className="space-y-3">
+                  <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{isRTL ? 'ملف النسخة الاحتياطية' : 'Backup Archive File'}</label>
+                  <input
+                    type="file"
+                    accept=".zip"
+                    onChange={(e) => setRestoreFile(e.target.files?.[0] || null)}
+                    className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-800 dark:text-slate-200 file:mr-3 file:rounded-lg file:border-0 file:bg-slate-900 file:px-3 file:py-2 file:text-white dark:file:bg-slate-100 dark:file:text-slate-900"
+                  />
+                  {restoreFile && (
+                    <div className="text-xs text-slate-500 dark:text-slate-400">
+                      {`${restoreFile.name} • ${formatBytes(restoreFile.size)}`}
+                    </div>
+                  )}
+                </div>
+
+                <button
+                  onClick={handleRestoreBackup}
+                  disabled={backupActionId !== null || !restoreFile}
+                  className="w-full py-3 bg-rose-600 hover:bg-rose-700 text-white rounded-2xl text-sm font-bold flex items-center justify-center gap-2 transition-colors disabled:opacity-50"
+                >
+                  <Upload size={16} />
+                  {backupActionId === 'restore-backup' ? (isRTL ? 'جاري الاستعادة...' : 'Restoring...') : (isRTL ? 'رفع واستعادة النسخة' : 'Upload & Restore Backup')}
+                </button>
+              </div>
+            </div>
+
+            <div className="p-6 rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#09090B] space-y-5">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <h4 className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                  <Activity className="text-emerald-500" size={18} />
+                  {isRTL ? 'سجل عمليات النسخ والاستعادة' : 'Backup & Recovery History'}
+                </h4>
+                <button
+                  onClick={loadBackupCenter}
+                  disabled={backupActionId !== null}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-bold flex items-center gap-2 disabled:opacity-50"
+                >
+                  <RefreshCw size={14} />
+                  {isRTL ? 'تحديث السجل' : 'Refresh History'}
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+                {(backupOverview?.datasets || []).map((item) => (
+                  <div key={item.id} className="p-4 rounded-2xl bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800">
+                    <div className="text-xs text-slate-500 mb-1">{item.label}</div>
+                    <div className="text-lg font-bold text-slate-900 dark:text-white">{item.records}</div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="space-y-3">
+                {backupHistory.length === 0 ? (
+                  <div className="p-6 rounded-2xl border border-dashed border-slate-300 dark:border-slate-700 text-center text-sm text-slate-500">
+                    {isRTL ? 'لا توجد عمليات نسخ أو استعادة مسجلة بعد.' : 'No backup or recovery events have been recorded yet.'}
+                  </div>
+                ) : (
+                  backupHistory.map((item) => (
+                    <div key={item.id} className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-[#18181B]">
+                      <div className="space-y-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-sm font-bold text-slate-900 dark:text-white">{item.fileName}</span>
+                          <span className={`px-2 py-1 rounded-lg text-[10px] font-bold uppercase ${item.status === 'success' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400' : 'bg-rose-100 text-rose-700 dark:bg-rose-500/10 dark:text-rose-400'}`}>
+                            {item.status}
+                          </span>
+                          <span className="px-2 py-1 rounded-lg text-[10px] font-bold uppercase bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300">{item.provider}</span>
+                        </div>
+                        <div className="text-xs text-slate-500 dark:text-slate-400">
+                          {`${item.createdAt} • ${item.dataset || ''} • ${item.format}`}
+                        </div>
+                        {item.message && <div className="text-xs text-slate-600 dark:text-slate-300">{item.message}</div>}
+                        {item.checksum && <div className="text-[11px] font-mono text-slate-400 break-all">{item.checksum}</div>}
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <div className="text-xs font-bold text-slate-500">{formatBytes(item.sizeBytes)}</div>
+                        {item.downloadUrl && (
+                          <button
+                            onClick={() => window.open(resolveApiFileUrl(item.downloadUrl || ''), '_blank', 'noopener,noreferrer')}
+                            className="px-4 py-2 bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 rounded-xl text-xs font-bold flex items-center gap-2"
+                          >
+                            <Download size={14} />
+                            {isRTL ? 'تحميل' : 'Download'}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
             </div>
           </div>
         );
@@ -1436,31 +1927,17 @@ export default function SettingsTab({ state, setState }: SettingsTabProps) {
         </p>
       </header>
 
-      <div className="flex-1 flex flex-col md:flex-row gap-6 min-h-0">
-        
-        {/* Settings Sidebar */}
-        <div className="w-full md:w-64 shrink-0 overflow-x-auto md:overflow-y-auto custom-scrollbar flex md:flex-col gap-2 pb-2 md:pb-0">
-          {categories.map((cat) => {
-            const Icon = cat.icon;
-            const isActive = activeCategory === cat.id;
-            return (
-              <button
-                key={cat.id}
-                onClick={() => setActiveCategory(cat.id)}
-                className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition-all whitespace-nowrap ${
-                  isActive 
-                    ? 'bg-teal-500 text-white shadow-md shadow-teal-500/20' 
-                    : 'bg-white dark:bg-[#09090B] text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-800 hover:border-teal-500/30 hover:text-teal-600 dark:hover:text-teal-400'
-                }`}
-              >
-                <Icon size={18} className={isActive ? 'text-white' : 'text-slate-400'} />
-                {cat.label}
-              </button>
-            );
-          })}
-        </div>
+      <div className="flex-1 flex flex-col min-h-0">
+        {activeCategoryMeta && (
+          <div className="mb-4 flex flex-wrap items-center gap-3 text-sm text-slate-500 dark:text-slate-400">
+            <span className="inline-flex items-center gap-2 rounded-full bg-teal-500/10 px-3 py-1.5 font-semibold text-teal-600 dark:text-teal-400">
+              <activeCategoryMeta.icon size={16} />
+              {activeCategoryMeta.label}
+            </span>
+            <span>{isRTL ? 'أقسام الإعدادات أصبحت ضمن القائمة المنسدلة في الشريط الجانبي.' : 'Settings sections are now available from the sidebar dropdown.'}</span>
+          </div>
+        )}
 
-        {/* Settings Content Area */}
         <div className="flex-1 glass-card p-6 md:p-8 overflow-y-auto custom-scrollbar">
           {renderContent()}
           
@@ -1471,7 +1948,6 @@ export default function SettingsTab({ state, setState }: SettingsTabProps) {
             </button>
           </div>
         </div>
-
       </div>
 
       <AppPromptDialog

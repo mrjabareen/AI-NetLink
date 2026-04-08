@@ -631,10 +631,15 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
   const [showFilters, setShowFilters] = useState(false);
   const [showColumnControls, setShowColumnControls] = useState(false);
   const [subscriberWorkspaceMode, setSubscriberWorkspaceMode] = useState<'list' | 'add' | 'edit'>('list');
+  const [entityWorkspaceMode, setEntityWorkspaceMode] = useState<'list' | 'add' | 'edit'>('list');
   const [isSubscriberHelpOpen, setIsSubscriberHelpOpen] = useState(false);
+  const [isEntityHelpOpen, setIsEntityHelpOpen] = useState(false);
   const [subscriberQuickFilter, setSubscriberQuickFilter] = useState<'all' | 'active' | 'online'>('all');
   const [subscriberPage, setSubscriberPage] = useState(1);
   const [subscriberPageSize, setSubscriberPageSize] = useState(10);
+  const [entityQuickFilter, setEntityQuickFilter] = useState<'all' | 'debt' | 'negative' | 'high_shares' | 'with_dividends' | 'active' | 'limited' | 'service_active' | 'service_profitable'>('all');
+  const [entityPage, setEntityPage] = useState(1);
+  const [entityPageSize, setEntityPageSize] = useState(10);
   const [advancedFilters, setAdvancedFilters] = useState<AdvancedFiltersByTab>(DEFAULT_ADVANCED_FILTERS);
   const [showName, setShowName] = useState(() => localStorage.getItem('sas4_mgmt_show_name') !== 'false');
   const [showChannel, setShowChannel] = useState(() => localStorage.getItem('sas4_mgmt_show_channel') !== 'false');
@@ -729,6 +734,7 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
   const [isBulkSyncingSubscribers, setIsBulkSyncingSubscribers] = useState(false);
   const [syncResult, setSyncResult] = useState<{ success: boolean; message: string; details?: SyncResultDetail[] } | null>(null);
   const useSubscriberWorkspace = activeSubTab === 'subscribers';
+  const useEntityWorkspace = activeSubTab === 'suppliers' || activeSubTab === 'shareholders' || activeSubTab === 'managers' || activeSubTab === 'iptv';
 
   const SUBSCRIBER_COLUMNS = [
     { id: 'id', label: isRTL ? 'المعرف' : 'ID', defaultVisible: true },
@@ -1314,21 +1320,117 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
     },
   ]), [isRTL, subscriberFieldHelp]);
 
+  const entityFieldHelp = useMemo<Record<string, string>>(() => ({
+    supplierName: isRTL ? 'اسم المورد الرسمي المعتمد في التعاملات والفواتير.' : 'Official supplier name used in invoices and operations.',
+    supplierCode: isRTL ? 'كود مختصر لتسهيل البحث والمطابقة المحاسبية.' : 'Short code for search and accounting matching.',
+    debt: isRTL ? 'إجمالي المبالغ المستحقة على المورد.' : 'Total payable amount to the supplier.',
+    paid: isRTL ? 'إجمالي ما تم تسديده لهذا المورد.' : 'Total amount already paid to the supplier.',
+    supplierBalance: isRTL ? 'الرصيد الصافي مع المورد (موجب/سالب).' : 'Net supplier balance (positive/negative).',
+    supplierNotes: isRTL ? 'ملاحظات تشغيلية أو محاسبية مرتبطة بالمورد.' : 'Operational/accounting notes for the supplier.',
+    investorName: isRTL ? 'اسم المستثمر كما يظهر في السجلات الرسمية.' : 'Investor name shown in official records.',
+    shares: isRTL ? 'عدد الأسهم المملوكة لهذا المستثمر.' : 'Number of shares owned by this investor.',
+    buyPrice: isRTL ? 'سعر شراء السهم الواحد.' : 'Purchase price per share.',
+    investment: isRTL ? 'القيمة الكلية للاستثمار (أسهم × سعر شراء).' : 'Total investment value (shares × buy price).',
+    dividends: isRTL ? 'الأرباح الموزعة المستحقة أو المدفوعة.' : 'Distributed dividends due/paid.',
+    ownership: isRTL ? 'نوع الملكية أو جهة التملك (شخصي/شركة/شريك).' : 'Ownership type (personal/corporate/partner).',
+    managerGroup: isRTL ? 'مجموعة الصلاحيات الأمنية التي تحدد ما يمكن للعضو الإداري فعله.' : 'Security permission group that controls what the admin member can do.',
+    managerLimit: isRTL ? 'حد العمليات المالية المسموح للعضو الإداري تنفيذه.' : 'Maximum financial transaction limit for this admin member.',
+    serviceType: isRTL ? 'نوع الخدمة الرقمية (IPTV/VPN/...) لتصنيفها وربطها بالفوترة.' : 'Digital service type (IPTV/VPN/...) for categorization and billing.',
+    billingCycle: isRTL ? 'دورية احتساب السعر (شهري/ربع سنوي/سنوي/مرة واحدة).' : 'Pricing cycle (monthly/quarterly/yearly/one-time).',
+    sellPrice: isRTL ? 'سعر بيع الخدمة للعميل.' : 'Service selling price to customers.',
+    serviceCost: isRTL ? 'تكلفة الخدمة عليك كمزود.' : 'Your service cost as provider.',
+    serviceStatus: isRTL ? 'حالة تشغيل الخدمة (نشطة/معلقة/منتهية).' : 'Service operational status (active/suspended/expired).',
+  }), [isRTL]);
+
+  const entityHelpSections = useMemo(() => {
+    if (activeSubTab === 'suppliers') {
+      return [
+        {
+          title: isRTL ? 'بيانات المورد' : 'Supplier Data',
+          items: [
+            [isRTL ? 'اسم المورد' : 'Supplier Name', entityFieldHelp.supplierName],
+            [isRTL ? 'كود المورد' : 'Supplier Code', entityFieldHelp.supplierCode],
+            [isRTL ? 'مدين' : 'Debt', entityFieldHelp.debt],
+            [isRTL ? 'مسدد' : 'Paid', entityFieldHelp.paid],
+            [isRTL ? 'الرصيد' : 'Balance', entityFieldHelp.supplierBalance],
+            [isRTL ? 'ملاحظات' : 'Notes', entityFieldHelp.supplierNotes],
+          ],
+        },
+      ];
+    }
+    if (activeSubTab === 'shareholders') {
+      return [
+        {
+          title: isRTL ? 'بيانات المستثمر' : 'Investor Data',
+          items: [
+            [isRTL ? 'الاسم' : 'Name', entityFieldHelp.investorName],
+            [isRTL ? 'الأسهم' : 'Shares', entityFieldHelp.shares],
+            [isRTL ? 'سعر الشراء' : 'Buy Price', entityFieldHelp.buyPrice],
+            [isRTL ? 'الاستثمار' : 'Investment', entityFieldHelp.investment],
+            [isRTL ? 'الأرباح' : 'Dividends', entityFieldHelp.dividends],
+            [isRTL ? 'الملكية' : 'Ownership', entityFieldHelp.ownership],
+          ],
+        },
+      ];
+    }
+    if (activeSubTab === 'managers') {
+      return [
+        {
+          title: isRTL ? 'بيانات العضو الإداري' : 'Admin Member Data',
+          items: [
+            [isRTL ? 'مجموعة الصلاحيات' : 'Permission Group', entityFieldHelp.managerGroup],
+            [isRTL ? 'الحد المالي' : 'TX Limit', entityFieldHelp.managerLimit],
+          ],
+        },
+      ];
+    }
+    if (activeSubTab === 'iptv') {
+      return [
+        {
+          title: isRTL ? 'بيانات الخدمة الرقمية' : 'Digital Service Data',
+          items: [
+            [isRTL ? 'نوع الخدمة' : 'Service Type', entityFieldHelp.serviceType],
+            [isRTL ? 'دورة الفوترة' : 'Billing Cycle', entityFieldHelp.billingCycle],
+            [isRTL ? 'سعر البيع' : 'Sell Price', entityFieldHelp.sellPrice],
+            [isRTL ? 'التكلفة' : 'Cost', entityFieldHelp.serviceCost],
+            [isRTL ? 'الحالة' : 'Status', entityFieldHelp.serviceStatus],
+          ],
+        },
+      ];
+    }
+    return [];
+  }, [activeSubTab, entityFieldHelp, isRTL]);
+
   const subscriberFormState = useMemo<Record<string, unknown> | null>(() => {
     if (subscriberWorkspaceMode === 'add') return newItem;
     if (subscriberWorkspaceMode === 'edit' && editingItem) return editingItem;
     return null;
   }, [subscriberWorkspaceMode, newItem, editingItem]);
 
+  const entityFormState = useMemo<Record<string, unknown> | null>(() => {
+    if (!useEntityWorkspace) return null;
+    if (entityWorkspaceMode === 'add') return newItem;
+    if (entityWorkspaceMode === 'edit' && editingItem) return editingItem;
+    return null;
+  }, [useEntityWorkspace, entityWorkspaceMode, newItem, editingItem]);
+
   React.useEffect(() => {
     setSubscriberWorkspaceMode('list');
     setSubscriberPage(1);
     setSubscriberQuickFilter('all');
+    setEntityWorkspaceMode('list');
+    setEntityPage(1);
+    setEntityQuickFilter('all');
+    setIsEntityHelpOpen(false);
   }, [activeSubTab]);
 
   React.useEffect(() => {
     setSubscriberPage(1);
   }, [subscriberQuickFilter]);
+
+  React.useEffect(() => {
+    setEntityPage(1);
+  }, [entityQuickFilter, entityPageSize]);
 
   React.useEffect(() => {
     if (!useSubscriberWorkspace) return;
@@ -1352,6 +1454,23 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
     setEditingItem(null);
     setNewItem({});
     setIsSubscriberHelpOpen(false);
+  };
+
+  const setEntityFormField = (key: string, value: unknown, extra: Record<string, unknown> = {}) => {
+    if (entityWorkspaceMode === 'edit' && editingItem) {
+      setEditingItem((prev) => (prev ? { ...prev, [key]: value, ...extra } : prev));
+      return;
+    }
+    if (entityWorkspaceMode === 'add') {
+      setNewItem((prev) => ({ ...prev, [key]: value, ...extra }));
+    }
+  };
+
+  const closeEntityWorkspace = () => {
+    setEntityWorkspaceMode('list');
+    setEditingItem(null);
+    setNewItem({});
+    setIsEntityHelpOpen(false);
   };
 
   const investorSummary = useMemo(() => {
@@ -2309,6 +2428,10 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
       setSubscriberWorkspaceMode('edit');
       return;
     }
+    if (useEntityWorkspace) {
+      setEntityWorkspaceMode('edit');
+      return;
+    }
     setIsEditModalOpen(true);
   };
 
@@ -2373,6 +2496,10 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
     setNewItem(item);
     if (activeSubTab === 'subscribers') {
       setSubscriberWorkspaceMode('add');
+      return;
+    }
+    if (useEntityWorkspace) {
+      setEntityWorkspaceMode('add');
       return;
     }
     setIsAddModalOpen(true);
@@ -2449,6 +2576,9 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
     if (activeSubTab === 'subscribers') {
       closeSubscriberWorkspace();
       setSubscriberPage(1);
+    } else if (useEntityWorkspace) {
+      closeEntityWorkspace();
+      setEntityPage(1);
     } else {
       setIsAddModalOpen(false);
     }
@@ -2629,6 +2759,8 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
     
     if (activeSubTab === 'subscribers') {
       closeSubscriberWorkspace();
+    } else if (useEntityWorkspace) {
+      closeEntityWorkspace();
     } else {
       setIsEditModalOpen(false);
     }
@@ -2693,6 +2825,8 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
         if (filters.balanceState === 'zero' && Math.abs(balanceValue) > 0.0001) return false;
         if (filters.noteState === 'has_notes' && !hasNotes) return false;
         if (filters.noteState === 'no_notes' && hasNotes) return false;
+        if (entityQuickFilter === 'debt' && debtValue <= 0) return false;
+        if (entityQuickFilter === 'negative' && balanceValue >= 0) return false;
         return true;
       }
       if (activeSubTab === 'shareholders') {
@@ -2704,6 +2838,8 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
         if (filters.sharesState !== 'all' && sharesBucket !== filters.sharesState) return false;
         if (filters.dividendsState === 'has_dividends' && !hasDividends) return false;
         if (filters.dividendsState === 'no_dividends' && hasDividends) return false;
+        if (entityQuickFilter === 'high_shares' && sharesBucket !== 'high') return false;
+        if (entityQuickFilter === 'with_dividends' && !hasDividends) return false;
         return true;
       }
       if (activeSubTab === 'managers') {
@@ -2718,6 +2854,8 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
         if (filters.balanceState === 'zero' && balanceValue !== 0) return false;
         if (filters.limitState === 'limited' && !hasLimit) return false;
         if (filters.limitState === 'unlimited' && hasLimit) return false;
+        if (entityQuickFilter === 'active' && !isManagerActive(item)) return false;
+        if (entityQuickFilter === 'limited' && !hasLimit) return false;
         return true;
       }
       if (activeSubTab === 'iptv') {
@@ -2726,6 +2864,8 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
         if (filters.status !== 'all' && getIptvStatusLabel(item) !== filters.status) return false;
         if (filters.priceRange !== 'all' && priceBucket !== filters.priceRange) return false;
         if (filters.serviceType !== 'all' && getIptvServiceTypeLabel(item) !== filters.serviceType) return false;
+        if (entityQuickFilter === 'service_active' && String(item.status || '') !== 'active') return false;
+        if (entityQuickFilter === 'service_profitable' && Number(item.price || 0) <= Number(item.cost || 0)) return false;
         return true;
       }
       return true;
@@ -2784,7 +2924,7 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
 
   const filteredItems = useMemo(
     () => filteredData(),
-    [activeSubTab, searchTerm, advancedFilters, subscriberQuickFilter, subscribers, suppliers, shareholders, managers, iptvSubscribers, onlineStatuses, isRTL]
+    [activeSubTab, searchTerm, advancedFilters, subscriberQuickFilter, entityQuickFilter, subscribers, suppliers, shareholders, managers, iptvSubscribers, onlineStatuses, isRTL]
   );
 
   const subscriberPagedItems = useMemo(() => {
@@ -2802,6 +2942,22 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
     if (!useSubscriberWorkspace) return;
     setSubscriberPage((current) => Math.min(current, Math.max(1, Math.ceil(filteredItems.length / subscriberPageSize))));
   }, [useSubscriberWorkspace, filteredItems.length, subscriberPageSize]);
+
+  const entityPagedItems = useMemo(() => {
+    if (!useEntityWorkspace) return [] as DynamicItem[];
+    const start = (entityPage - 1) * entityPageSize;
+    return filteredItems.slice(start, start + entityPageSize);
+  }, [useEntityWorkspace, filteredItems, entityPage, entityPageSize]);
+
+  const entityTotalPages = useMemo(() => {
+    if (!useEntityWorkspace) return 1;
+    return Math.max(1, Math.ceil(filteredItems.length / entityPageSize));
+  }, [useEntityWorkspace, filteredItems.length, entityPageSize]);
+
+  React.useEffect(() => {
+    if (!useEntityWorkspace) return;
+    setEntityPage((current) => Math.min(current, Math.max(1, Math.ceil(filteredItems.length / entityPageSize))));
+  }, [useEntityWorkspace, filteredItems.length, entityPageSize]);
   return (
     <motion.div 
       key="management" 
@@ -3366,8 +3522,70 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
                         </div>
                       ) : (
                         <>
+                          <div className="md:hidden p-4 space-y-3">
+                            {entityPagedItems.map((item: DynamicItem, index: number, items: DynamicItem[]) => (
+                              <div key={item.id} className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#101014] p-4 space-y-3">
+                                <div className="flex items-start justify-between gap-3">
+                                  <div className="min-w-0">
+                                    <p className="text-sm font-black text-slate-900 dark:text-white truncate">
+                                      {activeSubTab === 'suppliers'
+                                        ? getSupplierName(item)
+                                        : activeSubTab === 'shareholders'
+                                          ? getInvestorName(item)
+                                          : activeSubTab === 'managers'
+                                            ? getManagerName(item)
+                                            : getIptvName(item)}
+                                    </p>
+                                    <p className="text-[11px] text-slate-500 mt-1 truncate">
+                                      {activeSubTab === 'suppliers'
+                                        ? (item['كود'] || item['الرمز'] || '-')
+                                        : activeSubTab === 'shareholders'
+                                          ? (item.ownership || '-')
+                                          : activeSubTab === 'managers'
+                                            ? (item['الصلاحية'] || item.role || '-')
+                                            : getIptvServiceTypeLabel(item)}
+                                    </p>
+                                  </div>
+                                  <SmartActionMenu
+                                    item={item}
+                                    actions={getActions(item)}
+                                    isOpen={openActionMenuId === item.id}
+                                    onToggle={() => setOpenActionMenuId(openActionMenuId === item.id ? null : item.id)}
+                                    isRTL={isRTL}
+                                    isLastRows={items.length > 3 && index >= items.length - 1}
+                                  />
+                                </div>
+                                <div className="grid grid-cols-2 gap-3 text-xs">
+                                  {activeSubTab === 'suppliers' && (
+                                    <>
+                                      <div className="rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 p-3"><p className="text-slate-500">{isRTL ? 'مدين' : 'Debt'}</p><p className="mt-1 font-black text-rose-600 dark:text-rose-400">{formatCurrency(parseSupplierAmount(item['مدين']), state.currency, state.lang, 2)}</p></div>
+                                      <div className="rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 p-3"><p className="text-slate-500">{isRTL ? 'الرصيد' : 'Balance'}</p><p className="mt-1 font-black text-blue-600 dark:text-blue-400">{formatCurrency(parseSupplierAmount(item['الرصيد']), state.currency, state.lang, 2)}</p></div>
+                                    </>
+                                  )}
+                                  {activeSubTab === 'shareholders' && (
+                                    <>
+                                      <div className="rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 p-3"><p className="text-slate-500">{isRTL ? 'الأسهم' : 'Shares'}</p><p className="mt-1 font-black text-blue-600 dark:text-blue-400">{formatNumber(Number(item.shares || 0))}</p></div>
+                                      <div className="rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 p-3"><p className="text-slate-500">{isRTL ? 'الأرباح' : 'Dividends'}</p><p className="mt-1 font-black text-emerald-600 dark:text-emerald-400">{formatCurrency(Number(item.dividends || 0), state.currency, state.lang, 2)}</p></div>
+                                    </>
+                                  )}
+                                  {activeSubTab === 'managers' && (
+                                    <>
+                                      <div className="rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 p-3"><p className="text-slate-500">{isRTL ? 'الحالة' : 'Status'}</p><p className="mt-1 font-black text-emerald-600 dark:text-emerald-400">{isManagerActive(item) ? (isRTL ? 'نشط' : 'Active') : (isRTL ? 'مجمد' : 'Disabled')}</p></div>
+                                      <div className="rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 p-3"><p className="text-slate-500">{isRTL ? 'الرصيد' : 'Balance'}</p><p className="mt-1 font-black text-blue-600 dark:text-blue-400">{formatCurrency(Number(item.balance || item['الرصيد'] || 0), state.currency, state.lang, 2)}</p></div>
+                                    </>
+                                  )}
+                                  {activeSubTab === 'iptv' && (
+                                    <>
+                                      <div className="rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 p-3"><p className="text-slate-500">{isRTL ? 'سعر البيع' : 'Price'}</p><p className="mt-1 font-black text-blue-600 dark:text-blue-400">{formatCurrency(Number(item.price || 0), state.currency, state.lang, 2)}</p></div>
+                                      <div className="rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 p-3"><p className="text-slate-500">{isRTL ? 'التكلفة' : 'Cost'}</p><p className="mt-1 font-black text-amber-600 dark:text-amber-400">{formatCurrency(Number(item.cost || 0), state.currency, state.lang, 2)}</p></div>
+                                    </>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
                           <div className="overflow-x-auto">
-                            <table dir={isRTL ? 'rtl' : 'ltr'} className={`w-full border-collapse ${isRTL ? 'text-right' : 'text-left'}`}>
+                            <table dir={isRTL ? 'rtl' : 'ltr'} className={`hidden md:table w-full border-collapse ${isRTL ? 'text-right' : 'text-left'}`}>
                               <thead className="bg-slate-50/80 dark:bg-slate-900/60 border-b border-slate-200 dark:border-slate-800">
                                 <tr>
                                   <th className="px-4 py-4 text-xs font-black text-slate-500 uppercase">{isRTL ? 'المعرف' : 'ID'}</th>
@@ -3733,6 +3951,307 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
               </div>
             )}
 
+            {useEntityWorkspace && (
+              <div className="p-4 md:p-6 space-y-6">
+                {entityWorkspaceMode === 'list' ? (
+                  <>
+                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+                      {activeSubTab === 'suppliers' && (
+                        <>
+                          <button type="button" onClick={() => setEntityQuickFilter('all')} className={`rounded-2xl border p-4 text-start transition-all ${entityQuickFilter === 'all' ? 'border-teal-300 dark:border-teal-500/30 bg-teal-50/80 dark:bg-teal-500/10 ring-1 ring-teal-200/70 dark:ring-teal-500/20' : 'border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#101014]'}`}>
+                            <p className="text-[11px] font-black text-slate-500 uppercase tracking-widest">{isRTL ? 'إجمالي الموردين' : 'Suppliers'}</p>
+                            <p className="mt-2 text-2xl font-black text-slate-900 dark:text-white">{formatNumber(supplierSummary.count)}</p>
+                          </button>
+                          <button type="button" onClick={() => setEntityQuickFilter('debt')} className={`rounded-2xl border p-4 text-start transition-all ${entityQuickFilter === 'debt' ? 'border-rose-300 dark:border-rose-500/30 bg-rose-50/80 dark:bg-rose-500/10 ring-1 ring-rose-200/70 dark:ring-rose-500/20' : 'border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#101014]'}`}>
+                            <p className="text-[11px] font-black text-slate-500 uppercase tracking-widest">{isRTL ? 'المدينون فقط' : 'With Debt'}</p>
+                            <p className="mt-2 text-xl font-black text-rose-600 dark:text-rose-400">{formatCurrency(supplierSummary.totalDebt, state.currency, state.lang, 2)}</p>
+                          </button>
+                          <button type="button" onClick={() => setEntityQuickFilter('negative')} className={`rounded-2xl border p-4 text-start transition-all ${entityQuickFilter === 'negative' ? 'border-amber-300 dark:border-amber-500/30 bg-amber-50/80 dark:bg-amber-500/10 ring-1 ring-amber-200/70 dark:ring-amber-500/20' : 'border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#101014]'}`}>
+                            <p className="text-[11px] font-black text-slate-500 uppercase tracking-widest">{isRTL ? 'رصيد سلبي' : 'Negative Balance'}</p>
+                            <p className="mt-2 text-xl font-black text-amber-600 dark:text-amber-400">{formatCurrency(supplierSummary.totalBalance, state.currency, state.lang, 2)}</p>
+                          </button>
+                          <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#101014] p-4">
+                            <p className="text-[11px] font-black text-slate-500 uppercase tracking-widest">{isRTL ? 'إجمالي المسدد' : 'Total Paid'}</p>
+                            <p className="mt-2 text-xl font-black text-emerald-600 dark:text-emerald-400">{formatCurrency(supplierSummary.totalPaid, state.currency, state.lang, 2)}</p>
+                          </div>
+                        </>
+                      )}
+                      {activeSubTab === 'shareholders' && (
+                        <>
+                          <button type="button" onClick={() => setEntityQuickFilter('all')} className={`rounded-2xl border p-4 text-start transition-all ${entityQuickFilter === 'all' ? 'border-teal-300 dark:border-teal-500/30 bg-teal-50/80 dark:bg-teal-500/10 ring-1 ring-teal-200/70 dark:ring-teal-500/20' : 'border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#101014]'}`}>
+                            <p className="text-[11px] font-black text-slate-500 uppercase tracking-widest">{isRTL ? 'إجمالي المستثمرين' : 'Investors'}</p>
+                            <p className="mt-2 text-2xl font-black text-slate-900 dark:text-white">{formatNumber(investorSummary.count)}</p>
+                          </button>
+                          <button type="button" onClick={() => setEntityQuickFilter('high_shares')} className={`rounded-2xl border p-4 text-start transition-all ${entityQuickFilter === 'high_shares' ? 'border-blue-300 dark:border-blue-500/30 bg-blue-50/80 dark:bg-blue-500/10 ring-1 ring-blue-200/70 dark:ring-blue-500/20' : 'border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#101014]'}`}>
+                            <p className="text-[11px] font-black text-slate-500 uppercase tracking-widest">{isRTL ? 'أسهم مرتفعة' : 'High Shares'}</p>
+                            <p className="mt-2 text-xl font-black text-blue-600 dark:text-blue-400">{formatNumber(investorSummary.totalShares)}</p>
+                          </button>
+                          <button type="button" onClick={() => setEntityQuickFilter('with_dividends')} className={`rounded-2xl border p-4 text-start transition-all ${entityQuickFilter === 'with_dividends' ? 'border-emerald-300 dark:border-emerald-500/30 bg-emerald-50/80 dark:bg-emerald-500/10 ring-1 ring-emerald-200/70 dark:ring-emerald-500/20' : 'border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#101014]'}`}>
+                            <p className="text-[11px] font-black text-slate-500 uppercase tracking-widest">{isRTL ? 'أرباح موزعة' : 'With Dividends'}</p>
+                            <p className="mt-2 text-xl font-black text-emerald-600 dark:text-emerald-400">{formatCurrency(investorSummary.totalDividends, state.currency, state.lang, 2)}</p>
+                          </button>
+                          <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#101014] p-4">
+                            <p className="text-[11px] font-black text-slate-500 uppercase tracking-widest">{isRTL ? 'إجمالي الاستثمار' : 'Total Investment'}</p>
+                            <p className="mt-2 text-xl font-black text-amber-600 dark:text-amber-400">{formatCurrency(investorSummary.totalInvestment, state.currency, state.lang, 2)}</p>
+                          </div>
+                        </>
+                      )}
+                      {activeSubTab === 'managers' && (
+                        <>
+                          <button type="button" onClick={() => setEntityQuickFilter('all')} className={`rounded-2xl border p-4 text-start transition-all ${entityQuickFilter === 'all' ? 'border-teal-300 dark:border-teal-500/30 bg-teal-50/80 dark:bg-teal-500/10 ring-1 ring-teal-200/70 dark:ring-teal-500/20' : 'border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#101014]'}`}>
+                            <p className="text-[11px] font-black text-slate-500 uppercase tracking-widest">{isRTL ? 'إجمالي الطاقم' : 'Team Members'}</p>
+                            <p className="mt-2 text-2xl font-black text-slate-900 dark:text-white">{formatNumber(managerSummary.count)}</p>
+                          </button>
+                          <button type="button" onClick={() => setEntityQuickFilter('active')} className={`rounded-2xl border p-4 text-start transition-all ${entityQuickFilter === 'active' ? 'border-emerald-300 dark:border-emerald-500/30 bg-emerald-50/80 dark:bg-emerald-500/10 ring-1 ring-emerald-200/70 dark:ring-emerald-500/20' : 'border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#101014]'}`}>
+                            <p className="text-[11px] font-black text-slate-500 uppercase tracking-widest">{isRTL ? 'النشطون' : 'Active'}</p>
+                            <p className="mt-2 text-xl font-black text-emerald-600 dark:text-emerald-400">{formatNumber(managerSummary.activeCount)}</p>
+                          </button>
+                          <button type="button" onClick={() => setEntityQuickFilter('limited')} className={`rounded-2xl border p-4 text-start transition-all ${entityQuickFilter === 'limited' ? 'border-amber-300 dark:border-amber-500/30 bg-amber-50/80 dark:bg-amber-500/10 ring-1 ring-amber-200/70 dark:ring-amber-500/20' : 'border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#101014]'}`}>
+                            <p className="text-[11px] font-black text-slate-500 uppercase tracking-widest">{isRTL ? 'بقيود مالية' : 'Limited'}</p>
+                            <p className="mt-2 text-xl font-black text-amber-600 dark:text-amber-400">{formatNumber(managerSummary.limitedCount)}</p>
+                          </button>
+                          <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#101014] p-4">
+                            <p className="text-[11px] font-black text-slate-500 uppercase tracking-widest">{isRTL ? 'إجمالي الأرصدة' : 'Total Balance'}</p>
+                            <p className="mt-2 text-xl font-black text-blue-600 dark:text-blue-400">{formatCurrency(managerSummary.totalBalance, state.currency, state.lang, 2)}</p>
+                          </div>
+                        </>
+                      )}
+                      {activeSubTab === 'iptv' && (
+                        <>
+                          <button type="button" onClick={() => setEntityQuickFilter('all')} className={`rounded-2xl border p-4 text-start transition-all ${entityQuickFilter === 'all' ? 'border-teal-300 dark:border-teal-500/30 bg-teal-50/80 dark:bg-teal-500/10 ring-1 ring-teal-200/70 dark:ring-teal-500/20' : 'border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#101014]'}`}>
+                            <p className="text-[11px] font-black text-slate-500 uppercase tracking-widest">{isRTL ? 'إجمالي الخدمات' : 'Digital Services'}</p>
+                            <p className="mt-2 text-2xl font-black text-slate-900 dark:text-white">{formatNumber(iptvSummary.count)}</p>
+                          </button>
+                          <button type="button" onClick={() => setEntityQuickFilter('service_active')} className={`rounded-2xl border p-4 text-start transition-all ${entityQuickFilter === 'service_active' ? 'border-emerald-300 dark:border-emerald-500/30 bg-emerald-50/80 dark:bg-emerald-500/10 ring-1 ring-emerald-200/70 dark:ring-emerald-500/20' : 'border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#101014]'}`}>
+                            <p className="text-[11px] font-black text-slate-500 uppercase tracking-widest">{isRTL ? 'النشطة' : 'Active'}</p>
+                            <p className="mt-2 text-xl font-black text-emerald-600 dark:text-emerald-400">{formatNumber(iptvSummary.activeCount)}</p>
+                          </button>
+                          <button type="button" onClick={() => setEntityQuickFilter('service_profitable')} className={`rounded-2xl border p-4 text-start transition-all ${entityQuickFilter === 'service_profitable' ? 'border-blue-300 dark:border-blue-500/30 bg-blue-50/80 dark:bg-blue-500/10 ring-1 ring-blue-200/70 dark:ring-blue-500/20' : 'border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#101014]'}`}>
+                            <p className="text-[11px] font-black text-slate-500 uppercase tracking-widest">{isRTL ? 'الأكثر ربحية' : 'Profitable'}</p>
+                            <p className="mt-2 text-xl font-black text-blue-600 dark:text-blue-400">{formatCurrency(iptvSummary.totalRevenue - iptvSummary.totalCost, state.currency, state.lang, 2)}</p>
+                          </button>
+                          <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#101014] p-4">
+                            <p className="text-[11px] font-black text-slate-500 uppercase tracking-widest">{isRTL ? 'إجمالي التكلفة' : 'Total Cost'}</p>
+                            <p className="mt-2 text-xl font-black text-amber-600 dark:text-amber-400">{formatCurrency(iptvSummary.totalCost, state.currency, state.lang, 2)}</p>
+                          </div>
+                        </>
+                      )}
+                    </div>
+
+                    <div className="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#101014] overflow-hidden">
+                      <div className="p-4 md:p-5 border-b border-slate-200 dark:border-slate-800 flex flex-col xl:flex-row xl:items-center justify-between gap-4">
+                        <div>
+                          <h4 className="text-lg font-black text-slate-900 dark:text-white">
+                            {activeSubTab === 'suppliers'
+                              ? (isRTL ? 'لوحة إدارة الموردين' : 'Supplier Operations Console')
+                              : activeSubTab === 'shareholders'
+                                ? (isRTL ? 'لوحة إدارة المستثمرين' : 'Investor Operations Console')
+                                : activeSubTab === 'managers'
+                                  ? (isRTL ? 'لوحة إدارة الطاقم الإداري' : 'Management Team Console')
+                                  : (isRTL ? 'لوحة إدارة الخدمات الرقمية' : 'Digital Services Console')}
+                          </h4>
+                          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                            {isRTL ? 'عرض احترافي موحّد مع فرز سريع وصفحات وتحرير مباشر من نفس السياق.' : 'Unified professional view with quick filtering, pagination, and direct in-context editing.'}
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-3">
+                          <label className="text-xs font-bold text-slate-500 dark:text-slate-400">{isRTL ? 'إظهار' : 'Show'}</label>
+                          <select
+                            value={entityPageSize}
+                            onChange={(e) => {
+                              setEntityPageSize(Number(e.target.value));
+                              setEntityPage(1);
+                            }}
+                            className="bg-white dark:bg-[#09090B] border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-sm font-bold"
+                          >
+                            {[10, 20, 50, 100].map((size) => (
+                              <option key={size} value={size}>{size}</option>
+                            ))}
+                          </select>
+                          <span className="text-xs font-bold text-slate-500 dark:text-slate-400">{isRTL ? 'في الصفحة' : 'per page'}</span>
+                        </div>
+                      </div>
+
+                      {entityPagedItems.length === 0 ? (
+                        <div className="p-10 text-center">
+                          <Users size={32} className="mx-auto text-slate-300 mb-3" />
+                          <p className="text-sm font-bold text-slate-500 dark:text-slate-400">
+                            {isRTL ? 'لا توجد بيانات حالياً. ابدأ بإضافة سجل جديد.' : 'No records yet. Start by adding a new item.'}
+                          </p>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="overflow-x-auto">
+                            <table dir={isRTL ? 'rtl' : 'ltr'} className={`w-full border-collapse ${isRTL ? 'text-right' : 'text-left'}`}>
+                              <thead className="bg-slate-50/80 dark:bg-slate-900/60 border-b border-slate-200 dark:border-slate-800">
+                                <tr>
+                                  {activeTableColumns.map((col) => (
+                                    <th key={col.id} className={`px-4 py-4 text-xs font-black text-slate-500 uppercase ${col.headerClassName || ''}`}>
+                                      {col.label}
+                                    </th>
+                                  ))}
+                                  <th className="px-4 py-4"></th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                                {entityPagedItems.map((item: DynamicItem, index: number, items: DynamicItem[]) => (
+                                  <tr key={item.id} onDoubleClick={() => handleEdit(item)} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/20 transition-colors cursor-pointer">
+                                    {activeTableColumns.map((col) => (
+                                      <td key={col.id} className={`px-4 py-4 align-middle ${col.cellClassName || ''}`}>
+                                        {col.render(item)}
+                                      </td>
+                                    ))}
+                                    <td className="px-4 py-4 text-right relative z-[30]">
+                                      <SmartActionMenu
+                                        item={item}
+                                        actions={getActions(item)}
+                                        isOpen={openActionMenuId === item.id}
+                                        onToggle={() => setOpenActionMenuId(openActionMenuId === item.id ? null : item.id)}
+                                        isRTL={isRTL}
+                                        isLastRows={items.length > 4 && index >= items.length - 2}
+                                      />
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                          <div className="p-4 border-t border-slate-200 dark:border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                            <p className="text-xs font-bold text-slate-500 dark:text-slate-400">
+                              {isRTL
+                                ? `عرض ${(entityPage - 1) * entityPageSize + 1}-${Math.min(entityPage * entityPageSize, filteredItems.length)} من ${filteredItems.length}`
+                                : `Showing ${(entityPage - 1) * entityPageSize + 1}-${Math.min(entityPage * entityPageSize, filteredItems.length)} of ${filteredItems.length}`}
+                            </p>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <button type="button" onClick={() => setEntityPage(1)} disabled={entityPage === 1} className="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-bold disabled:opacity-40">{isRTL ? 'الأولى' : 'First'}</button>
+                              <button type="button" onClick={() => setEntityPage((page) => Math.max(1, page - 1))} disabled={entityPage === 1} className="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-bold disabled:opacity-40">{isRTL ? 'السابق' : 'Prev'}</button>
+                              <span className="px-3 py-2 text-xs font-black text-slate-700 dark:text-slate-200">{entityPage} / {entityTotalPages}</span>
+                              <button type="button" onClick={() => setEntityPage((page) => Math.min(entityTotalPages, page + 1))} disabled={entityPage === entityTotalPages} className="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-bold disabled:opacity-40">{isRTL ? 'التالي' : 'Next'}</button>
+                              <button type="button" onClick={() => setEntityPage(entityTotalPages)} disabled={entityPage === entityTotalPages} className="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-bold disabled:opacity-40">{isRTL ? 'الأخيرة' : 'Last'}</button>
+                            </div>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </>
+                ) : (
+                  <div className="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#101014] overflow-hidden">
+                    <div className="p-5 md:p-6 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between gap-4">
+                      <div>
+                        <h4 className="text-xl font-black text-slate-900 dark:text-white">
+                          {entityWorkspaceMode === 'add'
+                            ? (activeSubTab === 'suppliers' ? (isRTL ? 'إضافة مورد جديد' : 'Add New Supplier') : activeSubTab === 'shareholders' ? (isRTL ? 'إضافة مستثمر جديد' : 'Add New Investor') : activeSubTab === 'managers' ? (isRTL ? 'إضافة عضو إداري جديد' : 'Add New Manager') : (isRTL ? 'إضافة خدمة رقمية' : 'Add Digital Service'))
+                            : (activeSubTab === 'suppliers' ? (isRTL ? 'تعديل بيانات المورد' : 'Edit Supplier') : activeSubTab === 'shareholders' ? (isRTL ? 'تعديل بيانات المستثمر' : 'Edit Investor') : activeSubTab === 'managers' ? (isRTL ? 'تعديل بيانات العضو الإداري' : 'Edit Team Member') : (isRTL ? 'تعديل الخدمة الرقمية' : 'Edit Digital Service'))}
+                        </h4>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                          {isRTL ? 'صفحة مستقلة للإدخال والتعديل بنفس فلسفة تبويب المشتركين.' : 'Standalone add/edit page following the subscriber workspace style.'}
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-3">
+                        <button
+                          type="button"
+                          onClick={() => setIsEntityHelpOpen((open) => !open)}
+                          className="px-4 py-2.5 rounded-xl border border-teal-200 dark:border-teal-500/20 bg-teal-50/80 dark:bg-teal-500/10 text-sm font-bold text-teal-700 dark:text-teal-300"
+                        >
+                          {isEntityHelpOpen ? (isRTL ? 'إخفاء الدليل' : 'Hide Guide') : (isRTL ? 'دليل الحقول' : 'Field Guide')}
+                        </button>
+                        <button type="button" onClick={closeEntityWorkspace} className="px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 text-sm font-bold text-slate-600 dark:text-slate-300">
+                          {isRTL ? 'العودة إلى الجدول' : 'Back to Table'}
+                        </button>
+                      </div>
+                    </div>
+                    {entityFormState && (
+                      <div className="p-5 md:p-6 space-y-5">
+                        {isEntityHelpOpen && entityHelpSections.length > 0 && (
+                          <div className="rounded-3xl border border-teal-200/70 dark:border-teal-500/20 bg-teal-50/70 dark:bg-teal-500/5 p-5 space-y-4">
+                            <div className="flex items-center gap-3">
+                              <CircleHelp size={18} className="text-teal-600 dark:text-teal-400" />
+                              <div>
+                                <h5 className="text-sm font-black text-slate-900 dark:text-white">{isRTL ? 'دليل الحقول' : 'Field Guide'}</h5>
+                                <p className="text-xs text-slate-600 dark:text-slate-400">
+                                  {isRTL ? 'شرح مبسط للحقول الأساسية في هذا التبويب لضمان إدخال دقيق.' : 'Simple explanation of key fields in this tab to ensure accurate data entry.'}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                              {entityHelpSections.map((section) => (
+                                <div key={section.title} className="rounded-2xl border border-white/70 dark:border-slate-800 bg-white/80 dark:bg-[#101014] p-4 space-y-3">
+                                  <h6 className="text-sm font-black text-slate-900 dark:text-white">{section.title}</h6>
+                                  <div className="space-y-3">
+                                    {section.items.map(([title, description]) => (
+                                      <div key={title}>
+                                        <p className="text-xs font-black text-slate-700 dark:text-slate-200">{title}</p>
+                                        <p className="mt-1 text-[11px] leading-5 text-slate-500 dark:text-slate-400">{description}</p>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        {activeSubTab === 'suppliers' && (
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{isRTL ? 'اسم المورد' : 'Supplier Name'}</label><input type="text" value={String(entityFormState['اسم المورد'] || entityFormState['الاسم'] || '')} onChange={(e) => setEntityFormField('اسم المورد', e.target.value, { 'الاسم': e.target.value })} className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm" /></div>
+                            <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{isRTL ? 'كود المورد' : 'Supplier Code'}</label><input type="text" value={String(entityFormState['كود'] || entityFormState['الرمز'] || '')} onChange={(e) => setEntityFormField('كود', e.target.value, { 'الرمز': e.target.value })} className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm font-mono" /></div>
+                            <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{isRTL ? 'مدين' : 'Debt'}</label><input type="text" inputMode="decimal" value={String(entityFormState['مدين'] || '0')} onChange={(e) => setEntityFormField('مدين', normalizeDigits(e.target.value))} className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm font-mono" /></div>
+                            <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{isRTL ? 'مسدد' : 'Paid'}</label><input type="text" inputMode="decimal" value={String(entityFormState['مسدد'] || '0')} onChange={(e) => setEntityFormField('مسدد', normalizeDigits(e.target.value))} className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm font-mono" /></div>
+                            <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{isRTL ? 'الرصيد' : 'Balance'}</label><input type="text" inputMode="decimal" value={String(entityFormState['الرصيد'] || '0')} onChange={(e) => setEntityFormField('الرصيد', normalizeDigits(e.target.value))} className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm font-mono" /></div>
+                            <div className="space-y-2 md:col-span-2"><label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{isRTL ? 'ملاحظات' : 'Notes'}</label><textarea rows={4} value={String(entityFormState['ملاحظات'] || '')} onChange={(e) => setEntityFormField('ملاحظات', e.target.value)} className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm resize-none" /></div>
+                          </div>
+                        )}
+                        {activeSubTab === 'shareholders' && (
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{isRTL ? 'الاسم' : 'Name'}</label><input type="text" value={String(entityFormState.name || '')} onChange={(e) => setEntityFormField('name', e.target.value)} className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm" /></div>
+                            <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{isRTL ? 'الأسهم' : 'Shares'}</label><input type="text" inputMode="decimal" value={String(entityFormState.shares || '0')} onChange={(e) => { const shares = normalizeDigits(e.target.value); const buyPrice = Number(entityFormState.buyPrice || 0); setEntityFormField('shares', shares, { investment: Number(shares || 0) * buyPrice }); }} className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm font-mono" /></div>
+                            <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{isRTL ? 'سعر الشراء' : 'Buy Price'}</label><input type="text" inputMode="decimal" value={String(entityFormState.buyPrice || '0')} onChange={(e) => { const buyPrice = normalizeDigits(e.target.value); const shares = Number(entityFormState.shares || 0); setEntityFormField('buyPrice', buyPrice, { investment: shares * Number(buyPrice || 0) }); }} className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm font-mono" /></div>
+                            <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{isRTL ? 'الاستثمار' : 'Investment'}</label><input type="text" inputMode="decimal" value={String(entityFormState.investment || '0')} onChange={(e) => setEntityFormField('investment', normalizeDigits(e.target.value))} className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm font-mono" /></div>
+                            <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{isRTL ? 'الأرباح' : 'Dividends'}</label><input type="text" inputMode="decimal" value={String(entityFormState.dividends || '0')} onChange={(e) => setEntityFormField('dividends', normalizeDigits(e.target.value))} className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm font-mono" /></div>
+                            <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{isRTL ? 'الملكية' : 'Ownership'}</label><select value={String(entityFormState.ownership || 'personal')} onChange={(e) => setEntityFormField('ownership', e.target.value)} className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm"><option value="personal">{isRTL ? 'شخصي' : 'Personal'}</option><option value="corporate">{isRTL ? 'شركة' : 'Corporate'}</option><option value="partner">{isRTL ? 'شريك' : 'Partner'}</option></select></div>
+                          </div>
+                        )}
+                        {activeSubTab === 'managers' && (
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{isRTL ? 'الاسم الأول' : 'First Name'}</label><input type="text" value={String(entityFormState['الاسم الاول'] || entityFormState.firstName || '')} onChange={(e) => setEntityFormField('الاسم الاول', e.target.value, { firstName: e.target.value })} className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm" /></div>
+                            <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{isRTL ? 'الاسم الثاني' : 'Last Name'}</label><input type="text" value={String(entityFormState['الاسم الثاني'] || entityFormState.lastName || '')} onChange={(e) => setEntityFormField('الاسم الثاني', e.target.value, { lastName: e.target.value })} className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm" /></div>
+                            <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{isRTL ? 'اسم الدخول' : 'Username'}</label><input type="text" value={String(entityFormState['اسم الدخول'] || entityFormState.username || '')} onChange={(e) => setEntityFormField('اسم الدخول', e.target.value, { username: e.target.value })} className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm font-mono" /></div>
+                            <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{isRTL ? 'كلمة المرور' : 'Password'}</label><input type="text" value={String(entityFormState['كلمة المرور'] || entityFormState.password || '')} onChange={(e) => setEntityFormField('كلمة المرور', e.target.value, { password: e.target.value })} className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm font-mono" /></div>
+                            <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{isRTL ? 'مجموعة الصلاحيات' : 'Permission Group'}</label><select value={String(entityFormState['الصلاحية'] || '')} onChange={(e) => { const group = state.securityGroups.find((g) => g.name === e.target.value); setEntityFormField('الصلاحية', e.target.value, { role: e.target.value, groupId: group?.id || '' }); }} className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm"><option value="">{isRTL ? '-- اختر المجموعة --' : '-- Select Group --'}</option>{state.securityGroups.map((group) => (<option key={group.id} value={group.name}>{group.name}</option>))}</select></div>
+                            <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{isRTL ? 'الحالة' : 'Status'}</label><select value={String(entityFormState.status || 'active')} onChange={(e) => setEntityFormField('status', e.target.value)} className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm"><option value="active">{isRTL ? 'نشط' : 'Active'}</option><option value="inactive">{isRTL ? 'مجمد' : 'Disabled'}</option></select></div>
+                            <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{isRTL ? 'الرصيد' : 'Balance'}</label><input type="text" inputMode="decimal" value={String(entityFormState.balance || entityFormState['الرصيد'] || '0')} onChange={(e) => setEntityFormField('balance', normalizeDigits(e.target.value), { 'الرصيد': normalizeDigits(e.target.value) })} className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm font-mono" /></div>
+                            <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{isRTL ? 'الحد المالي' : 'Tx Limit'}</label><input type="text" inputMode="decimal" value={String(entityFormState.maxTxLimit || entityFormState['الحد المالي'] || '')} onChange={(e) => setEntityFormField('maxTxLimit', normalizeDigits(e.target.value), { 'الحد المالي': normalizeDigits(e.target.value) })} className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm font-mono" /></div>
+                            <div className="space-y-2 md:col-span-2"><label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{isRTL ? 'ملاحظات' : 'Notes'}</label><textarea rows={3} value={String(entityFormState.notes || '')} onChange={(e) => setEntityFormField('notes', e.target.value)} className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm resize-none" /></div>
+                          </div>
+                        )}
+                        {activeSubTab === 'iptv' && (
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{t.management.iptv.table.name}</label><input type="text" value={String(entityFormState.name || '')} onChange={(e) => setEntityFormField('name', e.target.value)} className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm" /></div>
+                            <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{t.management.iptv.table.serviceType}</label><select value={String(entityFormState.serviceType || 'iptv')} onChange={(e) => setEntityFormField('serviceType', e.target.value)} className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm"><option value="iptv">{t.management.iptv.serviceTypes.iptv}</option><option value="vpn">{t.management.iptv.serviceTypes.vpn}</option><option value="static_ip">{t.management.iptv.serviceTypes.static_ip}</option><option value="cloud_storage">{t.management.iptv.serviceTypes.cloud_storage}</option><option value="security">{t.management.iptv.serviceTypes.security}</option><option value="other">{t.management.iptv.serviceTypes.other}</option></select></div>
+                            <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{t.management.iptv.table.provider}</label><input type="text" value={String(entityFormState.platform || '')} onChange={(e) => setEntityFormField('platform', e.target.value)} className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm" /></div>
+                            <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{t.management.iptv.table.host}</label><input type="text" value={String(entityFormState.host || '')} onChange={(e) => setEntityFormField('host', e.target.value)} className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm" /></div>
+                            <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{t.management.iptv.table.billingCycle}</label><select value={String(entityFormState.billingCycle || 'monthly')} onChange={(e) => setEntityFormField('billingCycle', e.target.value)} className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm"><option value="monthly">{t.management.iptv.billingCycles.monthly}</option><option value="quarterly">{t.management.iptv.billingCycles.quarterly}</option><option value="yearly">{t.management.iptv.billingCycles.yearly}</option><option value="one_time">{t.management.iptv.billingCycles.one_time}</option></select></div>
+                            <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{t.management.iptv.table.status}</label><select value={String(entityFormState.status || 'active')} onChange={(e) => setEntityFormField('status', e.target.value)} className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm"><option value="active">{t.management.iptv.statuses.active}</option><option value="suspended">{t.management.iptv.statuses.suspended}</option><option value="expired">{t.management.iptv.statuses.expired}</option></select></div>
+                            <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{t.management.iptv.table.price}</label><input type="text" inputMode="decimal" value={String(entityFormState.price || 0)} onChange={(e) => setEntityFormField('price', normalizeDigits(e.target.value))} className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm font-mono" /></div>
+                            <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{t.management.iptv.table.cost}</label><input type="text" inputMode="decimal" value={String(entityFormState.cost || 0)} onChange={(e) => setEntityFormField('cost', normalizeDigits(e.target.value))} className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm font-mono" /></div>
+                            <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{t.management.iptv.table.expiry}</label><DateInput value={String(entityFormState.expiry || '')} onChange={(val) => setEntityFormField('expiry', val)} className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm" /></div>
+                            <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{t.management.iptv.table.phone}</label><input type="text" value={String(entityFormState.phone || '')} onChange={(e) => setEntityFormField('phone', e.target.value)} className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm font-mono" /></div>
+                            <div className="space-y-2 md:col-span-2"><label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{isRTL ? 'ملاحظات' : 'Notes'}</label><textarea rows={3} value={String(entityFormState.notes || '')} onChange={(e) => setEntityFormField('notes', e.target.value)} className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm resize-none" /></div>
+                          </div>
+                        )}
+                        <div className="flex flex-wrap items-center justify-end gap-3 pt-2 border-t border-slate-200 dark:border-slate-800">
+                          <button type="button" onClick={closeEntityWorkspace} className="px-5 py-2.5 text-sm font-bold text-slate-600 dark:text-slate-400">{isRTL ? 'إلغاء' : 'Cancel'}</button>
+                          <button type="button" onClick={entityWorkspaceMode === 'add' ? handleSaveAdd : handleSave} className="px-8 py-2.5 bg-teal-500 hover:bg-teal-600 text-white rounded-xl text-sm font-bold shadow-lg shadow-teal-500/20 flex items-center gap-2">
+                            <Save size={18} />
+                            {entityWorkspaceMode === 'add' ? (isRTL ? 'حفظ' : 'Save') : (isRTL ? 'حفظ التعديلات' : 'Save Changes')}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
             {activeSubTab === 'subscribers' && !useSubscriberWorkspace && (
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 p-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-900/30">
                 <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#101014] p-4">
@@ -3774,7 +4293,7 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
                 </div>
               </div>
             )}
-            {activeSubTab === 'iptv' && (
+            {activeSubTab === 'iptv' && !useEntityWorkspace && (
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 p-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-900/30">
                 <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#101014] p-4">
                   <div className="flex items-center justify-between">
@@ -3814,7 +4333,7 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
                 </div>
               </div>
             )}
-            {activeSubTab === 'suppliers' && (
+            {activeSubTab === 'suppliers' && !useEntityWorkspace && (
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 p-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-900/30">
                 <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#101014] p-4">
                   <div className="flex items-center justify-between">
@@ -3857,7 +4376,7 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
                 </div>
               </div>
             )}
-            {activeSubTab === 'shareholders' && (
+            {activeSubTab === 'shareholders' && !useEntityWorkspace && (
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 p-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-900/30">
                 <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#101014] p-4">
                   <div className="flex items-center justify-between">
@@ -3897,7 +4416,7 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
                 </div>
               </div>
             )}
-            {activeSubTab === 'managers' && (
+            {activeSubTab === 'managers' && !useEntityWorkspace && (
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 p-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-900/30">
                 <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#101014] p-4">
                   <div className="flex items-center justify-between">
@@ -3980,7 +4499,7 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
                 ))}
               </div>
             )}
-            {activeSubTab === 'iptv' && (
+            {activeSubTab === 'iptv' && !useEntityWorkspace && (
               <div className="md:hidden p-4 space-y-3">
                 {filteredItems.map((item: DynamicItem, index: number, items: DynamicItem[]) => (
                   <div key={item.id} className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#101014] p-4 space-y-4">
@@ -4022,7 +4541,7 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
                 ))}
               </div>
             )}
-            {activeSubTab === 'suppliers' && (
+            {activeSubTab === 'suppliers' && !useEntityWorkspace && (
               <div className="md:hidden p-4 space-y-3">
                 {filteredItems.map((item: DynamicItem, index: number, items: DynamicItem[]) => {
                   const balanceValue = parseSupplierAmount(item['الرصيد']);
@@ -4085,7 +4604,7 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
                 })}
               </div>
             )}
-            {activeSubTab === 'shareholders' && (
+            {activeSubTab === 'shareholders' && !useEntityWorkspace && (
               <div className="md:hidden p-4 space-y-3">
                 {filteredItems.map((item: DynamicItem, index: number, items: DynamicItem[]) => (
                   <div key={item.id} className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#101014] p-4 space-y-4">
@@ -4123,7 +4642,7 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
                 ))}
               </div>
             )}
-            {activeSubTab === 'managers' && (
+            {activeSubTab === 'managers' && !useEntityWorkspace && (
               <div className="md:hidden p-4 space-y-3">
                 {filteredItems.map((item: DynamicItem, index: number, items: DynamicItem[]) => (
                   <div key={item.id} className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#101014] p-4 space-y-4">
@@ -4161,7 +4680,7 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
                 ))}
               </div>
             )}
-            {activeSubTab !== 'subscribers' && (
+            {activeSubTab !== 'subscribers' && !useEntityWorkspace && (
             <table
               dir={isRTL ? 'rtl' : 'ltr'}
               className={`${['subscribers', 'suppliers', 'shareholders', 'managers', 'iptv'].includes(activeSubTab) ? 'hidden md:table w-full' : 'w-full'} ${activeSubTab === 'suppliers' ? 'min-w-[780px] table-auto' : ''} ${isRTL ? 'text-right' : 'text-left'} border-collapse`}
@@ -4514,7 +5033,7 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
 
       {/* Add Modal */}
       <AnimatePresence>
-        {isAddModalOpen && activeSubTab !== 'subscribers' && (
+        {isAddModalOpen && activeSubTab !== 'subscribers' && activeSubTab !== 'suppliers' && activeSubTab !== 'shareholders' && activeSubTab !== 'managers' && activeSubTab !== 'iptv' && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
             <motion.div 
               initial={{ opacity: 0 }} 
@@ -5110,7 +5629,7 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
 
       {/* Edit Modal */}
       <AnimatePresence>
-        {isEditModalOpen && activeSubTab !== 'subscribers' && (
+        {isEditModalOpen && activeSubTab !== 'subscribers' && activeSubTab !== 'suppliers' && activeSubTab !== 'shareholders' && activeSubTab !== 'managers' && activeSubTab !== 'iptv' && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
             <motion.div 
               initial={{ opacity: 0 }} 

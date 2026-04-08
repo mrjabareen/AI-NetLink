@@ -48,6 +48,8 @@ const PERMISSION_CATEGORIES: PermissionCategory[] = [
       { id: 'view_dashboard', labelAr: 'لوحة التحكم', labelEn: 'Dashboard', descriptionAr: 'عرض الإحصائيات العامة للنظام', descriptionEn: 'View overall system statistics' },
       { id: 'access_executive', labelAr: 'المركز الإداري والرقابة', labelEn: 'Executive Center', descriptionAr: 'الدخول إلى واجهة الإدارة التنفيذية', descriptionEn: 'Access executive management interface' },
       { id: 'view_security', labelAr: 'الأمان والتنبيهات', labelEn: 'Security & Alerts', descriptionAr: 'عرض سجلات الأمان والتحذيرات', descriptionEn: 'View security logs and warnings' },
+      { id: 'access_files', labelAr: 'مدير الملفات', labelEn: 'File Manager', descriptionAr: 'الوصول إلى مستعرض الملفات الداخلي', descriptionEn: 'Access internal file explorer' },
+      { id: 'access_chat', labelAr: 'المحادثة', labelEn: 'Chat', descriptionAr: 'الوصول إلى مركز المحادثة', descriptionEn: 'Access chat center' },
       { id: 'edit_settings', labelAr: 'إعدادات النظام', labelEn: 'System Settings', descriptionAr: 'تعديل الإعدادات العامة للمنظومة', descriptionEn: 'Modify general system settings' },
     ]
   },
@@ -71,6 +73,8 @@ const PERMISSION_CATEGORIES: PermissionCategory[] = [
     icon: UsersIcon,
     permissions: [
       { id: 'view_crm', labelAr: 'إدارة المشتركين', labelEn: 'Subscriber Management', descriptionAr: 'عرض قائمة المشتركين وبياناتهم', descriptionEn: 'View subscriber lists and data' },
+      { id: 'view_subscribers', labelAr: 'عرض المشتركين', labelEn: 'View Subscribers', descriptionAr: 'عرض بيانات المشتركين دون تعديل', descriptionEn: 'View subscribers without editing' },
+      { id: 'manage_subscribers', labelAr: 'إدارة المشتركين', labelEn: 'Manage Subscribers', descriptionAr: 'إضافة وتعديل وحذف المشتركين', descriptionEn: 'Add, edit, and delete subscribers' },
       { id: 'sub_activate', labelAr: 'تفعيل المشتركين', labelEn: 'Activate Subscribers', descriptionAr: 'صلاحية تفعيل وتجديد الاشتراكات', descriptionEn: 'Authority to activate/renew subscriptions' },
       { id: 'sub_edit', labelAr: 'تعديل البيانات', labelEn: 'Edit Data', descriptionAr: 'تعديل بيانات المشتركين والحزم', descriptionEn: 'Modify subscriber data and packages' },
       { id: 'sub_delete', labelAr: 'حذف مشتركين', labelEn: 'Delete Subscribers', descriptionAr: 'حذف سجلات المشتركين من النظام', descriptionEn: 'Remove subscriber records from system' },
@@ -83,9 +87,12 @@ const PERMISSION_CATEGORIES: PermissionCategory[] = [
     icon: Network,
     permissions: [
       { id: 'view_topology', labelAr: 'خارطة الشبكة', labelEn: 'Network Topology', descriptionAr: 'عرض توبولوجيا الشبكة والأجهزة', descriptionEn: 'View network topology and devices' },
+      { id: 'manage_topology', labelAr: 'إدارة التوبولوجيا', labelEn: 'Manage Topology', descriptionAr: 'تعديل خرائط الربط بين الشبكات والأجهزة', descriptionEn: 'Edit topology and device links' },
       { id: 'view_inventory', labelAr: 'المستودع', labelEn: 'Inventory', descriptionAr: 'عرض وإدارة مخزون الأجهزة والأدوات', descriptionEn: 'View and manage hardware inventory' },
+      { id: 'manage_inventory', labelAr: 'إدارة المستودع', labelEn: 'Manage Inventory', descriptionAr: 'تعديل وإضافة وحذف عناصر المخزون', descriptionEn: 'Add, edit, and delete inventory items' },
       { id: 'view_field_service', labelAr: 'الخدمات الميدانية', labelEn: 'Field Services', descriptionAr: 'إدارة المهام الميدانية والفنيين', descriptionEn: 'Manage field tasks and technicians' },
-      { id: 'iptv_manage', labelAr: 'إدارة IPTV', labelEn: 'IPTV Management', descriptionAr: 'إدارة خدمات البث التلفزيوني', descriptionEn: 'Manage TV broadcasting services' },
+      { id: 'manage_field_service', labelAr: 'إدارة الخدمات الميدانية', labelEn: 'Manage Field Services', descriptionAr: 'إدارة أوامر العمل وجدولة الفنيين', descriptionEn: 'Manage work orders and technician schedule' },
+      { id: 'manage_iptv', labelAr: 'الخدمات الرقمية', labelEn: 'Digital Services', descriptionAr: 'إدارة خدمات IPTV/VPN والخدمات الرقمية', descriptionEn: 'Manage IPTV/VPN and digital services' },
     ]
   },
   {
@@ -96,6 +103,7 @@ const PERMISSION_CATEGORIES: PermissionCategory[] = [
     permissions: [
       { id: 'view_admins', labelAr: 'عرض الطاقم الإداري', labelEn: 'View Management Staff', descriptionAr: 'عرض قائمة المدراء والوكلاء والموظفين', descriptionEn: 'View list of managers, agents, and staff' },
       { id: 'manage_admins', labelAr: 'إدارة الرتب', labelEn: 'Rank Management', descriptionAr: 'إضافة وتعديل بيانات المدراء الجدد', descriptionEn: 'Add and modify new manager data' },
+      { id: 'manage_team', labelAr: 'إدارة الفريق', labelEn: 'Manage Team', descriptionAr: 'التحكم ببيانات الفريق والإشراف الإداري', descriptionEn: 'Control team data and administrative oversight' },
       { id: 'manage_security_groups', labelAr: 'مجموعات الأمان', labelEn: 'Security Groups', descriptionAr: 'تعديل صلاحيات مجموعات الأمان', descriptionEn: 'Modify security group permissions' },
     ]
   },
@@ -107,6 +115,7 @@ const PERMISSION_CATEGORIES: PermissionCategory[] = [
     permissions: [
       { id: 'create_reports', labelAr: 'إنشاء التقارير', labelEn: 'Generate Reports', descriptionAr: 'توليد تقارير مخصصة وتصديرها', descriptionEn: 'Generate and export custom reports' },
       { id: 'perform_search', labelAr: 'البحث المتقدم', labelEn: 'Advanced Search', descriptionAr: 'استخدام أدوات البحث العميق في البيانات', descriptionEn: 'Use deep data search tools' },
+      { id: 'view_financial', labelAr: 'عرض النظام المالي', labelEn: 'View Financial', descriptionAr: 'الوصول إلى لوحات وأرقام النظام المالي', descriptionEn: 'Access financial dashboards and metrics' },
     ]
   }
 ];
@@ -237,8 +246,8 @@ export default function SecurityGroupsTab({ state, setState }: SecurityGroupsTab
         </div>
       </div>
 
-      <div className="flex min-h-0 flex-col xl:flex-row gap-6">
-      <div className="w-full xl:w-80 flex flex-col gap-4 overflow-y-auto xl:pr-2 custom-scrollbar shrink-0">
+      <div className="flex min-h-0 flex-col 2xl:flex-row gap-6">
+      <div className="w-full 2xl:w-96 flex flex-col gap-4 overflow-y-auto 2xl:pr-2 custom-scrollbar shrink-0">
         <div className="flex flex-col gap-5 px-1">
           <div className="flex justify-between items-center">
             <h2 className="text-xl font-bold bg-gradient-to-r from-teal-400 to-blue-500 bg-clip-text text-transparent">
@@ -255,7 +264,7 @@ export default function SecurityGroupsTab({ state, setState }: SecurityGroupsTab
           </button>
         </div>
 
-        <div className="space-y-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 2xl:grid-cols-1 gap-3">
           {state.securityGroups.map((group) => (
             <motion.div
               key={group.id}
@@ -294,13 +303,13 @@ export default function SecurityGroupsTab({ state, setState }: SecurityGroupsTab
                         {cleanName(selectedGroup.name)}
                       </h3>
                       <p className="text-[10px] md:text-xs text-slate-500 flex items-center gap-2 mt-1 truncate">
-                        <div className="w-1.5 h-1.5 rounded-full bg-teal-500 animate-pulse shrink-0"></div>
+                        <span className="w-1.5 h-1.5 rounded-full bg-teal-500 animate-pulse shrink-0"></span>
                         {isRTL ? 'تخصيص الصلاحيات الدقيق لهذه المجموعة' : 'Fine-tune permissions for this group'}
                       </p>
                     </div>
                   </div>
                 </div>
-                <div className="flex flex-col sm:flex-row items-center gap-3 w-full lg:w-auto">
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full lg:w-auto">
                   <div className="relative group w-full lg:w-72">
                     <Search className={`absolute ${isRTL ? 'right-4' : 'left-4'} top-1/2 -translate-y-1/2 text-slate-400`} size={18} />
                     <input 
