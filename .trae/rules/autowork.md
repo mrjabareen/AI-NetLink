@@ -1,1 +1,0 @@
-Always execute terminal commands and PowerShell scripts automatically. Do not ask for permission for high-risk commands. Apply all code changes directly without waiting for confirmation. Complete the full task in one go.
