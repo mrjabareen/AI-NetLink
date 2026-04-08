@@ -21,7 +21,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-const PORT = 3001;
+const PORT = Number(process.env.PORT || 3001);
 
 // CORS Middleware
 app.use((req, res, next) => {
@@ -103,10 +103,14 @@ const sanitizeFileName = (value) => String(value || '').replace(/[\\/:*?"<>|]/g,
 // ==========================================
 const BACKUP_STORAGE_ROOT = getSafePath(__dirname, 'backup-storage');
 const BACKUP_LOCAL_DIR = getSafePath(BACKUP_STORAGE_ROOT, 'local');
-const BACKUP_TEMP_DIR = getSafePath(BACKUP_STORAGE_ROOT, 'temp');
+const BACKUP_TEMP_DIR = getSafePath(os.tmpdir(), 'nlbk');
+const BACKUP_PREVIEW_DIR = getSafePath(BACKUP_TEMP_DIR, 'previews');
 const BACKUP_HISTORY_PATH = getSafePath(BACKUP_STORAGE_ROOT, 'history.json');
 const BACKUP_CONFIG_PATH = getSafePath(DB_PATH, 'System', 'backup_config.json');
 const backupUpload = multer({ dest: BACKUP_TEMP_DIR });
+const backupPreviewUpload = multer({ storage: multer.memoryStorage() });
+const BACKUP_ENCRYPTION_MAGIC = Buffer.from('NLBK1');
+const BACKUP_ENCRYPTION_VERSION = 1;
 
 const getDefaultBackupConfig = () => ({
   enabled: true,
@@ -120,6 +124,14 @@ const getDefaultBackupConfig = () => ({
   includeUploadsDirectory: true,
   lastBackup: null,
   lastRestore: null,
+  encryption: {
+    enabled: false,
+    algorithm: 'aes-256-gcm',
+    password: '',
+    passwordHint: '',
+    requirePasswordOnRestore: true,
+    kdfIterations: 210000,
+  },
   googleDrive: {
     enabled: false,
     folderId: '',
@@ -150,6 +162,10 @@ const writeJsonSafe = (filePath, data) => {
 const mergeBackupConfig = (rawConfig = {}) => ({
   ...getDefaultBackupConfig(),
   ...rawConfig,
+  encryption: {
+    ...getDefaultBackupConfig().encryption,
+    ...(rawConfig.encryption || {}),
+  },
   googleDrive: {
     ...getDefaultBackupConfig().googleDrive,
     ...(rawConfig.googleDrive || {}),
@@ -159,6 +175,14 @@ const mergeBackupConfig = (rawConfig = {}) => ({
 const getBackupConfig = () => mergeBackupConfig(readJsonSafeWithFallback(BACKUP_CONFIG_PATH, getDefaultBackupConfig()));
 const saveBackupConfig = (config) => {
   const merged = mergeBackupConfig(config);
+  if (merged.encryption.enabled) {
+    if (!String(merged.encryption.password || '').trim()) {
+      throw new Error('Backup encryption password is required when encryption is enabled.');
+    }
+    if (String(merged.encryption.password || '').length < 8) {
+      throw new Error('Backup encryption password must be at least 8 characters long.');
+    }
+  }
   writeJsonSafe(BACKUP_CONFIG_PATH, merged);
   return merged;
 };
@@ -187,6 +211,127 @@ const hashFileSha256 = (filePath) => new Promise((resolve, reject) => {
   stream.on('end', () => resolve(hash.digest('hex')));
   stream.on('error', reject);
 });
+
+const hashBufferSha256 = (buffer) => crypto.createHash('sha256').update(buffer).digest('hex');
+
+const createEncryptedBackupContainer = ({ payloadBuffer, password, passwordHint = '', originalExtension = '.zip', originalFileName = 'backup.zip', algorithm = 'aes-256-gcm', iterations = 210000 }) => {
+  if (!password) {
+    throw new Error('Backup encryption password is required.');
+  }
+
+  const salt = crypto.randomBytes(16);
+  const iv = crypto.randomBytes(12);
+  const key = crypto.pbkdf2Sync(password, salt, Number(iterations) || 210000, 32, 'sha512');
+  const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+  const encryptedPayload = Buffer.concat([cipher.update(payloadBuffer), cipher.final()]);
+  const tag = cipher.getAuthTag();
+
+  const header = Buffer.from(JSON.stringify({
+    version: BACKUP_ENCRYPTION_VERSION,
+    encrypted: true,
+    algorithm,
+    kdf: 'pbkdf2-sha512',
+    iterations: Number(iterations) || 210000,
+    salt: salt.toString('base64'),
+    iv: iv.toString('base64'),
+    tag: tag.toString('base64'),
+    passwordHint,
+    originalExtension,
+    originalFileName,
+  }), 'utf-8');
+
+  const headerLength = Buffer.allocUnsafe(4);
+  headerLength.writeUInt32BE(header.length, 0);
+  return Buffer.concat([BACKUP_ENCRYPTION_MAGIC, headerLength, header, encryptedPayload]);
+};
+
+const readEncryptedBackupHeader = (filePath) => {
+  const fileBuffer = fs.readFileSync(filePath);
+  if (fileBuffer.length < BACKUP_ENCRYPTION_MAGIC.length + 4) {
+    return { encrypted: false };
+  }
+
+  const magic = fileBuffer.subarray(0, BACKUP_ENCRYPTION_MAGIC.length);
+  if (!magic.equals(BACKUP_ENCRYPTION_MAGIC)) {
+    return { encrypted: false };
+  }
+
+  const headerLength = fileBuffer.readUInt32BE(BACKUP_ENCRYPTION_MAGIC.length);
+  const headerStart = BACKUP_ENCRYPTION_MAGIC.length + 4;
+  const headerEnd = headerStart + headerLength;
+  const header = JSON.parse(fileBuffer.subarray(headerStart, headerEnd).toString('utf-8'));
+  return {
+    encrypted: true,
+    fileBuffer,
+    header,
+    payloadOffset: headerEnd,
+  };
+};
+
+const decryptEncryptedBackupContainer = ({ filePath, password }) => {
+  const parsed = readEncryptedBackupHeader(filePath);
+  if (!parsed.encrypted) {
+    return {
+      encrypted: false,
+      payloadBuffer: fs.readFileSync(filePath),
+      header: null,
+    };
+  }
+
+  if (!password) {
+    const error = new Error('Backup password is required to unlock this encrypted archive.');
+    error.code = 'BACKUP_PASSWORD_REQUIRED';
+    error.passwordHint = parsed.header?.passwordHint || '';
+    throw error;
+  }
+
+  try {
+    const header = parsed.header || {};
+    const key = crypto.pbkdf2Sync(
+      password,
+      Buffer.from(header.salt, 'base64'),
+      Number(header.iterations) || 210000,
+      32,
+      'sha512'
+    );
+    const decipher = crypto.createDecipheriv('aes-256-gcm', key, Buffer.from(header.iv, 'base64'));
+    decipher.setAuthTag(Buffer.from(header.tag, 'base64'));
+    const encryptedPayload = parsed.fileBuffer.subarray(parsed.payloadOffset);
+    const payloadBuffer = Buffer.concat([decipher.update(encryptedPayload), decipher.final()]);
+    return {
+      encrypted: true,
+      payloadBuffer,
+      header,
+    };
+  } catch {
+    const error = new Error('Backup password is invalid or the encrypted archive is corrupted.');
+    error.code = 'BACKUP_PASSWORD_INVALID';
+    error.passwordHint = parsed.header?.passwordHint || '';
+    throw error;
+  }
+};
+
+const materializeBackupArchiveForRead = ({ archivePath, password }) => {
+  const parsed = readEncryptedBackupHeader(archivePath);
+  if (!parsed.encrypted) {
+    return {
+      encrypted: false,
+      archivePath,
+      cleanupPaths: [],
+      header: null,
+    };
+  }
+
+  const decrypted = decryptEncryptedBackupContainer({ filePath: archivePath, password });
+  const tempArchivePath = path.join(BACKUP_TEMP_DIR, `${createBackupId()}${decrypted.header?.originalExtension || '.zip'}`);
+  fs.writeFileSync(tempArchivePath, decrypted.payloadBuffer);
+  return {
+    encrypted: true,
+    archivePath: tempArchivePath,
+    cleanupPaths: [tempArchivePath],
+    header: decrypted.header,
+  };
+};
 
 const collectFilesRecursively = (targetPath, rootPath = targetPath, results = []) => {
   if (!fs.existsSync(targetPath)) return results;
@@ -242,31 +387,41 @@ const BACKUP_DATASETS = [
 
 const getDatasetDefinition = (datasetId) => BACKUP_DATASETS.find((item) => item.id === datasetId);
 
-const readDatasetRecords = (datasetId) => {
+const getDatasetPathFromBase = (dataset, basePath) => {
+  const relativePath = path.relative(DB_PATH, dataset.path);
+  return path.join(basePath, relativePath);
+};
+
+const readDatasetRecordsFromBasePath = (datasetId, basePath) => {
   if (datasetId === 'all_tables') {
     return BACKUP_DATASETS.reduce((acc, item) => {
-      acc[item.id] = readDatasetRecords(item.id);
+      acc[item.id] = readDatasetRecordsFromBasePath(item.id, basePath);
       return acc;
     }, {});
   }
 
   const dataset = getDatasetDefinition(datasetId);
   if (!dataset) return [];
+  const targetPath = getDatasetPathFromBase(dataset, basePath);
 
   if (dataset.type === 'file') {
-    const data = readJsonSafeWithFallback(dataset.path, []);
+    const data = readJsonSafeWithFallback(targetPath, []);
     if (Array.isArray(data)) return data;
     if (data && typeof data === 'object') return [data];
     return [];
   }
 
-  if (!fs.existsSync(dataset.path)) return [];
-  return fs.readdirSync(dataset.path)
+  if (!fs.existsSync(targetPath)) return [];
+  return fs.readdirSync(targetPath)
     .filter((file) => file.endsWith('.json'))
     .map((file) => ({
       __fileName: file,
-      ...readJsonSafeWithFallback(path.join(dataset.path, file), {}),
+      ...readJsonSafeWithFallback(path.join(targetPath, file), {}),
     }));
+};
+
+const readDatasetRecords = (datasetId) => {
+  return readDatasetRecordsFromBasePath(datasetId, DB_PATH);
 };
 
 const flattenForTable = (input, prefix = '', output = {}) => {
@@ -357,7 +512,7 @@ const uploadBackupToGoogleDrive = async (filePath, fileName, settings) => {
   const response = await drive.files.create({
     requestBody: fileMetadata,
     media: {
-      mimeType: 'application/zip',
+      mimeType: 'application/octet-stream',
       body: fs.createReadStream(filePath),
     },
     fields: 'id,name,webViewLink,webContentLink',
@@ -389,83 +544,176 @@ const pruneOldBackupArtifacts = () => {
   saveBackupHistory(filteredHistory);
 };
 
+const waitMs = (duration) => new Promise((resolve) => setTimeout(resolve, duration));
+
+const copyFileWithRetry = async (sourcePath, targetPath, attempts = 5) => {
+  let lastError = null;
+  for (let index = 0; index < attempts; index += 1) {
+    try {
+      fs.mkdirSync(path.dirname(targetPath), { recursive: true });
+      fs.copyFileSync(sourcePath, targetPath);
+      return;
+    } catch (error) {
+      lastError = error;
+      if (!['EBUSY', 'EPERM', 'EMFILE'].includes(error?.code) || index === attempts - 1) {
+        throw error;
+      }
+      await waitMs(250 * (index + 1));
+    }
+  }
+  throw lastError;
+};
+
+const createDirectorySnapshot = async (sourceDir) => {
+  const snapshotDir = path.join(BACKUP_TEMP_DIR, `${createBackupId()}-snapshot`);
+  const warnings = [];
+
+  const copyRecursive = async (currentSource, currentTarget) => {
+    if (!fs.existsSync(currentSource)) return;
+    fs.mkdirSync(currentTarget, { recursive: true });
+    const entries = fs.readdirSync(currentSource, { withFileTypes: true });
+
+    for (const entry of entries) {
+      const sourcePath = path.join(currentSource, entry.name);
+      const targetPath = path.join(currentTarget, entry.name);
+
+      if (entry.isDirectory()) {
+        await copyRecursive(sourcePath, targetPath);
+        continue;
+      }
+
+      try {
+        await copyFileWithRetry(sourcePath, targetPath);
+      } catch (error) {
+        warnings.push({
+          path: path.relative(sourceDir, sourcePath).replace(/\\/g, '/'),
+          code: error?.code || 'UNKNOWN',
+          message: error?.message || 'Snapshot copy failed.',
+        });
+      }
+    }
+  };
+
+  await copyRecursive(sourceDir, snapshotDir);
+  return { snapshotDir, warnings };
+};
+
 const createFullSystemBackup = async ({ trigger = 'manual', uploadToDrive = false } = {}) => {
   const config = getBackupConfig();
   const createdAt = new Date().toISOString();
   const backupId = createBackupId();
-  const fileName = `netlink-full-backup-${getTimestampStamp()}.zip`;
+  const isEncryptedBackup = Boolean(config.encryption?.enabled && String(config.encryption?.password || '').trim());
+  const fileName = `netlink-full-backup-${getTimestampStamp()}${isEncryptedBackup ? '.nbk' : '.zip'}`;
   const outputPath = path.join(BACKUP_LOCAL_DIR, fileName);
-  const systemFiles = collectFilesRecursively(DB_PATH);
+  const { snapshotDir, warnings } = await createDirectorySnapshot(DB_PATH);
+  const tempZipPath = path.join(BACKUP_TEMP_DIR, `${backupId}.zip`);
 
-  const manifest = {
-    backupId,
-    createdAt,
-    trigger,
-    scope: 'full_system',
-    dbPath: DB_PATH,
-    fileCount: systemFiles.length,
-    files: systemFiles,
-    datasetStats: getDatasetStats(),
-  };
+  try {
+    const systemFiles = collectFilesRecursively(snapshotDir);
 
-  await createZipArchive({
-    outputPath,
-    compressionLevel: config.compressionLevel,
-    directoryEntries: [{ source: DB_PATH, target: 'database' }],
-    bufferEntries: [{ target: 'manifest.json', content: Buffer.from(JSON.stringify(manifest, null, 2), 'utf-8') }],
-  });
+    const manifest = {
+      backupId,
+      createdAt,
+      trigger,
+      scope: 'full_system',
+      dbPath: DB_PATH,
+      snapshotWarnings: warnings,
+      fileCount: systemFiles.length,
+      files: systemFiles,
+      datasetStats: getDatasetStats(),
+    };
 
-  const sizeBytes = fs.statSync(outputPath).size;
-  const checksum = await hashFileSha256(outputPath);
-  let provider = 'local';
-  let uploadInfo = null;
+    await createZipArchive({
+      outputPath: tempZipPath,
+      compressionLevel: config.compressionLevel,
+      directoryEntries: [{ source: snapshotDir, target: 'database' }],
+      bufferEntries: [{ target: 'manifest.json', content: Buffer.from(JSON.stringify(manifest, null, 2), 'utf-8') }],
+    });
 
-  if (config.googleDrive.enabled && (uploadToDrive || config.googleDrive.autoUpload)) {
-    uploadInfo = await uploadBackupToGoogleDrive(outputPath, fileName, config.googleDrive);
-    provider = uploadToDrive ? 'hybrid' : 'hybrid';
-    config.googleDrive.lastSyncAt = createdAt;
-    config.googleDrive.connectionStatus = 'connected';
-    config.googleDrive.connectionMessage = uploadInfo?.name ? `Drive upload completed: ${uploadInfo.name}` : 'Drive upload completed';
+    if (isEncryptedBackup) {
+      const encryptedContainer = createEncryptedBackupContainer({
+        payloadBuffer: fs.readFileSync(tempZipPath),
+        password: config.encryption.password,
+        passwordHint: config.encryption.passwordHint,
+        originalExtension: '.zip',
+        originalFileName: `${backupId}.zip`,
+        algorithm: config.encryption.algorithm,
+        iterations: config.encryption.kdfIterations,
+      });
+      fs.writeFileSync(outputPath, encryptedContainer);
+    } else {
+      fs.copyFileSync(tempZipPath, outputPath);
+    }
+
+    const sizeBytes = fs.statSync(outputPath).size;
+    const checksum = await hashFileSha256(outputPath);
+    let provider = 'local';
+    let uploadInfo = null;
+
+    if (config.googleDrive.enabled && (uploadToDrive || config.googleDrive.autoUpload)) {
+      uploadInfo = await uploadBackupToGoogleDrive(outputPath, fileName, config.googleDrive);
+      provider = uploadToDrive ? 'hybrid' : 'hybrid';
+      config.googleDrive.lastSyncAt = createdAt;
+      config.googleDrive.connectionStatus = 'connected';
+      config.googleDrive.connectionMessage = uploadInfo?.name ? `Drive upload completed: ${uploadInfo.name}` : 'Drive upload completed';
+    }
+
+    config.lastBackup = createdAt;
+    saveBackupConfig(config);
+
+    const historyItem = appendBackupHistory({
+      id: backupId,
+      action: 'backup',
+      status: 'success',
+      provider,
+      format: 'backup_zip',
+      dataset: 'full_system',
+      createdAt,
+      fileName,
+      sizeBytes,
+      checksum,
+      encrypted: isEncryptedBackup,
+      message: warnings.length
+        ? `System backup completed with ${warnings.length} skipped locked files.`
+        : (trigger === 'restore_point'
+          ? (isEncryptedBackup ? 'Encrypted restore point created successfully.' : 'Restore point created successfully.')
+          : (isEncryptedBackup ? 'Encrypted system backup completed successfully.' : 'System backup completed successfully.')),
+      downloadUrl: buildDownloadUrl(fileName),
+    });
+
+    pruneOldBackupArtifacts();
+
+    return {
+      historyItem,
+      downloadUrl: historyItem.downloadUrl,
+      googleDrive: uploadInfo,
+      warnings,
+    };
+  } finally {
+    try { fs.unlinkSync(tempZipPath); } catch {}
+    try { fs.rmSync(snapshotDir, { recursive: true, force: true }); } catch {}
   }
-
-  config.lastBackup = createdAt;
-  saveBackupConfig(config);
-
-  const historyItem = appendBackupHistory({
-    id: backupId,
-    action: 'backup',
-    status: 'success',
-    provider,
-    format: 'backup_zip',
-    dataset: 'full_system',
-    createdAt,
-    fileName,
-    sizeBytes,
-    checksum,
-    message: trigger === 'restore_point' ? 'Restore point created successfully.' : 'System backup completed successfully.',
-    downloadUrl: buildDownloadUrl(fileName),
-  });
-
-  pruneOldBackupArtifacts();
-
-  return {
-    historyItem,
-    downloadUrl: historyItem.downloadUrl,
-    googleDrive: uploadInfo,
-  };
 };
 
-const exportDatasetBundle = async ({ dataset, format }) => {
+const exportDatasetBundle = async ({ dataset, format, encrypt = false }) => {
+  const config = getBackupConfig();
   const createdAt = new Date().toISOString();
   const exportId = createBackupId();
   const baseName = `netlink-${dataset}-${getTimestampStamp()}`;
   const data = readDatasetRecords(dataset);
   let fileName = '';
   let outputPath = '';
+  let plainFileName = '';
+  let plainOutputPath = '';
+  const shouldEncryptExport = Boolean(encrypt && config.encryption?.enabled && String(config.encryption?.password || '').trim());
+
+  if (encrypt && !shouldEncryptExport) {
+    throw new Error('Export encryption requires enabled backup encryption settings with a valid password.');
+  }
 
   if (dataset === 'all_tables' && (format === 'csv' || format === 'zip')) {
-    fileName = `${baseName}.zip`;
-    outputPath = path.join(BACKUP_LOCAL_DIR, fileName);
+    plainFileName = `${baseName}.zip`;
+    plainOutputPath = path.join(BACKUP_LOCAL_DIR, plainFileName);
     const entries = BACKUP_DATASETS.map((item) => ({
       target: `${item.id}.${format === 'csv' ? 'csv' : 'json'}`,
       content: Buffer.from(
@@ -475,18 +723,18 @@ const exportDatasetBundle = async ({ dataset, format }) => {
         'utf-8'
       ),
     }));
-    await createZipArchive({ outputPath, compressionLevel: 'balanced', bufferEntries: entries });
+    await createZipArchive({ outputPath: plainOutputPath, compressionLevel: 'balanced', bufferEntries: entries });
   } else if (format === 'json') {
-    fileName = `${baseName}.json`;
-    outputPath = path.join(BACKUP_LOCAL_DIR, fileName);
-    writeJsonSafe(outputPath, data);
+    plainFileName = `${baseName}.json`;
+    plainOutputPath = path.join(BACKUP_LOCAL_DIR, plainFileName);
+    writeJsonSafe(plainOutputPath, data);
   } else if (format === 'csv') {
-    fileName = `${baseName}.csv`;
-    outputPath = path.join(BACKUP_LOCAL_DIR, fileName);
-    fs.writeFileSync(outputPath, toCsv(Array.isArray(data) ? data : []), 'utf-8');
+    plainFileName = `${baseName}.csv`;
+    plainOutputPath = path.join(BACKUP_LOCAL_DIR, plainFileName);
+    fs.writeFileSync(plainOutputPath, toCsv(Array.isArray(data) ? data : []), 'utf-8');
   } else if (format === 'xlsx') {
-    fileName = `${baseName}.xlsx`;
-    outputPath = path.join(BACKUP_LOCAL_DIR, fileName);
+    plainFileName = `${baseName}.xlsx`;
+    plainOutputPath = path.join(BACKUP_LOCAL_DIR, plainFileName);
     const workbook = XLSX.utils.book_new();
     if (dataset === 'all_tables') {
       BACKUP_DATASETS.forEach((item) => {
@@ -499,14 +747,32 @@ const exportDatasetBundle = async ({ dataset, format }) => {
       const sheet = XLSX.utils.json_to_sheet(rows.length ? rows : [{}]);
       XLSX.utils.book_append_sheet(workbook, sheet, dataset.slice(0, 31));
     }
-    XLSX.writeFile(workbook, outputPath);
+    XLSX.writeFile(workbook, plainOutputPath);
   } else {
-    fileName = `${baseName}.zip`;
-    outputPath = path.join(BACKUP_LOCAL_DIR, fileName);
+    plainFileName = `${baseName}.zip`;
+    plainOutputPath = path.join(BACKUP_LOCAL_DIR, plainFileName);
     const payload = dataset === 'all_tables'
       ? BACKUP_DATASETS.map((item) => ({ target: `${item.id}.json`, content: Buffer.from(JSON.stringify(readDatasetRecords(item.id), null, 2), 'utf-8') }))
       : [{ target: `${dataset}.json`, content: Buffer.from(JSON.stringify(data, null, 2), 'utf-8') }];
-    await createZipArchive({ outputPath, compressionLevel: 'balanced', bufferEntries: payload });
+    await createZipArchive({ outputPath: plainOutputPath, compressionLevel: 'balanced', bufferEntries: payload });
+  }
+
+  if (shouldEncryptExport) {
+    fileName = `${baseName}.nlex`;
+    outputPath = path.join(BACKUP_LOCAL_DIR, fileName);
+    const encryptedContainer = createEncryptedBackupContainer({
+      payloadBuffer: fs.readFileSync(plainOutputPath),
+      password: config.encryption.password,
+      passwordHint: config.encryption.passwordHint,
+      originalExtension: path.extname(plainFileName) || '.dat',
+      originalFileName: plainFileName,
+      algorithm: config.encryption.algorithm,
+      iterations: config.encryption.kdfIterations,
+    });
+    fs.writeFileSync(outputPath, encryptedContainer);
+  } else {
+    fileName = plainFileName;
+    outputPath = plainOutputPath;
   }
 
   const sizeBytes = fs.statSync(outputPath).size;
@@ -522,9 +788,16 @@ const exportDatasetBundle = async ({ dataset, format }) => {
     fileName,
     sizeBytes,
     checksum,
-    message: `Dataset export completed for ${dataset}.`,
+    encrypted: shouldEncryptExport,
+    message: shouldEncryptExport
+      ? `Encrypted dataset export completed for ${dataset}.`
+      : `Dataset export completed for ${dataset}.`,
     downloadUrl: buildDownloadUrl(fileName),
   });
+
+  if (shouldEncryptExport) {
+    try { fs.unlinkSync(plainOutputPath); } catch {}
+  }
 
   return {
     historyItem,
@@ -532,46 +805,222 @@ const exportDatasetBundle = async ({ dataset, format }) => {
   };
 };
 
-const restoreBackupArchive = async (archivePath) => {
+const parseDatasetsSelection = (value) => {
+  if (!value) return [];
+  if (Array.isArray(value)) return value.filter(Boolean);
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? parsed.filter(Boolean) : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+};
+
+const extractArchiveToTemp = async (archivePath) => {
+  const extractionDir = path.join(BACKUP_TEMP_DIR, createBackupId());
+  fs.mkdirSync(extractionDir, { recursive: true });
+  await fs.createReadStream(archivePath).pipe(unzipper.Extract({ path: extractionDir })).promise();
+  return extractionDir;
+};
+
+const getArchiveManifest = (extractionDir) => {
+  const manifestPath = path.join(extractionDir, 'manifest.json');
+  return readJsonSafeWithFallback(manifestPath, null);
+};
+
+const getArchiveRestoreSource = (extractionDir) => {
+  const restoreSource = path.join(extractionDir, 'database');
+  if (!fs.existsSync(restoreSource)) {
+    throw new Error('The uploaded archive does not contain a valid full-system backup.');
+  }
+  return restoreSource;
+};
+
+const getAvailableArchiveDatasets = (restoreSource) => BACKUP_DATASETS
+  .filter((dataset) => {
+    const datasetPath = getDatasetPathFromBase(dataset, restoreSource);
+    return fs.existsSync(datasetPath);
+  })
+  .map((dataset) => dataset.id);
+
+const buildArchivePreview = async (archivePath, originalName = path.basename(archivePath), password = '') => {
+  const encryptedMeta = readEncryptedBackupHeader(archivePath);
+  const checksum = encryptedMeta.encrypted
+    ? hashBufferSha256(encryptedMeta.fileBuffer)
+    : await hashFileSha256(archivePath);
+  const sizeBytes = fs.statSync(archivePath).size;
+
+  if (encryptedMeta.encrypted && !password) {
+    return {
+      previewToken: path.basename(archivePath),
+      fileName: originalName,
+      sizeBytes,
+      checksum,
+      encrypted: true,
+      requiresPassword: true,
+      passwordHint: encryptedMeta.header?.passwordHint || '',
+      encryptionAlgorithm: encryptedMeta.header?.algorithm || 'aes-256-gcm',
+      createdAt: null,
+      backupId: null,
+      scope: 'encrypted_backup',
+      datasetDiffs: [],
+      archiveSummary: {
+        fileCount: 0,
+        availableDatasets: [],
+      },
+    };
+  }
+
+  const materializedArchive = materializeBackupArchiveForRead({ archivePath, password });
+  const extractionDir = await extractArchiveToTemp(materializedArchive.archivePath);
+
+  try {
+    const restoreSource = getArchiveRestoreSource(extractionDir);
+    const manifest = getArchiveManifest(extractionDir);
+
+    const datasetDiffs = BACKUP_DATASETS.map((dataset) => {
+      const currentRecords = readDatasetRecords(dataset.id);
+      const archiveRecords = readDatasetRecordsFromBasePath(dataset.id, restoreSource);
+      const currentPath = getDatasetPathFromBase(dataset, DB_PATH);
+      const archivePathResolved = getDatasetPathFromBase(dataset, restoreSource);
+      const currentCount = Array.isArray(currentRecords) ? currentRecords.length : 0;
+      const archiveCount = Array.isArray(archiveRecords) ? archiveRecords.length : 0;
+
+      return {
+        id: dataset.id,
+        label: dataset.label,
+        availableInArchive: fs.existsSync(archivePathResolved),
+        currentRecords: currentCount,
+        archiveRecords: archiveCount,
+        delta: archiveCount - currentCount,
+        currentPath,
+        archivePath: archivePathResolved,
+      };
+    });
+
+    return {
+      previewToken: path.basename(archivePath),
+      fileName: originalName,
+      sizeBytes,
+      checksum,
+      encrypted: materializedArchive.encrypted,
+      requiresPassword: false,
+      passwordHint: materializedArchive.header?.passwordHint || '',
+      encryptionAlgorithm: materializedArchive.header?.algorithm || undefined,
+      createdAt: manifest?.createdAt || null,
+      backupId: manifest?.backupId || null,
+      scope: manifest?.scope || 'full_system',
+      datasetDiffs,
+      archiveSummary: {
+        fileCount: manifest?.fileCount || collectFilesRecursively(restoreSource).length,
+        availableDatasets: getAvailableArchiveDatasets(restoreSource),
+      },
+    };
+  } finally {
+    try { fs.rmSync(extractionDir, { recursive: true, force: true }); } catch {}
+    materializedArchive.cleanupPaths.forEach((cleanupPath) => {
+      try { fs.unlinkSync(cleanupPath); } catch {}
+    });
+  }
+};
+
+const applyDatasetRestore = (restoreSource, datasetId) => {
+  const dataset = getDatasetDefinition(datasetId);
+  if (!dataset) return;
+
+  const sourcePath = getDatasetPathFromBase(dataset, restoreSource);
+  const targetPath = dataset.path;
+
+  if (!fs.existsSync(sourcePath)) {
+    throw new Error(`Dataset "${datasetId}" is not available in the uploaded archive.`);
+  }
+
+  if (dataset.type === 'file') {
+    fs.mkdirSync(path.dirname(targetPath), { recursive: true });
+    fs.copyFileSync(sourcePath, targetPath);
+    return;
+  }
+
+  fs.rmSync(targetPath, { recursive: true, force: true });
+  fs.mkdirSync(path.dirname(targetPath), { recursive: true });
+  fs.cpSync(sourcePath, targetPath, { recursive: true });
+};
+
+const resolveRestoreArchivePath = ({ archivePath, previewToken }) => {
+  if (archivePath && fs.existsSync(archivePath)) return archivePath;
+  if (previewToken) {
+    const tokenPath = path.join(BACKUP_PREVIEW_DIR, path.basename(previewToken));
+    if (fs.existsSync(tokenPath)) return tokenPath;
+  }
+  throw new Error('Backup archive is required.');
+};
+
+const restoreBackupArchive = async ({ archivePath, previewToken, mode = 'full', datasets = [], password = '' }) => {
   const config = getBackupConfig();
   const createdAt = new Date().toISOString();
+  const selectedMode = mode === 'selective' ? 'selective' : 'full';
+  const selectedDatasets = selectedMode === 'selective'
+    ? datasets.filter((datasetId) => BACKUP_DATASETS.some((item) => item.id === datasetId))
+    : [];
+  const sourceArchivePath = resolveRestoreArchivePath({ archivePath, previewToken });
 
   if (config.createRestorePointBeforeRestore) {
     await createFullSystemBackup({ trigger: 'restore_point', uploadToDrive: false });
   }
 
-  const extractionDir = path.join(BACKUP_TEMP_DIR, createBackupId());
-  fs.mkdirSync(extractionDir, { recursive: true });
-  await fs.createReadStream(archivePath).pipe(unzipper.Extract({ path: extractionDir })).promise();
-
-  const restoreSource = path.join(extractionDir, 'database');
-  if (!fs.existsSync(restoreSource)) {
-    throw new Error('The uploaded archive does not contain a valid full-system backup.');
+  if (selectedMode === 'selective' && selectedDatasets.length === 0) {
+    throw new Error('Please select at least one dataset for selective restore.');
   }
 
-  fs.rmSync(DB_PATH, { recursive: true, force: true });
-  fs.mkdirSync(DB_PATH, { recursive: true });
-  fs.cpSync(restoreSource, DB_PATH, { recursive: true });
+  const materializedArchive = materializeBackupArchiveForRead({ archivePath: sourceArchivePath, password });
+  const extractionDir = await extractArchiveToTemp(materializedArchive.archivePath);
 
-  const refreshedConfig = getBackupConfig();
-  refreshedConfig.lastRestore = createdAt;
-  saveBackupConfig(refreshedConfig);
+  try {
+    const restoreSource = getArchiveRestoreSource(extractionDir);
 
-  const restoredFileName = path.basename(archivePath);
-  const historyItem = appendBackupHistory({
-    id: createBackupId(),
-    action: 'restore',
-    status: 'success',
-    provider: 'local',
-    format: 'backup_zip',
-    dataset: 'full_system',
-    createdAt,
-    fileName: restoredFileName,
-    message: 'Full system restore completed successfully.',
-  });
+    if (selectedMode === 'full') {
+      fs.rmSync(DB_PATH, { recursive: true, force: true });
+      fs.mkdirSync(DB_PATH, { recursive: true });
+      fs.cpSync(restoreSource, DB_PATH, { recursive: true });
+    } else {
+      selectedDatasets.forEach((datasetId) => applyDatasetRestore(restoreSource, datasetId));
+    }
 
-  try { fs.rmSync(extractionDir, { recursive: true, force: true }); } catch {}
-  return historyItem;
+    const refreshedConfig = getBackupConfig();
+    refreshedConfig.lastRestore = createdAt;
+    saveBackupConfig(refreshedConfig);
+
+    const restoredFileName = path.basename(sourceArchivePath);
+    const historyItem = appendBackupHistory({
+      id: createBackupId(),
+      action: 'restore',
+      status: 'success',
+      provider: 'local',
+      format: 'backup_zip',
+      dataset: selectedMode === 'full'
+        ? 'full_system'
+        : (selectedDatasets.length === 1 ? selectedDatasets[0] : 'all_tables'),
+      createdAt,
+      fileName: restoredFileName,
+      encrypted: materializedArchive.encrypted,
+      message: selectedMode === 'full'
+        ? 'Full system restore completed successfully.'
+        : `Selective restore completed successfully for: ${selectedDatasets.join(', ')}.`,
+    });
+
+    return historyItem;
+  } finally {
+    try { fs.rmSync(extractionDir, { recursive: true, force: true }); } catch {}
+    materializedArchive.cleanupPaths.forEach((cleanupPath) => {
+      try { fs.unlinkSync(cleanupPath); } catch {}
+    });
+    if (previewToken) {
+      try { fs.unlinkSync(path.join(BACKUP_PREVIEW_DIR, path.basename(previewToken))); } catch {}
+    }
+  }
 };
 
 const getBackupOverview = () => {
@@ -3327,36 +3776,72 @@ app.post('/api/system/backup/run', async (req, res) => {
 
 app.post('/api/system/backup/export', async (req, res) => {
   try {
-    const { dataset, format } = req.body || {};
+    const { dataset, format, encrypt } = req.body || {};
     if (!dataset || !format) {
       return res.status(400).json({ error: 'Dataset and format are required.' });
     }
-    const data = await exportDatasetBundle({ dataset, format });
+    const data = await exportDatasetBundle({ dataset, format, encrypt: Boolean(encrypt) });
     res.json({ data });
   } catch (error) {
     res.status(500).json({ error: error?.message || 'Failed to export dataset.' });
   }
 });
 
-app.post('/api/system/backup/restore', backupUpload.single('backupFile'), async (req, res) => {
+app.post('/api/system/backup/restore/preview', backupPreviewUpload.single('backupFile'), async (req, res) => {
   try {
-    if (!req.file) {
+    if (!req.file?.buffer) {
       return res.status(400).json({ error: 'Backup file is required.' });
     }
 
-    const historyItem = await restoreBackupArchive(req.file.path);
-    try { fs.unlinkSync(req.file.path); } catch {}
+    const previewToken = `${createBackupId()}-${path.basename(req.file.originalname || 'backup.zip')}`;
+    const previewArchivePath = path.join(BACKUP_PREVIEW_DIR, previewToken);
+    fs.writeFileSync(previewArchivePath, req.file.buffer);
+
+    const data = await buildArchivePreview(previewArchivePath, req.file.originalname || previewToken, String(req.body?.password || ''));
+    res.json({ data });
+  } catch (error) {
+    const statusCode = ['BACKUP_PASSWORD_REQUIRED', 'BACKUP_PASSWORD_INVALID'].includes(error?.code) ? 400 : 500;
+    res.status(statusCode).json({
+      error: error?.message || 'Failed to preview backup archive.',
+      passwordHint: error?.passwordHint || '',
+    });
+  }
+});
+
+app.post('/api/system/backup/restore', backupUpload.single('backupFile'), async (req, res) => {
+  try {
+    const previewToken = req.body?.previewToken ? String(req.body.previewToken) : '';
+    if (!req.file && !previewToken) {
+      return res.status(400).json({ error: 'Backup file is required.' });
+    }
+
+    const historyItem = await restoreBackupArchive({
+      archivePath: req.file?.path,
+      previewToken,
+      mode: req.body?.mode,
+      datasets: parseDatasetsSelection(req.body?.datasets),
+      password: String(req.body?.password || ''),
+    });
+    if (req.file?.path && fs.existsSync(req.file.path)) {
+      try { fs.unlinkSync(req.file.path); } catch {}
+    }
     res.json({
       data: {
         historyItem,
-        message: 'System restore completed successfully. Refresh the interface to load restored data.',
+        message: req.body?.mode === 'selective'
+          ? 'Selective restore completed successfully. Refresh the interface to load restored data.'
+          : 'System restore completed successfully. Refresh the interface to load restored data.',
       }
     });
   } catch (error) {
     if (req.file?.path && fs.existsSync(req.file.path)) {
       try { fs.unlinkSync(req.file.path); } catch {}
     }
-    res.status(500).json({ error: error?.message || 'Failed to restore backup.' });
+    const statusCode = ['BACKUP_PASSWORD_REQUIRED', 'BACKUP_PASSWORD_INVALID'].includes(error?.code) ? 400 : 500;
+    res.status(statusCode).json({
+      error: error?.message || 'Failed to restore backup.',
+      passwordHint: error?.passwordHint || '',
+    });
   }
 });
 
@@ -3690,7 +4175,53 @@ setInterval(runAutomaticBackupIfDue, 60000);
 runAutomaticBackupIfDue().catch(() => {});
 console.log(`[System] Automated Backup Scheduler is active.`);
 
-import { exec } from 'child_process';
+import { exec, execFile } from 'child_process';
+
+const getGitCommandErrorMessage = (error, stdout = '', stderr = '') => {
+  if (error?.killed) return 'Git command timed out.';
+  const combined = [stderr, stdout, error?.message].filter(Boolean).join('\n').trim();
+  return combined || 'Git command failed.';
+};
+
+const runExecFile = (command, args, options = {}) => new Promise((resolve, reject) => {
+  execFile(command, args, {
+    cwd: options.cwd,
+    timeout: options.timeout ?? 120000,
+    maxBuffer: 10 * 1024 * 1024,
+    windowsHide: true,
+    env: {
+      ...process.env,
+      GIT_TERMINAL_PROMPT: '0',
+      GCM_INTERACTIVE: 'Never',
+      GIT_ASKPASS: 'echo',
+      SSH_ASKPASS: 'echo',
+      ...(options.env || {}),
+    },
+  }, (error, stdout, stderr) => {
+    if (error) {
+      error.stdout = stdout;
+      error.stderr = stderr;
+      return reject(error);
+    }
+    resolve({ stdout, stderr });
+  });
+});
+
+const runGitCommand = async (args, { cwd, timeout = 120000 } = {}) => {
+  try {
+    return await runExecFile('git', args, { cwd, timeout });
+  } catch (error) {
+    error.friendlyMessage = getGitCommandErrorMessage(error, error?.stdout, error?.stderr);
+    throw error;
+  }
+};
+
+const buildAuthenticatedGitRemoteUrl = (repoUrl, pat) => {
+  const parsed = new URL(repoUrl);
+  parsed.username = 'x-access-token';
+  parsed.password = pat;
+  return parsed.toString();
+};
 
 // ==========================================
 // System Update API
@@ -3853,37 +4384,63 @@ app.post('/api/system/publish', async (req, res) => {
       return res.status(400).json({ error: 'At least one changelog item is required.' });
     }
     
-    // Project Root (where .git is)
     const projectRoot = path.resolve(__dirname, '../../');
     const commitMessage = String(body.commitMessage || `release: v${version}`).trim();
 
     if (!config.repo_url || !config.pat || config.pat.includes('your_personal_access_token_here')) {
       return res.status(500).json({ error: 'GitHub token is missing in git_config.json on the server.' });
     }
+    const remoteUrl = buildAuthenticatedGitRemoteUrl(config.repo_url, config.pat);
 
-    // Commands to run in sequence
-    // Using simple auth in URL from config
-    const remoteUrl = config.repo_url.replace('https://', `https://${config.pat}@`);
-    
-    const commands = [
-      `git config user.email "admin@aljabareen.com"`,
-      `git config user.name "NetLink System AutoSync"`,
-      `git config pull.rebase false`,
-      `git add -A .`,
-      `git reset -q -- "NetLink Enterprise DB" "AI NetLink Interface/ai-net-link/git_config.json" "AI NetLink Interface/ai-net-link/.wwebjs_cache" || true`,
-      `git commit -m "${commitMessage.replace(/"/g, '\\"')}" || echo "No changes to commit"`,
-      `git push "${remoteUrl}" HEAD:main`
-    ].join(' && ');
+    await runGitCommand(['config', 'user.email', 'admin@aljabareen.com'], { cwd: projectRoot, timeout: 15000 });
+    await runGitCommand(['config', 'user.name', 'NetLink System AutoSync'], { cwd: projectRoot, timeout: 15000 });
+    await runGitCommand(['config', 'pull.rebase', 'false'], { cwd: projectRoot, timeout: 15000 });
 
-    exec(commands, { cwd: projectRoot }, (err, stdout, stderr) => {
-      if (err) {
-        console.error('Git Publish Error:', stderr || stdout);
-        return res.status(500).json({ error: (stderr || stdout || 'Publish failed.').trim() });
-      }
-      res.json({ message: 'Release published to GitHub successfully!', data: { version, buildDate, changelog } });
+    await runGitCommand(['add', '-A', '.'], { cwd: projectRoot, timeout: 60000 });
+
+    try {
+      await runGitCommand(['reset', '-q', '--', 'NetLink Enterprise DB', 'AI NetLink Interface/ai-net-link/git_config.json', 'AI NetLink Interface/ai-net-link/.wwebjs_cache'], { cwd: projectRoot, timeout: 30000 });
+    } catch (error) {
+      console.warn('Git reset exclusions warning:', error?.friendlyMessage || error?.message || error);
+    }
+
+    const statusResult = await runGitCommand(['status', '--porcelain'], { cwd: projectRoot, timeout: 20000 });
+    const hasChangesToCommit = Boolean(String(statusResult.stdout || '').trim());
+
+    if (hasChangesToCommit) {
+      await runGitCommand(['commit', '-m', commitMessage], { cwd: projectRoot, timeout: 60000 });
+    }
+
+    await runGitCommand(['fetch', '--quiet', '--no-tags', remoteUrl, 'main'], { cwd: projectRoot, timeout: 120000 });
+    const divergence = await runGitCommand(['rev-list', '--left-right', '--count', 'FETCH_HEAD...HEAD'], { cwd: projectRoot, timeout: 20000 });
+    const [remoteAheadRaw = '0', localAheadRaw = '0'] = String(divergence.stdout || '').trim().split(/\s+/);
+    const remoteAhead = Number(remoteAheadRaw) || 0;
+    const localAhead = Number(localAheadRaw) || 0;
+
+    if (remoteAhead > 0 && localAhead === 0) {
+      return res.status(409).json({
+        error: 'GitHub contains newer commits. Run update/sync first, then publish again.',
+        data: { remoteAhead, localAhead }
+      });
+    }
+
+    if (remoteAhead > 0 && localAhead > 0) {
+      return res.status(409).json({
+        error: 'Local and remote branches have diverged. Please sync/update before publishing.',
+        data: { remoteAhead, localAhead }
+      });
+    }
+
+    await runGitCommand(['push', remoteUrl, 'HEAD:main'], { cwd: projectRoot, timeout: 180000 });
+
+    return res.json({
+      message: 'Release published to GitHub successfully!',
+      data: { version, buildDate, changelog, committed: hasChangesToCommit }
     });
-
-  } catch (err) { res.status(500).json({ error: 'Server error during publish.' }); }
+  } catch (err) {
+    console.error('Git Publish Error:', err?.friendlyMessage || err?.message || err);
+    return res.status(500).json({ error: err?.friendlyMessage || err?.message || 'Server error during publish.' });
+  }
 });
 
 app.listen(PORT, () => {

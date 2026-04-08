@@ -4,7 +4,7 @@
  * Website: aljabareen.com
  * Contact: admin@aljabareen.com | +970597409040
  */
-import type { BackupDatasetId, BackupExportFormat, BackupSettings } from './types';
+import type { BackupDatasetId, BackupExportFormat, BackupRestoreMode, BackupRestorePreview, BackupSettings } from './types';
 
 const getDefaultBaseUrl = () => {
   if (typeof window === 'undefined') return 'http://localhost:3001/api';
@@ -663,7 +663,7 @@ export const runSystemBackup = async (payload: { uploadToDrive?: boolean; trigge
   return data.data;
 };
 
-export const exportBackupDataset = async (payload: { dataset: BackupDatasetId; format: BackupExportFormat }) => {
+export const exportBackupDataset = async (payload: { dataset: BackupDatasetId; format: BackupExportFormat; encrypt?: boolean }) => {
   const res = await fetch(`${BASE_URL}/system/backup/export`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -685,9 +685,27 @@ export const testGoogleDriveBackupConnection = async (googleDriveSettings: Backu
   return data.data;
 };
 
-export const restoreSystemBackup = async (file: File) => {
+export const previewRestoreArchive = async (file: File, password?: string): Promise<BackupRestorePreview> => {
   const formData = new FormData();
   formData.append('backupFile', file);
+  if (password) formData.append('password', password);
+
+  const res = await fetch(`${BASE_URL}/system/backup/restore/preview`, {
+    method: 'POST',
+    body: formData,
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || 'Failed to preview backup archive');
+  return data.data;
+};
+
+export const restoreSystemBackup = async (payload: { previewToken?: string; mode?: BackupRestoreMode; datasets?: BackupDatasetId[]; file?: File; password?: string }) => {
+  const formData = new FormData();
+  if (payload.file) formData.append('backupFile', payload.file);
+  if (payload.previewToken) formData.append('previewToken', payload.previewToken);
+  if (payload.mode) formData.append('mode', payload.mode);
+  if (payload.datasets?.length) formData.append('datasets', JSON.stringify(payload.datasets));
+  if (payload.password) formData.append('password', payload.password);
 
   const res = await fetch(`${BASE_URL}/system/backup/restore`, {
     method: 'POST',

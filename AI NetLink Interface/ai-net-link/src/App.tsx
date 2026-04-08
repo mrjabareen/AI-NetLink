@@ -227,6 +227,15 @@ export default function App() {
       includeUploadsDirectory: true,
       lastBackup: '2026-03-28 12:00:00',
       lastRestore: null,
+      encryption: {
+        enabled: false,
+        algorithm: 'aes-256-gcm',
+        password: '',
+        passwordHint: '',
+        applyToExports: false,
+        requirePasswordOnRestore: true,
+        kdfIterations: 210000
+      },
       googleDrive: {
         enabled: false,
         folderId: '',

@@ -8,6 +8,8 @@ export type BackupExportFormat = 'json' | 'csv' | 'xlsx' | 'zip';
 export type BackupDatasetId = 'subscribers' | 'investors' | 'suppliers' | 'managers' | 'directors' | 'deputies' | 'iptv' | 'profiles' | 'all_tables';
 export type BackupProvider = 'local' | 'google_drive' | 'hybrid';
 export type BackupJobStatus = 'idle' | 'running' | 'success' | 'failed';
+export type BackupRestoreMode = 'full' | 'selective';
+export type BackupEncryptionAlgorithm = 'aes-256-gcm';
 /**
  * © 2026 SAS NET. All Rights Reserved.
  * Developer: Muhammad Rateb Jabarin
@@ -217,6 +219,16 @@ export interface BackupGoogleDriveSettings {
   connectionMessage?: string;
 }
 
+export interface BackupEncryptionSettings {
+  enabled: boolean;
+  algorithm: BackupEncryptionAlgorithm;
+  password: string;
+  passwordHint: string;
+  applyToExports: boolean;
+  requirePasswordOnRestore: boolean;
+  kdfIterations: number;
+}
+
 export interface BackupSettings {
   enabled: boolean;
   automatic: boolean;
@@ -229,6 +241,7 @@ export interface BackupSettings {
   includeUploadsDirectory: boolean;
   lastBackup: string | null;
   lastRestore: string | null;
+  encryption: BackupEncryptionSettings;
   googleDrive: BackupGoogleDriveSettings;
 }
 
@@ -245,6 +258,37 @@ export interface BackupHistoryItem {
   checksum?: string;
   message?: string;
   downloadUrl?: string;
+  encrypted?: boolean;
+}
+
+export interface BackupDatasetDiffItem {
+  id: BackupDatasetId;
+  label: string;
+  availableInArchive: boolean;
+  currentRecords: number;
+  archiveRecords: number;
+  delta: number;
+  currentPath?: string;
+  archivePath?: string;
+}
+
+export interface BackupRestorePreview {
+  previewToken: string;
+  fileName: string;
+  sizeBytes: number;
+  checksum: string;
+  encrypted?: boolean;
+  requiresPassword?: boolean;
+  passwordHint?: string;
+  encryptionAlgorithm?: BackupEncryptionAlgorithm;
+  createdAt?: string | null;
+  backupId?: string | null;
+  scope?: string | null;
+  datasetDiffs: BackupDatasetDiffItem[];
+  archiveSummary: {
+    fileCount: number;
+    availableDatasets: BackupDatasetId[];
+  };
 }
 
 export interface User {
@@ -359,6 +403,7 @@ export interface AppState {
     includeUploadsDirectory: boolean;
     lastBackup: string | null;
     lastRestore: string | null;
+    encryption: BackupEncryptionSettings;
     googleDrive: BackupGoogleDriveSettings;
   };
   aiSettings: {

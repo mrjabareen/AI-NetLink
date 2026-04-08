@@ -160,16 +160,30 @@ function deleteSavedProject(userDataDir, projectId) {
   return getConfigResponse(config);
 }
 
-async function runGit(args, cwd) {
+async function runGit(args, cwd, options = {}) {
   try {
     const { stdout, stderr } = await execFileAsync('git', args, {
       cwd,
       windowsHide: true,
       maxBuffer: 1024 * 1024 * 10,
+      timeout: options.timeout || 120000,
+      env: {
+        ...process.env,
+        GIT_TERMINAL_PROMPT: '0',
+        GCM_INTERACTIVE: 'Never',
+        GIT_ASKPASS: 'echo',
+        SSH_ASKPASS: 'echo',
+        ...(options.env || {}),
+      },
     });
     return { stdout: stdout.trim(), stderr: stderr.trim() };
   } catch (error) {
-    const details = [error.stdout, error.stderr, error.message].filter(Boolean).join('\n').trim();
+    const details = [
+      error.killed ? 'Git command timed out.' : '',
+      error.stdout,
+      error.stderr,
+      error.message
+    ].filter(Boolean).join('\n').trim();
     throw new Error(details || `git ${args.join(' ')} failed`);
   }
 }
@@ -399,7 +413,10 @@ function buildAuthenticatedUrl(repoUrl, token) {
   if (!token || !String(token).trim()) {
     throw new Error('Enter the real GitHub token.');
   }
-  return String(repoUrl).trim().replace(/^https:\/\//i, `https://${String(token).trim()}@`);
+  const url = new URL(String(repoUrl).trim());
+  url.username = 'x-access-token';
+  url.password = String(token).trim();
+  return url.toString();
 }
 
 const REMOTE_VERSION_PATH = 'AI NetLink Interface/ai-net-link/public/version.json';
@@ -612,39 +629,61 @@ async function publishRelease(input) {
   if (!buildDate) throw new Error('Enter the build date.');
   if (changelog.length === 0) throw new Error('Enter the changelog.');
 
-  const remoteVersion = await getRemoteVersionData(repoUrl, token);
-  if (remoteVersion?.version === version) {
-    throw new Error('The version number is still the same as GitHub. Change the version before publishing.');
-  }
-
-  saveVersionData(context.versionPath, version, buildDate, changelog);
-
   try {
     // Ensure git identity exists for automated release commits.
     const commitUser = githubUser || 'netlink-publisher';
-    await runGit(['config', 'user.name', commitUser], context.repoRoot);
-    await runGit(['config', 'user.email', `${commitUser}@users.noreply.github.com`], context.repoRoot);
+    await runGit(['config', 'user.name', commitUser], context.repoRoot, { timeout: 15000 });
+    await runGit(['config', 'user.email', `${commitUser}@users.noreply.github.com`], context.repoRoot, { timeout: 15000 });
+
+    const authenticatedUrl = buildAuthenticatedUrl(repoUrl, token);
+    await runGit(['fetch', '--quiet', '--no-tags', authenticatedUrl, 'main'], context.repoRoot, { timeout: 120000 });
+
+    const baseDivergence = await runGit(['rev-list', '--left-right', '--count', 'FETCH_HEAD...HEAD'], context.repoRoot, { timeout: 20000 });
+    const [remoteAheadRaw = '0', localAheadRaw = '0'] = String(baseDivergence.stdout || '').trim().split(/\s+/);
+    const remoteAhead = Number(remoteAheadRaw) || 0;
+    const localAhead = Number(localAheadRaw) || 0;
+
+    if (remoteAhead > 0 && localAhead === 0) {
+      throw new Error('GitHub contains newer commits. Run sync/update first, then publish again.');
+    }
+
+    if (remoteAhead > 0 && localAhead > 0) {
+      throw new Error('Local and remote branches have diverged. Sync the repository first, then publish again.');
+    }
+
+    // If previous publish attempts already created local commits, push them first instead of creating more.
+    if (localAhead > 0) {
+      await runGit(['push', authenticatedUrl, 'HEAD:main'], context.repoRoot, { timeout: 600000 });
+      return getProjectState(input);
+    }
+
+    const remoteVersion = await getRemoteVersionData(repoUrl, token);
+    if (remoteVersion?.version === version) {
+      throw new Error('The version number is still the same as GitHub. Change the version before publishing.');
+    }
+
+    saveVersionData(context.versionPath, version, buildDate, changelog);
 
     // Stage only publishable files (excludes DB, binaries, caches...).
     await stagePublishableChanges(context.repoRoot);
 
-    const stagedResult = await runGit(['diff', '--cached', '--name-only'], context.repoRoot);
-    if (!stagedResult.stdout) {
+    const stagedResult = await runGit(['diff', '--cached', '--name-only'], context.repoRoot, { timeout: 20000 });
+    const hasChangesToCommit = Boolean(stagedResult.stdout);
+    if (!hasChangesToCommit) {
       throw new Error('No publishable changes were found. Make sure you saved your code changes before publishing.');
     }
 
-    await runGit(['commit', '-m', `release: v${version}`], context.repoRoot);
+    await runGit(['commit', '-m', `release: v${version}`], context.repoRoot, { timeout: 60000 });
 
-    const authenticatedUrl = buildAuthenticatedUrl(repoUrl, token);
-    await runGit(['remote', 'set-url', 'origin', authenticatedUrl], context.repoRoot);
-    await runGit(['fetch', 'origin', 'main'], context.repoRoot);
-    await runGit(['pull', '--rebase', 'origin', 'main'], context.repoRoot);
-    await runGit(['push', 'origin', 'HEAD:main'], context.repoRoot);
+    await runGit(['push', authenticatedUrl, 'HEAD:main'], context.repoRoot, { timeout: 600000 });
     return getProjectState(input);
   } catch (error) {
     const message = String(error?.message || error || '');
     if (/could not apply|CONFLICT/i.test(message)) {
       throw new Error('Git rebase conflict detected. Please run a manual pull/rebase once, resolve conflicts if any, then publish again.');
+    }
+    if (/newer commits|diverged|sync\/update first|sync the repository first/i.test(message)) {
+      throw new Error(message);
     }
     if (/ENOTFOUND|Could not resolve host|Failed to fetch|fetch failed/i.test(message)) {
       throw new Error('Could not reach GitHub. Check your internet connection or DNS settings, then try again.');

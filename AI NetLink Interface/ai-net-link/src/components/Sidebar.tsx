@@ -116,17 +116,21 @@ export default function Sidebar({ state, setState }: SidebarProps) {
       .filter(Boolean),
   })).filter(group => group.items.length > 0)), [isRTL, navItems]);
 
-  const settingsCategories = useMemo<SettingsNavItem[]>(() => ([
-    { id: 'profile', label: t.settings.categories.profile },
-    { id: 'gateways', label: isRTL ? 'إدارة البوابات' : 'Gateways', permission: 'manage_team' },
-    { id: 'ai', label: t.settings.categories.ai, permission: 'manage_ai' },
-    { id: 'billing', label: t.settings.categories.billing, permission: 'view_billing' },
-    { id: 'investors', label: t.settings.categories.investors, permission: 'view_investors' },
-    { id: 'backup', label: t.settings.categories.backup, permission: 'perform_backup' },
-    { id: 'team', label: t.settings.categories.team, permission: 'manage_team' },
-    { id: 'security', label: t.settings.categories.security, permission: 'view_security' },
-    { id: 'about', label: t.settings.categories.about },
-  ].filter(category => !category.permission || hasPermission(category.permission))), [hasPermission, isRTL, t.settings.categories]);
+  const settingsCategories = useMemo<SettingsNavItem[]>(() => {
+    const categoryItems: SettingsNavItem[] = [
+      { id: 'profile', label: t.settings.categories.profile },
+      { id: 'gateways', label: isRTL ? 'إدارة البوابات' : 'Gateways', permission: 'manage_team' },
+      { id: 'ai', label: t.settings.categories.ai, permission: 'manage_ai' },
+      { id: 'billing', label: t.settings.categories.billing, permission: 'view_billing' },
+      { id: 'investors', label: t.settings.categories.investors, permission: 'view_investors' },
+      { id: 'backup', label: t.settings.categories.backup, permission: 'perform_backup' },
+      { id: 'team', label: t.settings.categories.team, permission: 'manage_team' },
+      { id: 'security', label: t.settings.categories.security, permission: 'view_security' },
+      { id: 'about', label: t.settings.categories.about },
+    ];
+
+    return categoryItems.filter((category) => category.permission === undefined || hasPermission(category.permission));
+  }, [hasPermission, isRTL, t.settings.categories]);
 
   useEffect(() => {
     if (state.activeTab === 'settings') {

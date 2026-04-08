@@ -241,6 +241,21 @@ function humanizePublisherError(rawError: unknown, lang: Lang): string {
       en: 'The entered version is the same as the one on GitHub. Change the version number before publishing.',
     },
     {
+      test: /GitHub contains newer commits|Run sync\/update first/i,
+      ar: 'يوجد تحديث أحدث على GitHub من النسخة المحلية. نفّذ المزامنة أو التحديث أولًا ثم أعد النشر.',
+      en: 'GitHub has newer commits than your local copy. Run sync/update first, then publish again.',
+    },
+    {
+      test: /Local and remote branches have diverged|sync the repository first/i,
+      ar: 'الفرع المحلي والفرع البعيد متباعدان. نفّذ مزامنة للمستودع أولًا ثم حاول النشر من جديد.',
+      en: 'The local and remote branches have diverged. Sync the repository first, then try publishing again.',
+    },
+    {
+      test: /Git command timed out/i,
+      ar: 'استغرقت إحدى أوامر Git وقتًا طويلًا وتوقفت تلقائيًا بدل أن يعلق البرنامج. تحقق من الاتصال أو من حجم التغييرات ثم أعد المحاولة.',
+      en: 'A Git command took too long and was stopped automatically instead of hanging the app. Check connectivity or change size, then retry.',
+    },
+    {
       test: /Select the project folder first|selected folder does not exist|Could not find ai-net-link inside the selected path/i,
       ar: 'مسار المشروع غير صحيح أو غير مكتمل. اختر مجلد المشروع الصحيح الذي يحتوي على واجهة `ai-net-link`.',
       en: 'The project path is invalid or incomplete. Select the correct project folder that contains `ai-net-link`.',

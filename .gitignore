@@ -45,6 +45,8 @@ temp/
 
 # App cache and local debug helpers
 AI NetLink Interface/ai-net-link/.wwebjs_cache/
+AI NetLink Interface/ai-net-link/backup-storage/
+AI NetLink Interface/ai-net-link/git_config.json
 AI NetLink Interface/ai-net-link/check_json.js
 AI NetLink Interface/ai-net-link/check_json.mjs
 AI NetLink Interface/ai-net-link/check_tags.js
@@ -52,3 +54,6 @@ AI NetLink Interface/ai-net-link/test_api.mjs
 AI NetLink Interface/ai-net-link/update_tab.cjs
 AI NetLink Interface/ai-net-link/update_tab.js
 AI NetLink Interface/ai-net-link/metadata.json
+.trae/
+DB_CLEAN_DEPLOY/
+DB_CLEAN_DEPLOY.zip

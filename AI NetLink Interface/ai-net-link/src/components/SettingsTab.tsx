@@ -6,11 +6,11 @@
  */
 import React, { useMemo, useState } from 'react';
 import { motion } from 'motion/react';
-import { Settings, User, Network, Cpu, CreditCard, Users, Shield, Save, Key, Database, Server, Lock, Bell, Globe, Moon, Sun, Plus, Trash2, TrendingUp, RefreshCw, Clock, CheckCircle2, XCircle, DollarSign, Calendar, Percent, Eye, EyeOff, Mail, Send, Smartphone, ScanLine, Activity, MessageSquare, QrCode, ShieldCheck, Search, Download, Upload, Cloud, FileJson, FileSpreadsheet, ArchiveRestore, HardDrive } from 'lucide-react';
-import { AppState, BackupDatasetId, BackupExportFormat, BackupHistoryItem, Currency, GatewayConfig, Permission, Role, SettingsCategoryId, TeamMember, WhatsAppStatus } from '../types';
+import { Settings, User, Network, Cpu, CreditCard, Users, Shield, Save, Key, Database, Server, Lock, Bell, Globe, Moon, Sun, Plus, Trash2, TrendingUp, RefreshCw, Clock, CheckCircle2, XCircle, DollarSign, Calendar, Percent, Eye, EyeOff, Mail, Send, Smartphone, ScanLine, Activity, MessageSquare, QrCode, ShieldCheck, Search, Download, Upload, Cloud, FileJson, FileSpreadsheet, ArchiveRestore, HardDrive, GitCompareArrows, Layers3 } from 'lucide-react';
+import { AppState, BackupDatasetId, BackupExportFormat, BackupHistoryItem, BackupRestorePreview, Currency, GatewayConfig, Permission, Role, SettingsCategoryId, TeamMember, WhatsAppStatus } from '../types';
 import { dict } from '../dict';
 import { formatNumber, normalizeDigits, parseNumericInput } from '../utils/format';
-import { getGatewaysConfig, saveGatewaysConfig, getWhatsappStatus, restartWhatsappEngine, getNetworkConfig, saveNetworkConfig, testMikrotikConnection, BASE_URL, checkSystemUpdate, startSystemUpdate, testAiProvider, exportBackupDataset, getBackupOverview, restoreSystemBackup, runSystemBackup, saveBackupConfig, testGoogleDriveBackupConnection } from '../api';
+import { getGatewaysConfig, saveGatewaysConfig, getWhatsappStatus, restartWhatsappEngine, getNetworkConfig, saveNetworkConfig, testMikrotikConnection, BASE_URL, checkSystemUpdate, startSystemUpdate, testAiProvider, exportBackupDataset, getBackupOverview, previewRestoreArchive, restoreSystemBackup, runSystemBackup, saveBackupConfig, testGoogleDriveBackupConnection } from '../api';
 import { showAppToast, toastError, toastInfo, toastSuccess } from '../utils/notify';
 import NumericInput from './NumericInput';
 import DateInput from './DateInput';
@@ -52,6 +52,12 @@ export default function SettingsTab({ state, setState }: SettingsTabProps) {
   const [backupOverview, setBackupOverview] = useState<{ history?: BackupHistoryItem[]; nextRunAt?: string | null; storage?: { localFileCount?: number; totalBytes?: number }; datasets?: Array<{ id: string; label: string; records: number }> } | null>(null);
   const [backupActionId, setBackupActionId] = useState<string | null>(null);
   const [restoreFile, setRestoreFile] = useState<File | null>(null);
+  const [restorePreview, setRestorePreview] = useState<BackupRestorePreview | null>(null);
+  const [restoreMode, setRestoreMode] = useState<'full' | 'selective'>('full');
+  const [selectedRestoreDatasets, setSelectedRestoreDatasets] = useState<BackupDatasetId[]>([]);
+  const [showBackupEncryptionPassword, setShowBackupEncryptionPassword] = useState(false);
+  const [showRestorePassword, setShowRestorePassword] = useState(false);
+  const [restorePassword, setRestorePassword] = useState('');
   const [selectedBackupDataset, setSelectedBackupDataset] = useState<BackupDatasetId>('subscribers');
   const [selectedBackupFormat, setSelectedBackupFormat] = useState<BackupExportFormat>('xlsx');
 
@@ -100,6 +106,10 @@ export default function SettingsTab({ state, setState }: SettingsTabProps) {
           backupSettings: {
             ...prev.backupSettings,
             ...overview.config,
+            encryption: {
+              ...prev.backupSettings.encryption,
+              ...(overview.config.encryption || {}),
+            },
             googleDrive: {
               ...prev.backupSettings.googleDrive,
               ...(overview.config.googleDrive || {}),
@@ -321,6 +331,22 @@ export default function SettingsTab({ state, setState }: SettingsTabProps) {
   };
 
   const handleSaveBackupSettings = async () => {
+    if (state.backupSettings.encryption.enabled && !state.backupSettings.encryption.password.trim()) {
+      toastInfo(
+        isRTL ? 'أدخل كلمة مرور التشفير قبل حفظ الإعدادات.' : 'Enter a backup encryption password before saving.',
+        isRTL ? 'كلمة المرور مطلوبة' : 'Password Required'
+      );
+      return;
+    }
+
+    if (state.backupSettings.encryption.enabled && state.backupSettings.encryption.password.trim().length < 8) {
+      toastInfo(
+        isRTL ? 'كلمة مرور التشفير يجب أن تكون 8 أحرف على الأقل.' : 'Backup encryption password must be at least 8 characters long.',
+        isRTL ? 'كلمة المرور قصيرة' : 'Password Too Short'
+      );
+      return;
+    }
+
     try {
       setBackupActionId('save-backup-settings');
       await saveBackupConfig(state.backupSettings);
@@ -357,11 +383,28 @@ export default function SettingsTab({ state, setState }: SettingsTabProps) {
   };
 
   const handleExportDataset = async () => {
+    if (state.backupSettings.encryption.applyToExports && (!state.backupSettings.encryption.enabled || !state.backupSettings.encryption.password.trim())) {
+      toastInfo(
+        isRTL ? 'فعّل تشفير النسخ الرئيسية وأدخل كلمة المرور أولًا حتى يتم تشفير ملف التصدير.' : 'Enable backup encryption and set a password first to encrypt export files.',
+        isRTL ? 'التشفير غير جاهز' : 'Encryption Not Ready'
+      );
+      return;
+    }
+
     try {
       setBackupActionId('export-dataset');
-      const result = await exportBackupDataset({ dataset: selectedBackupDataset, format: selectedBackupFormat });
+      const result = await exportBackupDataset({
+        dataset: selectedBackupDataset,
+        format: selectedBackupFormat,
+        encrypt: state.backupSettings.encryption.applyToExports,
+      });
       await loadBackupCenter();
-      toastSuccess(isRTL ? 'تم تجهيز ملف التصدير بنجاح.' : 'Export file prepared successfully.', isRTL ? 'نجح التصدير' : 'Export Ready');
+      toastSuccess(
+        state.backupSettings.encryption.applyToExports
+          ? (isRTL ? 'تم تجهيز ملف التصدير المشفّر بنجاح.' : 'Encrypted export file prepared successfully.')
+          : (isRTL ? 'تم تجهيز ملف التصدير بنجاح.' : 'Export file prepared successfully.'),
+        isRTL ? 'نجح التصدير' : 'Export Ready'
+      );
       if (result?.downloadUrl) {
         window.open(resolveApiFileUrl(result.downloadUrl), '_blank', 'noopener,noreferrer');
       }
@@ -409,18 +452,65 @@ export default function SettingsTab({ state, setState }: SettingsTabProps) {
     }
   };
 
-  const handleRestoreBackup = async () => {
+  const handlePreviewBackupRestore = async () => {
     if (!restoreFile) {
       toastInfo(isRTL ? 'اختر ملف نسخة احتياطية أولًا.' : 'Select a backup file first.', isRTL ? 'ملف مطلوب' : 'File Required');
       return;
     }
 
     try {
+      setBackupActionId('preview-restore');
+      const preview = await previewRestoreArchive(restoreFile, restorePassword);
+      setRestorePreview(preview);
+      setSelectedRestoreDatasets(preview.datasetDiffs.filter(item => item.availableInArchive).map(item => item.id));
+      if (preview.requiresPassword) {
+        toastInfo(
+          isRTL ? 'هذه النسخة مشفرة. أدخل كلمة المرور ثم أعد التحليل لعرض المقارنة.' : 'This archive is encrypted. Enter the password and analyze again to unlock the comparison.',
+          isRTL ? 'نسخة مشفرة' : 'Encrypted Archive'
+        );
+      } else {
+        toastSuccess(isRTL ? 'تم تحليل النسخة الاحتياطية وعرض المقارنة.' : 'Backup archive analyzed and comparison is ready.', isRTL ? 'المعاينة جاهزة' : 'Preview Ready');
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : (isRTL ? 'تعذر معاينة النسخة الاحتياطية.' : 'Failed to preview backup archive.');
+      setRestorePreview(null);
+      setSelectedRestoreDatasets([]);
+      toastError(message, isRTL ? 'فشل التحليل' : 'Preview Failed');
+    } finally {
+      setBackupActionId(null);
+    }
+  };
+
+  const handleRestoreBackup = async () => {
+    if (!restorePreview?.previewToken) {
+      toastInfo(isRTL ? 'قم أولًا بتحليل ملف النسخة الاحتياطية قبل الاسترجاع.' : 'Preview the backup archive before restoring.', isRTL ? 'المعاينة مطلوبة' : 'Preview Required');
+      return;
+    }
+
+    if (restoreMode === 'selective' && selectedRestoreDatasets.length === 0) {
+      toastInfo(isRTL ? 'اختر جدولًا واحدًا على الأقل للاستعادة الانتقائية.' : 'Select at least one dataset for selective restore.', isRTL ? 'تحديد مطلوب' : 'Selection Required');
+      return;
+    }
+
+    try {
       setBackupActionId('restore-backup');
-      await restoreSystemBackup(restoreFile);
+      await restoreSystemBackup({
+        previewToken: restorePreview.previewToken,
+        mode: restoreMode,
+        datasets: restoreMode === 'selective' ? selectedRestoreDatasets : [],
+        password: restorePassword,
+      });
       setRestoreFile(null);
+      setRestorePreview(null);
+      setSelectedRestoreDatasets([]);
+      setRestoreMode('full');
       await loadBackupCenter();
-      toastSuccess(isRTL ? 'تمت استعادة النظام بنجاح. قم بتحديث الصفحة لتحميل البيانات المستعادة.' : 'System restore completed successfully. Refresh the page to load restored data.', isRTL ? 'اكتملت الاستعادة' : 'Restore Completed');
+      toastSuccess(
+        restoreMode === 'selective'
+          ? (isRTL ? 'تمت الاستعادة الانتقائية بنجاح. قم بتحديث الصفحة لتحميل البيانات المستعادة.' : 'Selective restore completed successfully. Refresh the page to load restored data.')
+          : (isRTL ? 'تمت استعادة النظام بنجاح. قم بتحديث الصفحة لتحميل البيانات المستعادة.' : 'System restore completed successfully. Refresh the page to load restored data.'),
+        isRTL ? 'اكتملت الاستعادة' : 'Restore Completed'
+      );
     } catch (error) {
       const message = error instanceof Error ? error.message : (isRTL ? 'تعذرت استعادة النسخة الاحتياطية.' : 'Failed to restore backup.');
       toastError(message, isRTL ? 'فشل الاستعادة' : 'Restore Failed');
@@ -1203,6 +1293,84 @@ export default function SettingsTab({ state, setState }: SettingsTabProps) {
               </div>
             </div>
 
+            <div className="p-6 rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#09090B] space-y-5">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <h4 className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                    <Lock className="text-rose-500" size={18} />
+                    {isRTL ? 'تشفير النسخ الاحتياطية' : 'Backup Encryption'}
+                  </h4>
+                  <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                    {isRTL
+                      ? 'تشفير أرشيف النسخة الكاملة بخوارزمية قوية مع تلميح كلمة مرور، بحيث لا يمكن معاينته أو استعادته بدون كلمة المرور.'
+                      : 'Encrypt full backup archives with a strong algorithm and password hint so they cannot be previewed or restored without the password.'}
+                  </p>
+                </div>
+                <div onClick={() => setState(prev => ({ ...prev, backupSettings: { ...prev.backupSettings, encryption: { ...prev.backupSettings.encryption, enabled: !prev.backupSettings.encryption.enabled } } }))} className={`w-12 h-6 rounded-full relative cursor-pointer transition-colors ${state.backupSettings.encryption.enabled ? 'bg-rose-500' : 'bg-slate-300 dark:bg-slate-700'}`}>
+                  <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${state.backupSettings.encryption.enabled ? (isRTL ? 'left-1' : 'right-1') : (isRTL ? 'right-1' : 'left-1')}`}></div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+                <div className="space-y-2 xl:col-span-2">
+                  <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{isRTL ? 'كلمة مرور التشفير' : 'Encryption Password'}</label>
+                  <div className="relative">
+                    <input
+                      type={showBackupEncryptionPassword ? 'text' : 'password'}
+                      value={state.backupSettings.encryption.password}
+                      onChange={(e) => setState(prev => ({ ...prev, backupSettings: { ...prev.backupSettings, encryption: { ...prev.backupSettings.encryption, password: e.target.value } } }))}
+                      placeholder={isRTL ? 'أدخل كلمة مرور قوية لتشفير النسخ' : 'Enter a strong password for backup encryption'}
+                      className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 pr-12 text-sm text-slate-800 dark:text-slate-200 focus:outline-none focus:border-rose-500"
+                    />
+                    <button type="button" onClick={() => setShowBackupEncryptionPassword(prev => !prev)} className="absolute inset-y-0 right-3 flex items-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+                      {showBackupEncryptionPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{isRTL ? 'تلميح كلمة المرور' : 'Password Hint'}</label>
+                  <input
+                    value={state.backupSettings.encryption.passwordHint}
+                    onChange={(e) => setState(prev => ({ ...prev, backupSettings: { ...prev.backupSettings, encryption: { ...prev.backupSettings.encryption, passwordHint: e.target.value } } }))}
+                    placeholder={isRTL ? 'تلميح اختياري' : 'Optional hint'}
+                    className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-800 dark:text-slate-200 focus:outline-none focus:border-rose-500"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{isRTL ? 'الخوارزمية' : 'Algorithm'}</label>
+                  <div className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm font-bold text-slate-800 dark:text-slate-200">
+                    AES-256-GCM
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className={`p-4 rounded-2xl border ${state.backupSettings.encryption.enabled ? 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-500/10 dark:text-rose-300 dark:border-rose-500/20' : 'bg-slate-50 dark:bg-[#18181B] text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-800'}`}>
+                  <div className="text-sm font-bold mb-1">{isRTL ? 'الحالة' : 'Status'}</div>
+                  <div className="text-xs">{state.backupSettings.encryption.enabled ? (isRTL ? 'النسخ الجديدة ستنشأ كملفات مشفرة.' : 'New backups will be generated as encrypted archives.') : (isRTL ? 'النسخ ستنشأ بدون تشفير.' : 'Backups will be generated without encryption.')}</div>
+                </div>
+                <button
+                  onClick={() => setState(prev => ({ ...prev, backupSettings: { ...prev.backupSettings, encryption: { ...prev.backupSettings.encryption, requirePasswordOnRestore: !prev.backupSettings.encryption.requirePasswordOnRestore } } }))}
+                  className={`p-4 rounded-2xl border text-sm font-semibold transition-colors ${state.backupSettings.encryption.requirePasswordOnRestore ? 'bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-500/10 dark:text-violet-400 dark:border-violet-500/20' : 'bg-white dark:bg-[#18181B] text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-800'}`}
+                >
+                  {isRTL ? 'طلب كلمة المرور عند الاستعادة' : 'Require Password On Restore'}
+                </button>
+                <div className="p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-[#18181B] text-sm text-slate-600 dark:text-slate-300">
+                  <div className="font-bold mb-1">{isRTL ? 'اشتقاق المفتاح' : 'Key Derivation'}</div>
+                  <div>{`${state.backupSettings.encryption.kdfIterations.toLocaleString()} PBKDF2 iterations`}</div>
+                </div>
+              </div>
+
+              <button
+                onClick={() => setState(prev => ({ ...prev, backupSettings: { ...prev.backupSettings, encryption: { ...prev.backupSettings.encryption, applyToExports: !prev.backupSettings.encryption.applyToExports } } }))}
+                className={`w-full p-4 rounded-2xl border text-sm font-semibold transition-colors ${state.backupSettings.encryption.applyToExports ? 'bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-500/10 dark:text-violet-400 dark:border-violet-500/20' : 'bg-white dark:bg-[#18181B] text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-800'}`}
+              >
+                {isRTL ? 'تطبيق التشفير أيضًا على ملفات التصدير' : 'Apply Encryption To Export Files Too'}
+              </button>
+            </div>
+
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
               <div className="p-6 rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#09090B] space-y-5">
                 <div className="flex items-center gap-2">
@@ -1243,6 +1411,15 @@ export default function SettingsTab({ state, setState }: SettingsTabProps) {
                   </div>
                 </div>
 
+                <div className={`p-4 rounded-2xl border text-sm ${state.backupSettings.encryption.applyToExports ? 'bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-500/10 dark:text-violet-300 dark:border-violet-500/20' : 'bg-slate-50 dark:bg-[#18181B] text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-800'}`}>
+                  <div className="font-bold mb-1">{isRTL ? 'تشفير التصدير' : 'Export Encryption'}</div>
+                  <div>
+                    {state.backupSettings.encryption.applyToExports
+                      ? (isRTL ? 'سيتم تنزيل ملف التصدير بصيغة مشفرة `NLEX` باستخدام كلمة المرور الرئيسية.' : 'The export will be downloaded as an encrypted `NLEX` file using the main backup password.')
+                      : (isRTL ? 'سيتم تنزيل ملف التصدير بصيغته الأصلية بدون تشفير.' : 'The export will be downloaded in its original format without encryption.')}
+                  </div>
+                </div>
+
                 <button
                   onClick={handleExportDataset}
                   disabled={backupActionId !== null}
@@ -1256,21 +1433,26 @@ export default function SettingsTab({ state, setState }: SettingsTabProps) {
               <div className="p-6 rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#09090B] space-y-5">
                 <div className="flex items-center gap-2">
                   <ArchiveRestore className="text-rose-500" size={18} />
-                  <h4 className="font-bold text-slate-900 dark:text-white">{isRTL ? 'الاستعادة الشاملة' : 'Full Recovery Center'}</h4>
+                  <h4 className="font-bold text-slate-900 dark:text-white">{isRTL ? 'مركز المعاينة والاستعادة' : 'Preview & Recovery Center'}</h4>
                 </div>
 
                 <div className="p-4 rounded-2xl bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 text-sm text-rose-700 dark:text-rose-300 leading-6">
                   {isRTL
-                    ? 'الاستعادة الكاملة تستبدل بيانات النظام الحالية ببيانات النسخة الاحتياطية المرفوعة. إذا كان خيار نقطة الاستعادة مفعّلًا فسيتم إنشاء Restore Point تلقائيًا قبل الاسترجاع.'
-                    : 'A full restore replaces the current system data with the uploaded backup. When restore-point mode is enabled, a recovery snapshot is created automatically before restore.'}
+                    ? 'ابدأ بتحليل ملف النسخة الاحتياطية أولًا. ستظهر لك مقارنة بين بيانات النسخة والبيانات الحالية، ثم يمكنك تنفيذ استعادة كاملة أو انتقائية لجداول محددة فقط.'
+                    : 'Start by analyzing the backup archive. You will see a comparison against the current system, then choose either a full restore or a selective dataset restore.'}
                 </div>
 
                 <div className="space-y-3">
                   <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{isRTL ? 'ملف النسخة الاحتياطية' : 'Backup Archive File'}</label>
                   <input
                     type="file"
-                    accept=".zip"
-                    onChange={(e) => setRestoreFile(e.target.files?.[0] || null)}
+                    accept=".zip,.nbk"
+                    onChange={(e) => {
+                      setRestoreFile(e.target.files?.[0] || null);
+                      setRestorePreview(null);
+                      setSelectedRestoreDatasets([]);
+                      setRestorePassword('');
+                    }}
                     className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-800 dark:text-slate-200 file:mr-3 file:rounded-lg file:border-0 file:bg-slate-900 file:px-3 file:py-2 file:text-white dark:file:bg-slate-100 dark:file:text-slate-900"
                   />
                   {restoreFile && (
@@ -1280,14 +1462,174 @@ export default function SettingsTab({ state, setState }: SettingsTabProps) {
                   )}
                 </div>
 
-                <button
-                  onClick={handleRestoreBackup}
-                  disabled={backupActionId !== null || !restoreFile}
-                  className="w-full py-3 bg-rose-600 hover:bg-rose-700 text-white rounded-2xl text-sm font-bold flex items-center justify-center gap-2 transition-colors disabled:opacity-50"
-                >
-                  <Upload size={16} />
-                  {backupActionId === 'restore-backup' ? (isRTL ? 'جاري الاستعادة...' : 'Restoring...') : (isRTL ? 'رفع واستعادة النسخة' : 'Upload & Restore Backup')}
-                </button>
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{isRTL ? 'كلمة مرور النسخة الاحتياطية' : 'Backup Password'}</label>
+                  <div className="relative">
+                    <input
+                      type={showRestorePassword ? 'text' : 'password'}
+                      value={restorePassword}
+                      onChange={(e) => setRestorePassword(e.target.value)}
+                      placeholder={isRTL ? 'أدخل كلمة المرور إذا كانت النسخة مشفرة' : 'Enter password if the archive is encrypted'}
+                      className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 pr-12 text-sm text-slate-800 dark:text-slate-200 focus:outline-none focus:border-rose-500"
+                    />
+                    <button type="button" onClick={() => setShowRestorePassword(prev => !prev)} className="absolute inset-y-0 right-3 flex items-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+                      {showRestorePassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  </div>
+                  <div className="text-xs text-slate-500 dark:text-slate-400">
+                    {isRTL ? 'إذا كانت النسخة مشفرة فلن تنجح المعاينة أو الاستعادة إلا بعد إدخال كلمة المرور الصحيحة.' : 'If the archive is encrypted, preview and restore require the correct password.'}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <button
+                    onClick={handlePreviewBackupRestore}
+                    disabled={backupActionId !== null || !restoreFile}
+                    className="py-3 bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 rounded-2xl text-sm font-bold flex items-center justify-center gap-2 transition-colors disabled:opacity-50"
+                  >
+                    <GitCompareArrows size={16} />
+                    {backupActionId === 'preview-restore' ? (isRTL ? 'جاري التحليل...' : 'Analyzing...') : (isRTL ? 'فحص ومقارنة النسخة' : 'Analyze & Compare')}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setRestoreFile(null);
+                      setRestorePreview(null);
+                      setSelectedRestoreDatasets([]);
+                      setRestoreMode('full');
+                    }}
+                    disabled={backupActionId !== null}
+                    className="py-3 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-2xl text-sm font-bold flex items-center justify-center gap-2 transition-colors disabled:opacity-50"
+                  >
+                    <RefreshCw size={16} />
+                    {isRTL ? 'مسح الحالة' : 'Reset State'}
+                  </button>
+                </div>
+
+                {restorePreview && (
+                  <div className="space-y-4">
+                    {(restorePreview.encrypted || restorePreview.requiresPassword) && (
+                      <div className="p-4 rounded-2xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 text-sm text-amber-700 dark:text-amber-300 leading-6">
+                        <div className="font-bold mb-1">{isRTL ? 'نسخة احتياطية مشفرة' : 'Encrypted Backup Archive'}</div>
+                        <div>
+                          {restorePreview.requiresPassword
+                            ? (isRTL ? 'هذه النسخة محمية بكلمة مرور. أدخل كلمة المرور الصحيحة ثم أعد فحص الملف لعرض المقارنة الداخلية.' : 'This archive is password-protected. Enter the correct password and analyze again to unlock the internal comparison.')
+                            : (isRTL ? 'تم فك حماية النسخة المشفرة بنجاح وأصبحت جاهزة للمقارنة والاستعادة.' : 'The encrypted archive was unlocked successfully and is ready for comparison and restore.')}
+                        </div>
+                        {restorePreview.passwordHint && (
+                          <div className="mt-2 text-xs font-bold">{`${isRTL ? 'التلميح' : 'Hint'}: ${restorePreview.passwordHint}`}</div>
+                        )}
+                      </div>
+                    )}
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+                      <div className="p-4 rounded-2xl bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800">
+                        <div className="text-xs text-slate-500 mb-1">{isRTL ? 'المعرف' : 'Backup ID'}</div>
+                        <div className="text-sm font-bold text-slate-900 dark:text-white break-all">{restorePreview.backupId || '-'}</div>
+                      </div>
+                      <div className="p-4 rounded-2xl bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800">
+                        <div className="text-xs text-slate-500 mb-1">{isRTL ? 'تاريخ الإنشاء' : 'Created At'}</div>
+                        <div className="text-sm font-bold text-slate-900 dark:text-white">{restorePreview.createdAt || '-'}</div>
+                      </div>
+                      <div className="p-4 rounded-2xl bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800">
+                        <div className="text-xs text-slate-500 mb-1">{isRTL ? 'عدد الملفات' : 'Files Count'}</div>
+                        <div className="text-sm font-bold text-slate-900 dark:text-white">{restorePreview.archiveSummary.fileCount}</div>
+                      </div>
+                      <div className="p-4 rounded-2xl bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800">
+                        <div className="text-xs text-slate-500 mb-1">{isRTL ? 'التحقق' : 'Checksum'}</div>
+                        <div className="text-[11px] font-mono text-slate-500 dark:text-slate-300 break-all">{restorePreview.checksum}</div>
+                      </div>
+                    </div>
+
+                    {!restorePreview.requiresPassword && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <button
+                        onClick={() => setRestoreMode('full')}
+                        className={`p-4 rounded-2xl border text-sm font-bold flex items-center justify-center gap-2 transition-colors ${restoreMode === 'full' ? 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-500/10 dark:text-rose-400 dark:border-rose-500/20' : 'bg-slate-50 dark:bg-[#18181B] text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-800'}`}
+                      >
+                        <Layers3 size={16} />
+                        {isRTL ? 'استعادة كاملة' : 'Full Restore'}
+                      </button>
+                      <button
+                        onClick={() => setRestoreMode('selective')}
+                        className={`p-4 rounded-2xl border text-sm font-bold flex items-center justify-center gap-2 transition-colors ${restoreMode === 'selective' ? 'bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-500/10 dark:text-violet-400 dark:border-violet-500/20' : 'bg-slate-50 dark:bg-[#18181B] text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-800'}`}
+                      >
+                        <GitCompareArrows size={16} />
+                        {isRTL ? 'استعادة انتقائية' : 'Selective Restore'}
+                      </button>
+                    </div>
+                    )}
+
+                    {!restorePreview.requiresPassword && (
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div className="text-sm font-bold text-slate-900 dark:text-white">{isRTL ? 'مقارنة الجداول' : 'Dataset Comparison'}</div>
+                        {restoreMode === 'selective' && (
+                          <button
+                            onClick={() => setSelectedRestoreDatasets(restorePreview.datasetDiffs.filter(item => item.availableInArchive).map(item => item.id))}
+                            className="text-xs font-bold text-violet-600 dark:text-violet-400"
+                          >
+                            {isRTL ? 'تحديد المتاح كله' : 'Select All Available'}
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="space-y-2 max-h-80 overflow-y-auto custom-scrollbar pr-1">
+                        {restorePreview.datasetDiffs.map((item) => {
+                          const isSelected = selectedRestoreDatasets.includes(item.id);
+                          return (
+                            <button
+                              key={item.id}
+                              type="button"
+                              disabled={restoreMode !== 'selective' || !item.availableInArchive}
+                              onClick={() => setSelectedRestoreDatasets(prev => (
+                                prev.includes(item.id)
+                                  ? prev.filter(id => id !== item.id)
+                                  : [...prev, item.id]
+                              ))}
+                              className={`w-full text-left p-4 rounded-2xl border transition-colors ${
+                                !item.availableInArchive
+                                  ? 'bg-slate-50 dark:bg-[#111827] border-slate-200 dark:border-slate-800 opacity-60 cursor-not-allowed'
+                                  : restoreMode === 'selective' && isSelected
+                                    ? 'bg-violet-50 border-violet-200 dark:bg-violet-500/10 dark:border-violet-500/20'
+                                    : 'bg-slate-50 dark:bg-[#18181B] border-slate-200 dark:border-slate-800'
+                              }`}
+                            >
+                              <div className="flex flex-wrap items-center justify-between gap-3">
+                                <div>
+                                  <div className="text-sm font-bold text-slate-900 dark:text-white">{item.label}</div>
+                                  <div className="text-xs text-slate-500 dark:text-slate-400">
+                                    {item.availableInArchive
+                                      ? `${isRTL ? 'الحالي' : 'Current'}: ${item.currentRecords} • ${isRTL ? 'في النسخة' : 'In Backup'}: ${item.archiveRecords}`
+                                      : (isRTL ? 'غير موجود داخل الأرشيف' : 'Not available in archive')}
+                                  </div>
+                                </div>
+                                <div className={`px-3 py-1 rounded-full text-[11px] font-bold ${item.delta > 0 ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400' : item.delta < 0 ? 'bg-amber-100 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400' : 'bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300'}`}>
+                                  {item.delta > 0 ? `+${item.delta}` : item.delta}
+                                </div>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                    )}
+
+                    {!restorePreview.requiresPassword && (
+                    <button
+                      onClick={handleRestoreBackup}
+                      disabled={backupActionId !== null || (restoreMode === 'selective' && selectedRestoreDatasets.length === 0)}
+                      className="w-full py-3 bg-rose-600 hover:bg-rose-700 text-white rounded-2xl text-sm font-bold flex items-center justify-center gap-2 transition-colors disabled:opacity-50"
+                    >
+                      <Upload size={16} />
+                      {backupActionId === 'restore-backup'
+                        ? (isRTL ? 'جاري الاستعادة...' : 'Restoring...')
+                        : restoreMode === 'selective'
+                          ? (isRTL ? 'تنفيذ الاستعادة الانتقائية' : 'Run Selective Restore')
+                          : (isRTL ? 'تنفيذ الاستعادة الكاملة' : 'Run Full Restore')}
+                    </button>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
 
@@ -1331,6 +1673,11 @@ export default function SettingsTab({ state, setState }: SettingsTabProps) {
                             {item.status}
                           </span>
                           <span className="px-2 py-1 rounded-lg text-[10px] font-bold uppercase bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300">{item.provider}</span>
+                          {item.encrypted && (
+                            <span className="px-2 py-1 rounded-lg text-[10px] font-bold uppercase bg-rose-100 text-rose-700 dark:bg-rose-500/10 dark:text-rose-300">
+                              {isRTL ? 'مشفر' : 'Encrypted'}
+                            </span>
+                          )}
                         </div>
                         <div className="text-xs text-slate-500 dark:text-slate-400">
                           {`${item.createdAt} • ${item.dataset || ''} • ${item.format}`}
