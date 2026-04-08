@@ -259,6 +259,7 @@ export interface BackupHistoryItem {
   message?: string;
   downloadUrl?: string;
   encrypted?: boolean;
+  isProtected?: boolean;
 }
 
 export interface BackupDatasetDiffItem {

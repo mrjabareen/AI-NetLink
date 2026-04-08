@@ -459,7 +459,7 @@ const toCsv = (rows = []) => {
 
 const getStorageDirectorySummary = () => {
   const files = fs.existsSync(BACKUP_LOCAL_DIR)
-    ? fs.readdirSync(BACKUP_LOCAL_DIR).filter((file) => file.endsWith('.zip') || file.endsWith('.json') || file.endsWith('.csv') || file.endsWith('.xlsx'))
+    ? fs.readdirSync(BACKUP_LOCAL_DIR).filter((file) => file.endsWith('.zip') || file.endsWith('.json') || file.endsWith('.csv') || file.endsWith('.xlsx') || file.endsWith('.nbk') || file.endsWith('.nlex'))
     : [];
   const totalBytes = files.reduce((sum, file) => sum + fs.statSync(path.join(BACKUP_LOCAL_DIR, file)).size, 0);
   return {
@@ -525,14 +525,20 @@ const pruneOldBackupArtifacts = () => {
   const config = getBackupConfig();
   const history = getBackupHistory();
   const backupEntries = history.filter((item) => item.action === 'backup' && item.fileName);
+  const protectedFileNames = backupEntries
+    .filter((item) => item.isProtected && item.fileName)
+    .map((item) => item.fileName);
   const keepSet = new Set(
-    backupEntries
+    [
+      ...protectedFileNames,
+      ...backupEntries
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
       .slice(0, Math.max(1, Number(config.retentionCount) || 14))
-      .map((item) => item.fileName)
+      .map((item) => item.fileName),
+    ]
   );
 
-  const removable = backupEntries.filter((item) => item.fileName && !keepSet.has(item.fileName));
+  const removable = backupEntries.filter((item) => item.fileName && !item.isProtected && !keepSet.has(item.fileName));
   removable.forEach((item) => {
     const targetPath = path.join(BACKUP_LOCAL_DIR, path.basename(item.fileName));
     if (fs.existsSync(targetPath)) {
@@ -542,6 +548,22 @@ const pruneOldBackupArtifacts = () => {
 
   const filteredHistory = history.filter((item) => item.action !== 'backup' || !item.fileName || keepSet.has(item.fileName));
   saveBackupHistory(filteredHistory);
+};
+
+const toggleBackupHistoryProtection = (backupId, isProtected) => {
+  const history = getBackupHistory();
+  const targetIndex = history.findIndex((item) => item.id === backupId);
+  if (targetIndex === -1) {
+    throw new Error('Backup history item not found.');
+  }
+
+  history[targetIndex] = {
+    ...history[targetIndex],
+    isProtected: Boolean(isProtected),
+  };
+
+  saveBackupHistory(history);
+  return history[targetIndex];
 };
 
 const waitMs = (duration) => new Promise((resolve) => setTimeout(resolve, duration));
@@ -3714,6 +3736,15 @@ app.get('/api/system/backup/overview', (req, res) => {
     res.json({ data: getBackupOverview() });
   } catch (error) {
     res.status(500).json({ error: error?.message || 'Failed to load backup overview.' });
+  }
+});
+
+app.post('/api/system/backup/history/:backupId/protect', (req, res) => {
+  try {
+    const data = toggleBackupHistoryProtection(req.params.backupId, Boolean(req.body?.isProtected));
+    res.json({ data });
+  } catch (error) {
+    res.status(404).json({ error: error?.message || 'Failed to update backup protection.' });
   }
 });
 

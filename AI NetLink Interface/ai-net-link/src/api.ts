@@ -652,6 +652,17 @@ export const getBackupOverview = async () => {
   return data.data;
 };
 
+export const toggleBackupHistoryProtection = async (backupId: string, isProtected: boolean) => {
+  const res = await fetch(`${BASE_URL}/system/backup/history/${encodeURIComponent(backupId)}/protect`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ isProtected }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || 'Failed to update backup protection');
+  return data.data;
+};
+
 export const runSystemBackup = async (payload: { uploadToDrive?: boolean; trigger?: 'manual' | 'automatic' | 'restore_point' } = {}) => {
   const res = await fetch(`${BASE_URL}/system/backup/run`, {
     method: 'POST',

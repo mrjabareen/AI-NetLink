@@ -6,11 +6,11 @@
  */
 import React, { useMemo, useState } from 'react';
 import { motion } from 'motion/react';
-import { Settings, User, Network, Cpu, CreditCard, Users, Shield, Save, Key, Database, Server, Lock, Bell, Globe, Moon, Sun, Plus, Trash2, TrendingUp, RefreshCw, Clock, CheckCircle2, XCircle, DollarSign, Calendar, Percent, Eye, EyeOff, Mail, Send, Smartphone, ScanLine, Activity, MessageSquare, QrCode, ShieldCheck, Search, Download, Upload, Cloud, FileJson, FileSpreadsheet, ArchiveRestore, HardDrive, GitCompareArrows, Layers3 } from 'lucide-react';
+import { Settings, User, Network, Cpu, CreditCard, Users, Shield, Save, Key, Database, Server, Lock, Bell, Globe, Moon, Sun, Plus, Trash2, TrendingUp, RefreshCw, Clock, CheckCircle2, XCircle, DollarSign, Calendar, Percent, Eye, EyeOff, Mail, Send, Smartphone, ScanLine, Activity, MessageSquare, QrCode, ShieldCheck, Search, Download, Upload, Cloud, FileJson, FileSpreadsheet, ArchiveRestore, HardDrive, GitCompareArrows, Layers3, CircleHelp, ExternalLink } from 'lucide-react';
 import { AppState, BackupDatasetId, BackupExportFormat, BackupHistoryItem, BackupRestorePreview, Currency, GatewayConfig, Permission, Role, SettingsCategoryId, TeamMember, WhatsAppStatus } from '../types';
 import { dict } from '../dict';
 import { formatNumber, normalizeDigits, parseNumericInput } from '../utils/format';
-import { getGatewaysConfig, saveGatewaysConfig, getWhatsappStatus, restartWhatsappEngine, getNetworkConfig, saveNetworkConfig, testMikrotikConnection, BASE_URL, checkSystemUpdate, startSystemUpdate, testAiProvider, exportBackupDataset, getBackupOverview, previewRestoreArchive, restoreSystemBackup, runSystemBackup, saveBackupConfig, testGoogleDriveBackupConnection } from '../api';
+import { getGatewaysConfig, saveGatewaysConfig, getWhatsappStatus, restartWhatsappEngine, getNetworkConfig, saveNetworkConfig, testMikrotikConnection, BASE_URL, checkSystemUpdate, startSystemUpdate, testAiProvider, exportBackupDataset, getBackupOverview, previewRestoreArchive, restoreSystemBackup, runSystemBackup, saveBackupConfig, testGoogleDriveBackupConnection, toggleBackupHistoryProtection } from '../api';
 import { showAppToast, toastError, toastInfo, toastSuccess } from '../utils/notify';
 import NumericInput from './NumericInput';
 import DateInput from './DateInput';
@@ -60,6 +60,8 @@ export default function SettingsTab({ state, setState }: SettingsTabProps) {
   const [restorePassword, setRestorePassword] = useState('');
   const [selectedBackupDataset, setSelectedBackupDataset] = useState<BackupDatasetId>('subscribers');
   const [selectedBackupFormat, setSelectedBackupFormat] = useState<BackupExportFormat>('xlsx');
+  const [activeBackupHelpTopic, setActiveBackupHelpTopic] = useState<string | null>(null);
+  const [isBackupGuideOpen, setIsBackupGuideOpen] = useState(false);
 
   const activeCategory = state.activeSettingsCategory;
 
@@ -519,6 +521,25 @@ export default function SettingsTab({ state, setState }: SettingsTabProps) {
     }
   };
 
+  const handleToggleBackupProtection = async (item: BackupHistoryItem) => {
+    try {
+      setBackupActionId(`protect-${item.id}`);
+      await toggleBackupHistoryProtection(item.id, !item.isProtected);
+      await loadBackupCenter();
+      toastSuccess(
+        !item.isProtected
+          ? (isRTL ? 'تمت حماية النسخة من الحذف التلقائي.' : 'The backup is now protected from automatic deletion.')
+          : (isRTL ? 'تم إلغاء حماية النسخة وإعادتها لسياسة الاحتفاظ التلقائي.' : 'The backup protection was removed and retention policy applies again.'),
+        isRTL ? 'تم تحديث الحماية' : 'Protection Updated'
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : (isRTL ? 'تعذر تحديث حالة حماية النسخة.' : 'Failed to update backup protection.');
+      toastError(message, isRTL ? 'فشل التحديث' : 'Update Failed');
+    } finally {
+      setBackupActionId(null);
+    }
+  };
+
   const categories = useMemo<SettingsCategory[]>(() => [
     { id: 'profile', icon: User, label: t.settings.categories.profile },
     { id: 'gateways', icon: Send, label: isRTL ? 'إدارة البوابات' : 'Gateways', permission: 'manage_team' as Permission },
@@ -558,6 +579,181 @@ export default function SettingsTab({ state, setState }: SettingsTabProps) {
     if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} ${isRTL ? 'م.ب' : 'MB'}`;
     return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} ${isRTL ? 'ج.ب' : 'GB'}`;
   };
+
+  const backupHelpTopics = useMemo<Record<string, { title: string; summary: string; details: string[] }>>(() => ({
+    overview: {
+      title: isRTL ? 'ما هو مركز النسخ الاحتياطي؟' : 'What Is The Backup Center?',
+      summary: isRTL ? 'هذا المركز هو لوحة التحكم الكاملة لكل ما يتعلق بحماية بيانات النظام واستعادتها ونقلها.' : 'This center is the master control panel for protecting, restoring, and transferring system data.',
+      details: isRTL
+        ? ['ينشئ نسخة كاملة للنظام عند الطلب أو حسب الجدولة.', 'يصدر الجداول بصيغ متعددة للاحتفاظ أو التحليل.', 'يرفع النسخ إلى Google Drive عند تفعيل الربط.', 'يعرض سجلًا واضحًا لكل عملية نسخ أو استعادة أو تصدير.']
+        : ['Creates full system backups on demand or on schedule.', 'Exports datasets in multiple formats for storage or analysis.', 'Uploads backups to Google Drive when integration is enabled.', 'Shows a clear history for every backup, restore, and export action.'],
+    },
+    retention: {
+      title: isRTL ? 'ما معنى عدد النسخ المحتفظ بها؟' : 'What Is Retention Count?',
+      summary: isRTL ? 'هو العدد الأقصى للنسخ التلقائية التي يحتفظ بها النظام قبل حذف الأقدم منها.' : 'It is the maximum number of automatic backups the system keeps before deleting older ones.',
+      details: isRTL
+        ? ['إذا كان الرقم 14 فسيحتفظ النظام بأحدث 14 نسخة غير محمية.', 'النسخ التي تقوم بحمايتها من السجل لن تُحذف تلقائيًا.', 'كلما زاد العدد زادت المساحة المطلوبة في التخزين المحلي أو السحابي.']
+        : ['If the value is 14, the system keeps the latest 14 unprotected backups.', 'Backups you protect in history are excluded from automatic cleanup.', 'Higher values require more local or cloud storage space.'],
+    },
+    schedule: {
+      title: isRTL ? 'كيف تعمل الجدولة التلقائية؟' : 'How Does Auto Scheduling Work?',
+      summary: isRTL ? 'الجدولة تجعل النظام ينشئ النسخة الاحتياطية تلقائيًا حسب التكرار والوقت المحددين.' : 'Scheduling makes the system create backups automatically based on the selected frequency and time.',
+      details: isRTL
+        ? ['يمكنك الاختيار بين يومي أو أسبوعي أو شهري.', 'وقت التنفيذ يحدد متى يحاول النظام إنشاء النسخة.', 'يُفضّل اختيار وقت يكون فيه ضغط الاستخدام منخفضًا.']
+        : ['You can choose daily, weekly, or monthly scheduling.', 'The scheduled time defines when the system attempts the backup.', 'It is best to choose a time with low usage traffic.'],
+    },
+    compression: {
+      title: isRTL ? 'ما معنى مستوى الضغط؟' : 'What Is Compression Level?',
+      summary: isRTL ? 'يحدد مستوى الضغط التوازن بين سرعة إنشاء النسخة وحجم الملف النهائي.' : 'It controls the balance between backup speed and final archive size.',
+      details: isRTL
+        ? ['السريع ينشئ النسخة أسرع لكن بحجم أكبر قليلًا.', 'المتوازن مناسب لمعظم الحالات.', 'أقصى ضغط يقلل الحجم أكثر لكنه قد يستغرق وقتًا أطول.']
+        : ['Fast creates backups faster but with slightly larger files.', 'Balanced is suitable for most cases.', 'Maximum compression reduces size more but may take longer.'],
+    },
+    verify: {
+      title: isRTL ? 'ما معنى التحقق بعد الإنشاء؟' : 'What Is Verify After Backup?',
+      summary: isRTL ? 'يجعل النظام يتأكد بعد إنشاء النسخة أن الملف الناتج صالح ويمكن الاعتماد عليه.' : 'It makes the system verify that the generated backup file is valid after creation.',
+      details: isRTL
+        ? ['مفيد جدًا إذا كانت النسخة مهمة أو ستعتمد عليها في الطوارئ.', 'قد يزيد وقت العملية قليلًا لكنه يرفع الثقة في النتيجة.', 'يُنصح بتفعيله في البيئات الحساسة.']
+        : ['Very useful when the backup is important or intended for emergencies.', 'It adds a little time but increases confidence in the result.', 'Recommended for sensitive environments.'],
+    },
+    restorePoint: {
+      title: isRTL ? 'ما هي نقطة الاستعادة قبل الاسترجاع؟' : 'What Is Restore Point Before Restore?',
+      summary: isRTL ? 'هي نسخة أمان ينشئها النظام تلقائيًا قبل تنفيذ الاستعادة، حتى يمكنك الرجوع إذا لم تعجبك النتيجة.' : 'It is a safety snapshot created automatically before restore so you can roll back if needed.',
+      details: isRTL
+        ? ['مهمة جدًا قبل الاستعادة الكاملة.', 'تحميك إذا تبين أن الملف القديم غير مناسب.', 'تستهلك مساحة إضافية لكن فائدتها كبيرة.']
+        : ['Very important before a full restore.', 'Protects you if the old archive turns out to be unsuitable.', 'Consumes extra space but is highly valuable.'],
+    },
+    uploads: {
+      title: isRTL ? 'ما معنى تضمين ملفات الرفع؟' : 'What Does Include Uploads Mean?',
+      summary: isRTL ? 'يجعل النسخة تشمل الملفات المرفوعة أو الأصول المساندة المرتبطة بالنظام.' : 'It makes the backup include uploaded files or supporting assets related to the system.',
+      details: isRTL
+        ? ['فعّلها إذا كان لديك صور أو ملفات مرفوعة مهمة.', 'قد تزيد حجم النسخة بشكل ملحوظ.', 'إذا لم تكن تستخدم ملفات مرفوعة كثيرًا يمكن تركها حسب الحاجة.']
+        : ['Enable it if uploaded images or assets are important.', 'It can increase backup size significantly.', 'If uploads are not important in your setup, keep it based on your need.'],
+    },
+    drive: {
+      title: isRTL ? 'ما فائدة ربط Google Drive؟' : 'Why Connect Google Drive?',
+      summary: isRTL ? 'للاحتفاظ بنسخة خارج الجهاز بحيث تبقى البيانات آمنة حتى لو تعطل الخادم المحلي.' : 'It stores an off-device copy so data remains safe even if the local server fails.',
+      details: isRTL
+        ? ['يمكن رفع النسخة تلقائيًا بعد كل عملية نسخ.', 'يمكن استخدامه كنسخة احتياطية خارجية للطوارئ.', 'يحتاج إلى بيانات OAuth صحيحة وFolder ID مناسب.']
+        : ['It can upload each backup automatically after creation.', 'It serves as an external emergency recovery copy.', 'It requires valid OAuth credentials and a correct folder ID.'],
+    },
+    encryption: {
+      title: isRTL ? 'ما فائدة تشفير النسخ الاحتياطية؟' : 'Why Encrypt Backups?',
+      summary: isRTL ? 'التشفير يمنع أي شخص من قراءة النسخة أو استعادتها دون كلمة المرور الصحيحة.' : 'Encryption prevents anyone from reading or restoring the archive without the correct password.',
+      details: isRTL
+        ? ['احفظ كلمة المرور في مكان آمن جدًا.', 'إذا فُقدت كلمة المرور فلن يمكن فتح النسخة المشفرة.', 'يمكن أيضًا تطبيق نفس الحماية على ملفات التصدير.']
+        : ['Store the password in a very safe place.', 'If the password is lost, the encrypted archive cannot be opened.', 'The same protection can also be applied to exported files.'],
+    },
+    export: {
+      title: isRTL ? 'ما هو مركز تصدير الجداول؟' : 'What Is The Dataset Export Center?',
+      summary: isRTL ? 'يسمح لك بتنزيل جدول واحد أو كل الجداول بصيغ مناسبة للأرشفة أو التقارير أو النقل بين الأنظمة.' : 'It lets you download one dataset or all datasets in formats suitable for archival, reporting, or transfer.',
+      details: isRTL
+        ? ['JSON مناسب للأنظمة والنسخ البرمجية.', 'CSV وXLSX مناسبين للإكسل والتحليل.', 'ZIP مناسب لتجميع عدة ملفات في تنزيل واحد.']
+        : ['JSON is best for systems and structured archival.', 'CSV and XLSX are ideal for Excel and analytics.', 'ZIP is useful when you want multiple files in one download.'],
+    },
+    exportFormat: {
+      title: isRTL ? 'كيف أختار صيغة التصدير؟' : 'How Do I Choose Export Format?',
+      summary: isRTL ? 'اختيار الصيغة يعتمد على هدفك: أرشفة، تحليل، مشاركة، أو نقل إلى نظام آخر.' : 'The format depends on whether your goal is archival, analysis, sharing, or moving to another system.',
+      details: isRTL
+        ? ['JSON للنسخ البرمجية والتكامل مع الأنظمة.', 'CSV وXLSX للتحليل والتقارير والإكسل.', 'ZIP عندما تريد تنزيلًا واحدًا يحتوي عدة ملفات.']
+        : ['JSON for structured archival and integrations.', 'CSV and XLSX for analytics, reports, and Excel.', 'ZIP when you want one download containing multiple files.'],
+    },
+    archiveFile: {
+      title: isRTL ? 'ما هو ملف النسخة الاحتياطية المطلوب هنا؟' : 'What Backup Archive File Should I Upload Here?',
+      summary: isRTL ? 'هذا هو الملف الذي سبق أن أنشأته من النظام أو حملته من السجل أو من Google Drive.' : 'This is the archive you previously created from the system or downloaded from history or Google Drive.',
+      details: isRTL
+        ? ['يمكن أن يكون ZIP عاديًا أو NBK مشفرًا.', 'بعد رفعه سيقوم النظام بتحليله قبل الاستعادة.', 'إذا كان الملف مشفرًا أدخل كلمة المرور الصحيحة أولًا.']
+        : ['It can be a normal ZIP file or an encrypted NBK archive.', 'After upload, the system analyzes it before restoring.', 'If it is encrypted, enter the correct password first.'],
+    },
+    backupPassword: {
+      title: isRTL ? 'متى أحتاج كلمة مرور النسخة؟' : 'When Do I Need The Backup Password?',
+      summary: isRTL ? 'تحتاجها فقط إذا كانت النسخة التي تحاول فتحها أو استعادتها مشفرة.' : 'You only need it if the archive you are trying to preview or restore is encrypted.',
+      details: isRTL
+        ? ['إذا كانت النسخة غير مشفرة يمكنك ترك الحقل فارغًا.', 'إذا كانت كلمة المرور خاطئة فلن تظهر المقارنة أو لن تنجح الاستعادة.', 'احتفظ بكلمة المرور في مكان آمن لأن فقدانها يعني فقدان الوصول للنسخة المشفرة.']
+        : ['If the archive is not encrypted, you can leave the field empty.', 'If the password is wrong, preview and restore will fail.', 'Store the password safely because losing it means losing access to the encrypted archive.'],
+    },
+    restore: {
+      title: isRTL ? 'كيف تعمل المعاينة والاستعادة؟' : 'How Do Preview And Restore Work?',
+      summary: isRTL ? 'ترفع الملف أولًا، ثم يفحصه النظام ويعرض مقارنة واضحة قبل تنفيذ الاستعادة.' : 'You upload the archive first, then the system analyzes it and shows a clear comparison before restoring.',
+      details: isRTL
+        ? ['الاستعادة الكاملة تستبدل بيانات النظام بالكامل.', 'الاستعادة الانتقائية تعيد فقط الجداول التي تختارها.', 'إذا كانت النسخة مشفرة فستحتاج كلمة المرور أولًا.']
+        : ['A full restore replaces the entire system data.', 'A selective restore restores only the datasets you choose.', 'If the archive is encrypted, the password is required first.'],
+    },
+    history: {
+      title: isRTL ? 'ما فائدة سجل النسخ والاستعادة؟' : 'Why Is The Backup History Important?',
+      summary: isRTL ? 'السجل هو المكان الذي تراجع منه كل ما تم إنشاؤه أو استعادته أو تصديره مع التاريخ والحجم والحالة.' : 'History is where you review everything that was created, restored, or exported along with date, size, and status.',
+      details: isRTL
+        ? ['يمكنك تنزيل الملفات القديمة منه مباشرة.', 'يمكنك معرفة هل الملف مشفر أم لا.', 'يمكنك حماية بعض النسخ من الحذف التلقائي من هذا السجل.']
+        : ['You can download older files directly from it.', 'You can see whether an archive is encrypted or not.', 'You can protect selected backups from automatic deletion here.'],
+    },
+    protect: {
+      title: isRTL ? 'ما معنى حماية النسخة من الحذف التلقائي؟' : 'What Does Protect From Auto Delete Mean?',
+      summary: isRTL ? 'هذه الميزة تجعل النسخة المختارة تبقى محفوظة حتى لو تجاوزت سياسة الاحتفاظ التلقائي.' : 'This feature keeps the selected backup محفوظة even if it exceeds the automatic retention policy.',
+      details: isRTL
+        ? ['استخدمها للنسخ المهمة قبل تحديث كبير أو قبل عملية استعادة.', 'النسخة المحمية تبقى في التخزين المحلي حتى تلغي الحماية أو تحذفها يدويًا.', 'يُفضّل عدم حماية عدد كبير جدًا من النسخ حتى لا تمتلئ المساحة.']
+        : ['Use it for important backups before major updates or restores.', 'A protected backup stays in local storage until you unprotect or delete it manually.', 'Avoid protecting too many backups to prevent storage exhaustion.'],
+    },
+  }), [isRTL]);
+
+  const backupGuideSections = useMemo<Array<{ title: string; content: string[] }>>(() => ([
+    {
+      title: isRTL ? '1. ما هو هذا النظام؟' : '1. What Is This System?',
+      content: isRTL
+        ? ['مركز النسخ الاحتياطي هو المكان الذي تنشئ منه نسخًا كاملة للنظام، تصدر البيانات، ترفعها إلى Google Drive، وتستعيدها عند الحاجة.', 'تم تصميمه للمبتدئين أيضًا، لذلك كل خطوة فيه تهدف إلى تقليل المخاطرة قبل أي استعادة أو حذف تلقائي.']
+        : ['The backup center is where you create full system backups, export data, upload archives to Google Drive, and restore when needed.', 'It is also designed for beginners, so every step aims to reduce risk before restore or automatic cleanup.'],
+    },
+    {
+      title: isRTL ? '2. متى أستخدم النسخة الكاملة؟' : '2. When Should I Use A Full Backup?',
+      content: isRTL
+        ? ['قبل أي تحديث كبير للنظام.', 'قبل نقل النظام إلى خادم جديد.', 'قبل تنفيذ استعادة لبيانات قديمة.', 'عندما تريد نقطة أمان يمكنك الرجوع لها بسرعة.']
+        : ['Before any major system update.', 'Before moving the system to a new server.', 'Before restoring older data.', 'When you want a safe rollback point.'],
+    },
+    {
+      title: isRTL ? '3. كيف أبدأ كمبتدئ؟' : '3. How Should A Beginner Start?',
+      content: isRTL
+        ? ['فعّل المركز والجدولة التلقائية.', 'اختر وقتًا مناسبًا ليلًا.', 'اجعل عدد النسخ المحتفظ بها مناسبًا لمساحة الخادم.', 'أنشئ نسخة محلية كاملة يدويًا أولًا وتأكد من ظهورها في السجل.', 'بعد ذلك فعّل Google Drive إذا أردت نسخة خارجية.']
+        : ['Enable the backup center and auto scheduling.', 'Choose a suitable nighttime schedule.', 'Set a retention count that fits your storage space.', 'Create one manual local full backup first and confirm it appears in history.', 'Then enable Google Drive if you need an off-site copy.'],
+    },
+    {
+      title: isRTL ? '4. ما الفرق بين التصدير والنسخة الكاملة؟' : '4. What Is The Difference Between Export And Full Backup?',
+      content: isRTL
+        ? ['النسخة الكاملة تحفظ النظام كاملًا مع بنيته للاستعادة الشاملة.', 'التصدير مخصص لجداول محددة أو ملفات بيانات تريد تنزيلها أو تحليلها أو نقلها.', 'لا تستخدم التصدير بدل النسخة الكاملة إذا كان هدفك تعافي النظام بالكامل بعد عطل.']
+        : ['A full backup stores the complete system for full recovery.', 'Export is meant for selected datasets you want to download, analyze, or transfer.', 'Do not rely on exports alone if your goal is full system disaster recovery.'],
+    },
+    {
+      title: isRTL ? '5. كيف أحمي نسخة مهمة؟' : '5. How Do I Protect An Important Backup?',
+      content: isRTL
+        ? ['من سجل النسخ والاستعادة، فعّل الحماية للنسخة المهمة.', 'النسخة المحمية لا تدخل في الحذف التلقائي ضمن سياسة الاحتفاظ.', 'استخدم هذه الميزة فقط للنسخ المهمة حتى لا تمتلئ المساحة.']
+        : ['From the backup history, enable protection on the important backup.', 'Protected backups are excluded from automatic cleanup.', 'Use this only for critical backups so storage does not fill up.'],
+    },
+    {
+      title: isRTL ? '6. ماذا أفعل قبل الاستعادة؟' : '6. What Should I Do Before Restore?',
+      content: isRTL
+        ? ['ارفع الملف ثم راجع شاشة المعاينة والمقارنة.', 'افهم هل تريد استعادة كاملة أم انتقائية.', 'تأكد من كلمة المرور إذا كانت النسخة مشفرة.', 'يفضل إنشاء نسخة جديدة قبل الاستعادة أو تفعيل نقطة الاستعادة التلقائية.']
+        : ['Upload the archive and review the preview/comparison screen.', 'Decide whether you need full or selective restore.', 'Confirm the password if the backup is encrypted.', 'It is best to create a fresh backup first or keep restore-point mode enabled.'],
+    },
+    {
+      title: isRTL ? '7. ملاحظات أمان مهمة' : '7. Important Safety Notes',
+      content: isRTL
+        ? ['لا تشارك كلمة مرور التشفير مع أي شخص غير مخول.', 'احفظ نسخة من بيانات Google Drive في مكان آمن.', 'افحص السجل بانتظام للتأكد من نجاح النسخ التلقائي.', 'جرّب الاستعادة على بيئة اختبارية إذا كانت البيانات شديدة الحساسية.']
+        : ['Never share the encryption password with unauthorized users.', 'Keep a safe record of your Google Drive credentials.', 'Review history regularly to confirm scheduled backups are succeeding.', 'Test restore on a staging environment if the data is highly sensitive.'],
+    },
+  ]), [isRTL]);
+
+  const openBackupGuidePage = () => {
+    setIsBackupGuideOpen(true);
+  };
+
+  const renderBackupHelpButton = (topicId: string) => (
+    <button
+      type="button"
+      onClick={() => setActiveBackupHelpTopic(topicId)}
+      className="inline-flex items-center justify-center w-6 h-6 rounded-full border border-slate-300 dark:border-slate-700 text-slate-500 hover:text-teal-600 dark:hover:text-teal-400 hover:border-teal-400 transition-colors"
+      title={isRTL ? 'شرح هذه الميزة' : 'Explain this feature'}
+    >
+      <CircleHelp size={14} />
+    </button>
+  );
 
   const handleRoleSwitch = () => {
     const normalizedPin = normalizeDigits(pin);
@@ -1073,7 +1269,10 @@ export default function SettingsTab({ state, setState }: SettingsTabProps) {
           <div className="space-y-8">
             <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
               <div className="space-y-2">
-                <h3 className="text-xl font-bold text-slate-800 dark:text-slate-100">{t.settings.backup.title}</h3>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-xl font-bold text-slate-800 dark:text-slate-100">{t.settings.backup.title}</h3>
+                  {renderBackupHelpButton('overview')}
+                </div>
                 <p className="text-sm text-slate-500 dark:text-slate-400 max-w-3xl">
                   {isRTL
                     ? 'مركز نسخ احتياطي واستعادة احترافي يشمل نسخة كاملة للنظام، تصدير الجداول بصيغ متعددة، وجدولة تلقائية مع دعم الربط والرفع إلى Google Drive.'
@@ -1081,6 +1280,13 @@ export default function SettingsTab({ state, setState }: SettingsTabProps) {
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={openBackupGuidePage}
+                  className="px-4 py-2.5 bg-white dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200 rounded-xl text-sm font-bold flex items-center gap-2"
+                >
+                  <ExternalLink size={16} />
+                  {isRTL ? 'دليل المبتدئين الكامل' : 'Full Beginner Guide'}
+                </button>
                 <button
                   onClick={() => handleRunBackup(false)}
                   disabled={backupActionId !== null}
@@ -1139,6 +1345,7 @@ export default function SettingsTab({ state, setState }: SettingsTabProps) {
                   <h4 className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
                     <ShieldCheck className="text-teal-500" size={18} />
                     {isRTL ? 'سياسات النسخ الذكي' : 'Smart Backup Policy'}
+                    {renderBackupHelpButton('schedule')}
                   </h4>
                   <button
                     onClick={handleSaveBackupSettings}
@@ -1172,7 +1379,10 @@ export default function SettingsTab({ state, setState }: SettingsTabProps) {
                   </div>
 
                   <div className="space-y-2">
-                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{isRTL ? 'تكرار النسخ' : 'Frequency'}</label>
+                    <div className="flex items-center gap-2">
+                      <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{isRTL ? 'تكرار النسخ' : 'Frequency'}</label>
+                      {renderBackupHelpButton('schedule')}
+                    </div>
                     <select
                       value={state.backupSettings.frequency}
                       onChange={(e) => setState(prev => ({ ...prev, backupSettings: { ...prev.backupSettings, frequency: e.target.value as AppState['backupSettings']['frequency'] } }))}
@@ -1185,7 +1395,10 @@ export default function SettingsTab({ state, setState }: SettingsTabProps) {
                   </div>
 
                   <div className="space-y-2">
-                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{isRTL ? 'وقت التنفيذ' : 'Scheduled Time'}</label>
+                    <div className="flex items-center gap-2">
+                      <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{isRTL ? 'وقت التنفيذ' : 'Scheduled Time'}</label>
+                      {renderBackupHelpButton('schedule')}
+                    </div>
                     <input
                       type="time"
                       value={state.backupSettings.scheduledTime}
@@ -1195,7 +1408,10 @@ export default function SettingsTab({ state, setState }: SettingsTabProps) {
                   </div>
 
                   <div className="space-y-2">
-                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{isRTL ? 'عدد النسخ المحتفظ بها' : 'Retention Count'}</label>
+                    <div className="flex items-center gap-2">
+                      <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{isRTL ? 'عدد النسخ المحتفظ بها' : 'Retention Count'}</label>
+                      {renderBackupHelpButton('retention')}
+                    </div>
                     <input
                       type="number"
                       min={1}
@@ -1206,7 +1422,10 @@ export default function SettingsTab({ state, setState }: SettingsTabProps) {
                   </div>
 
                   <div className="space-y-2">
-                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{isRTL ? 'مستوى الضغط' : 'Compression Level'}</label>
+                    <div className="flex items-center gap-2">
+                      <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{isRTL ? 'مستوى الضغط' : 'Compression Level'}</label>
+                      {renderBackupHelpButton('compression')}
+                    </div>
                     <select
                       value={state.backupSettings.compressionLevel}
                       onChange={(e) => setState(prev => ({ ...prev, backupSettings: { ...prev.backupSettings, compressionLevel: e.target.value as AppState['backupSettings']['compressionLevel'] } }))}
@@ -1220,24 +1439,39 @@ export default function SettingsTab({ state, setState }: SettingsTabProps) {
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                  <button
-                    onClick={() => setState(prev => ({ ...prev, backupSettings: { ...prev.backupSettings, verifyAfterBackup: !prev.backupSettings.verifyAfterBackup } }))}
-                    className={`p-4 rounded-2xl border text-sm font-semibold transition-colors ${state.backupSettings.verifyAfterBackup ? 'bg-teal-50 text-teal-700 border-teal-200 dark:bg-teal-500/10 dark:text-teal-400 dark:border-teal-500/20' : 'bg-white dark:bg-[#18181B] text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-800'}`}
-                  >
-                    {isRTL ? 'تحقق بعد الإنشاء' : 'Verify After Backup'}
-                  </button>
-                  <button
-                    onClick={() => setState(prev => ({ ...prev, backupSettings: { ...prev.backupSettings, createRestorePointBeforeRestore: !prev.backupSettings.createRestorePointBeforeRestore } }))}
-                    className={`p-4 rounded-2xl border text-sm font-semibold transition-colors ${state.backupSettings.createRestorePointBeforeRestore ? 'bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-500/10 dark:text-violet-400 dark:border-violet-500/20' : 'bg-white dark:bg-[#18181B] text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-800'}`}
-                  >
-                    {isRTL ? 'نقطة استعادة قبل الاسترجاع' : 'Restore Point Before Restore'}
-                  </button>
-                  <button
-                    onClick={() => setState(prev => ({ ...prev, backupSettings: { ...prev.backupSettings, includeUploadsDirectory: !prev.backupSettings.includeUploadsDirectory } }))}
-                    className={`p-4 rounded-2xl border text-sm font-semibold transition-colors ${state.backupSettings.includeUploadsDirectory ? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20' : 'bg-white dark:bg-[#18181B] text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-800'}`}
-                  >
-                    {isRTL ? 'تضمين ملفات الرفع' : 'Include Uploads'}
-                  </button>
+                  <div className={`p-4 rounded-2xl border transition-colors ${state.backupSettings.verifyAfterBackup ? 'bg-teal-50 text-teal-700 border-teal-200 dark:bg-teal-500/10 dark:text-teal-400 dark:border-teal-500/20' : 'bg-white dark:bg-[#18181B] text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-800'}`}>
+                    <div className="flex items-center justify-between gap-2">
+                      <button
+                        onClick={() => setState(prev => ({ ...prev, backupSettings: { ...prev.backupSettings, verifyAfterBackup: !prev.backupSettings.verifyAfterBackup } }))}
+                        className="text-sm font-semibold text-left"
+                      >
+                        {isRTL ? 'تحقق بعد الإنشاء' : 'Verify After Backup'}
+                      </button>
+                      {renderBackupHelpButton('verify')}
+                    </div>
+                  </div>
+                  <div className={`p-4 rounded-2xl border transition-colors ${state.backupSettings.createRestorePointBeforeRestore ? 'bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-500/10 dark:text-violet-400 dark:border-violet-500/20' : 'bg-white dark:bg-[#18181B] text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-800'}`}>
+                    <div className="flex items-center justify-between gap-2">
+                      <button
+                        onClick={() => setState(prev => ({ ...prev, backupSettings: { ...prev.backupSettings, createRestorePointBeforeRestore: !prev.backupSettings.createRestorePointBeforeRestore } }))}
+                        className="text-sm font-semibold text-left"
+                      >
+                        {isRTL ? 'نقطة استعادة قبل الاسترجاع' : 'Restore Point Before Restore'}
+                      </button>
+                      {renderBackupHelpButton('restorePoint')}
+                    </div>
+                  </div>
+                  <div className={`p-4 rounded-2xl border transition-colors ${state.backupSettings.includeUploadsDirectory ? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20' : 'bg-white dark:bg-[#18181B] text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-800'}`}>
+                    <div className="flex items-center justify-between gap-2">
+                      <button
+                        onClick={() => setState(prev => ({ ...prev, backupSettings: { ...prev.backupSettings, includeUploadsDirectory: !prev.backupSettings.includeUploadsDirectory } }))}
+                        className="text-sm font-semibold text-left"
+                      >
+                        {isRTL ? 'تضمين ملفات الرفع' : 'Include Uploads'}
+                      </button>
+                      {renderBackupHelpButton('uploads')}
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -1246,6 +1480,7 @@ export default function SettingsTab({ state, setState }: SettingsTabProps) {
                   <h4 className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
                     <Cloud className="text-blue-500" size={18} />
                     {isRTL ? 'ربط Google Drive' : 'Google Drive Integration'}
+                    {renderBackupHelpButton('drive')}
                   </h4>
                   <span className={`px-3 py-1 rounded-full text-[11px] font-bold ${state.backupSettings.googleDrive.connectionStatus === 'connected' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400' : state.backupSettings.googleDrive.connectionStatus === 'error' ? 'bg-rose-100 text-rose-700 dark:bg-rose-500/10 dark:text-rose-400' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300'}`}>
                     {state.backupSettings.googleDrive.connectionStatus === 'connected' ? (isRTL ? 'متصل' : 'Connected') : state.backupSettings.googleDrive.connectionStatus === 'error' ? (isRTL ? 'خطأ' : 'Error') : (isRTL ? 'غير مفعل' : 'Idle')}
@@ -1296,10 +1531,13 @@ export default function SettingsTab({ state, setState }: SettingsTabProps) {
             <div className="p-6 rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#09090B] space-y-5">
               <div className="flex items-center justify-between gap-4">
                 <div>
-                  <h4 className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                    <Lock className="text-rose-500" size={18} />
-                    {isRTL ? 'تشفير النسخ الاحتياطية' : 'Backup Encryption'}
-                  </h4>
+                  <div className="flex items-center gap-2">
+                    <h4 className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                      <Lock className="text-rose-500" size={18} />
+                      {isRTL ? 'تشفير النسخ الاحتياطية' : 'Backup Encryption'}
+                    </h4>
+                    {renderBackupHelpButton('encryption')}
+                  </div>
                   <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
                     {isRTL
                       ? 'تشفير أرشيف النسخة الكاملة بخوارزمية قوية مع تلميح كلمة مرور، بحيث لا يمكن معاينته أو استعادته بدون كلمة المرور.'
@@ -1376,17 +1614,24 @@ export default function SettingsTab({ state, setState }: SettingsTabProps) {
                 <div className="flex items-center gap-2">
                   <FileSpreadsheet className="text-violet-500" size={18} />
                   <h4 className="font-bold text-slate-900 dark:text-white">{isRTL ? 'مركز تصدير الجداول' : 'Dataset Export Center'}</h4>
+                  {renderBackupHelpButton('export')}
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{isRTL ? 'الجدول أو الحزمة' : 'Dataset Bundle'}</label>
+                    <div className="flex items-center gap-2">
+                      <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{isRTL ? 'الجدول أو الحزمة' : 'Dataset Bundle'}</label>
+                      {renderBackupHelpButton('export')}
+                    </div>
                     <select value={selectedBackupDataset} onChange={(e) => setSelectedBackupDataset(e.target.value as BackupDatasetId)} className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2.5 text-slate-800 dark:text-slate-200 focus:outline-none focus:border-violet-500">
                       {backupDatasets.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
                     </select>
                   </div>
                   <div className="space-y-2">
-                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{isRTL ? 'صيغة التصدير' : 'Export Format'}</label>
+                    <div className="flex items-center gap-2">
+                      <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{isRTL ? 'صيغة التصدير' : 'Export Format'}</label>
+                      {renderBackupHelpButton('exportFormat')}
+                    </div>
                     <select value={selectedBackupFormat} onChange={(e) => setSelectedBackupFormat(e.target.value as BackupExportFormat)} className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2.5 text-slate-800 dark:text-slate-200 focus:outline-none focus:border-violet-500">
                       <option value="json">JSON</option>
                       <option value="csv">CSV</option>
@@ -1434,6 +1679,7 @@ export default function SettingsTab({ state, setState }: SettingsTabProps) {
                 <div className="flex items-center gap-2">
                   <ArchiveRestore className="text-rose-500" size={18} />
                   <h4 className="font-bold text-slate-900 dark:text-white">{isRTL ? 'مركز المعاينة والاستعادة' : 'Preview & Recovery Center'}</h4>
+                  {renderBackupHelpButton('restore')}
                 </div>
 
                 <div className="p-4 rounded-2xl bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 text-sm text-rose-700 dark:text-rose-300 leading-6">
@@ -1443,7 +1689,10 @@ export default function SettingsTab({ state, setState }: SettingsTabProps) {
                 </div>
 
                 <div className="space-y-3">
-                  <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{isRTL ? 'ملف النسخة الاحتياطية' : 'Backup Archive File'}</label>
+                  <div className="flex items-center gap-2">
+                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{isRTL ? 'ملف النسخة الاحتياطية' : 'Backup Archive File'}</label>
+                    {renderBackupHelpButton('archiveFile')}
+                  </div>
                   <input
                     type="file"
                     accept=".zip,.nbk"
@@ -1463,7 +1712,10 @@ export default function SettingsTab({ state, setState }: SettingsTabProps) {
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{isRTL ? 'كلمة مرور النسخة الاحتياطية' : 'Backup Password'}</label>
+                  <div className="flex items-center gap-2">
+                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{isRTL ? 'كلمة مرور النسخة الاحتياطية' : 'Backup Password'}</label>
+                    {renderBackupHelpButton('backupPassword')}
+                  </div>
                   <div className="relative">
                     <input
                       type={showRestorePassword ? 'text' : 'password'}
@@ -1638,6 +1890,7 @@ export default function SettingsTab({ state, setState }: SettingsTabProps) {
                 <h4 className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
                   <Activity className="text-emerald-500" size={18} />
                   {isRTL ? 'سجل عمليات النسخ والاستعادة' : 'Backup & Recovery History'}
+                  {renderBackupHelpButton('history')}
                 </h4>
                 <button
                   onClick={loadBackupCenter}
@@ -1678,6 +1931,11 @@ export default function SettingsTab({ state, setState }: SettingsTabProps) {
                               {isRTL ? 'مشفر' : 'Encrypted'}
                             </span>
                           )}
+                          {item.isProtected && (
+                            <span className="px-2 py-1 rounded-lg text-[10px] font-bold uppercase bg-blue-100 text-blue-700 dark:bg-blue-500/10 dark:text-blue-300">
+                              {isRTL ? 'محمي' : 'Protected'}
+                            </span>
+                          )}
                         </div>
                         <div className="text-xs text-slate-500 dark:text-slate-400">
                           {`${item.createdAt} • ${item.dataset || ''} • ${item.format}`}
@@ -1687,6 +1945,19 @@ export default function SettingsTab({ state, setState }: SettingsTabProps) {
                       </div>
                       <div className="flex items-center gap-3">
                         <div className="text-xs font-bold text-slate-500">{formatBytes(item.sizeBytes)}</div>
+                        {item.action === 'backup' && (
+                          <button
+                            onClick={() => handleToggleBackupProtection(item)}
+                            disabled={backupActionId === `protect-${item.id}`}
+                            className={`px-4 py-2 rounded-xl text-xs font-bold border disabled:opacity-50 ${item.isProtected ? 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-500/10 dark:text-blue-300 dark:border-blue-500/20' : 'bg-white dark:bg-[#09090B] text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700'}`}
+                          >
+                            {backupActionId === `protect-${item.id}`
+                              ? (isRTL ? 'جاري التحديث...' : 'Updating...')
+                              : item.isProtected
+                                ? (isRTL ? 'إلغاء الحماية' : 'Unprotect')
+                                : (isRTL ? 'حماية من الحذف التلقائي' : 'Protect From Auto Delete')}
+                          </button>
+                        )}
                         {item.downloadUrl && (
                           <button
                             onClick={() => window.open(resolveApiFileUrl(item.downloadUrl || ''), '_blank', 'noopener,noreferrer')}
@@ -2296,6 +2567,175 @@ export default function SettingsTab({ state, setState }: SettingsTabProps) {
           </div>
         </div>
       </div>
+
+      {activeBackupHelpTopic && backupHelpTopics[activeBackupHelpTopic] && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/70 p-4">
+          <div className="w-full max-w-2xl rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#09090B] shadow-2xl">
+            <div className="flex items-start justify-between gap-4 border-b border-slate-200 dark:border-slate-800 px-6 py-5">
+              <div>
+                <h3 className="text-lg font-bold text-slate-900 dark:text-white">{backupHelpTopics[activeBackupHelpTopic].title}</h3>
+                <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">{backupHelpTopics[activeBackupHelpTopic].summary}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setActiveBackupHelpTopic(null)}
+                className="inline-flex items-center justify-center w-9 h-9 rounded-xl border border-slate-200 dark:border-slate-800 text-slate-500 hover:text-slate-700 dark:hover:text-slate-200"
+              >
+                <XCircle size={18} />
+              </button>
+            </div>
+            <div className="px-6 py-5 space-y-4">
+              <div className="space-y-3">
+                {backupHelpTopics[activeBackupHelpTopic].details.map((detail, index) => (
+                  <div key={`${activeBackupHelpTopic}-${index}`} className="flex items-start gap-3 rounded-2xl bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 px-4 py-3 text-sm text-slate-700 dark:text-slate-300">
+                    <span className="mt-0.5 inline-flex items-center justify-center w-6 h-6 rounded-full bg-teal-500/10 text-teal-600 dark:text-teal-400 font-bold text-xs">{index + 1}</span>
+                    <span>{detail}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="flex flex-wrap gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={openBackupGuidePage}
+                  className="px-4 py-2.5 bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 rounded-xl text-sm font-bold flex items-center gap-2"
+                >
+                  <ExternalLink size={16} />
+                  {isRTL ? 'فتح الدليل الكامل' : 'Open Full Guide'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveBackupHelpTopic(null)}
+                  className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl text-sm font-bold"
+                >
+                  {isRTL ? 'إغلاق' : 'Close'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isBackupGuideOpen && (
+        <div className="fixed inset-0 z-[65] bg-slate-950/80 backdrop-blur-sm">
+          <div className="h-full overflow-y-auto custom-scrollbar">
+            <div className="max-w-6xl mx-auto px-4 py-6 sm:px-6 lg:px-8">
+              <div className="rounded-[2rem] border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#09090B] shadow-2xl overflow-hidden">
+                <div className="bg-gradient-to-br from-teal-600 via-cyan-600 to-violet-600 px-6 py-8 sm:px-8">
+                  <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
+                    <div className="max-w-3xl">
+                      <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/15 text-white text-xs font-bold mb-4">
+                        <ShieldCheck size={14} />
+                        {isRTL ? 'مركز المعرفة للمبتدئين' : 'Beginner Knowledge Center'}
+                      </div>
+                      <h2 className="text-2xl sm:text-3xl font-black text-white mb-3">
+                        {isRTL ? 'دليل عملاق النسخ الاحتياطي والاستعادة' : 'Backup & Recovery Giant Guide'}
+                      </h2>
+                      <p className="text-sm sm:text-base text-white/90 leading-8">
+                        {isRTL
+                          ? 'هذا الدليل الداخلي يشرح كل ما يحتاجه المستخدم المبتدئ لفهم النسخ الاحتياطي، التصدير، التشفير، والاستعادة بدون تعقيد تقني.'
+                          : 'This internal guide explains everything a beginner needs to understand backup, export, encryption, and restore without technical complexity.'}
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-3">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsBackupGuideOpen(false);
+                          setActiveBackupHelpTopic('overview');
+                        }}
+                        className="px-4 py-2.5 rounded-xl bg-white/15 hover:bg-white/20 text-white text-sm font-bold flex items-center gap-2 transition-colors"
+                      >
+                        <CircleHelp size={16} />
+                        {isRTL ? 'فتح شرح سريع' : 'Open Quick Help'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setIsBackupGuideOpen(false)}
+                        className="px-4 py-2.5 rounded-xl bg-white text-slate-900 text-sm font-bold flex items-center gap-2"
+                      >
+                        <XCircle size={16} />
+                        {isRTL ? 'إغلاق الدليل' : 'Close Guide'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="px-6 py-6 sm:px-8 space-y-5">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-[#18181B] p-5">
+                      <div className="text-xs font-bold text-slate-500 uppercase mb-2">{isRTL ? 'ابدأ من هنا' : 'Start Here'}</div>
+                      <div className="text-sm text-slate-700 dark:text-slate-300 leading-7">
+                        {isRTL ? 'أنشئ نسخة كاملة أولًا، ثم احمِ النسخة المهمة من الحذف التلقائي، وبعدها فعّل الجدولة وGoogle Drive.' : 'Create one full backup first, protect the important one from auto deletion, then enable scheduling and Google Drive.'}
+                      </div>
+                    </div>
+                    <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-[#18181B] p-5">
+                      <div className="text-xs font-bold text-slate-500 uppercase mb-2">{isRTL ? 'للطوارئ' : 'For Emergencies'}</div>
+                      <div className="text-sm text-slate-700 dark:text-slate-300 leading-7">
+                        {isRTL ? 'قبل أي استعادة كبيرة أو تحديث حساس، أنشئ نسخة جديدة ثم فعّل حمايتها من السجل.' : 'Before any major restore or sensitive update, create a fresh backup and protect it from history.'}
+                      </div>
+                    </div>
+                    <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-[#18181B] p-5">
+                      <div className="text-xs font-bold text-slate-500 uppercase mb-2">{isRTL ? 'للمبتدئين' : 'For Beginners'}</div>
+                      <div className="text-sm text-slate-700 dark:text-slate-300 leading-7">
+                        {isRTL ? 'إذا لم تفهم أي شيء، اضغط على زر ؟ بجانب الميزة نفسها وسيظهر لك شرح مباشر ومبسط.' : 'If you do not understand a feature, press the nearby ? button for a direct and simplified explanation.'}
+                      </div>
+                    </div>
+                  </div>
+
+                  {backupGuideSections.map((section, index) => (
+                    <section key={`backup-guide-${index}`} className="rounded-3xl border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-[#111827]/60 p-6">
+                      <div className="flex items-start gap-4">
+                        <div className="shrink-0 inline-flex items-center justify-center w-10 h-10 rounded-2xl bg-teal-500/10 text-teal-600 dark:text-teal-400 font-black">
+                          {index + 1}
+                        </div>
+                        <div className="space-y-4 w-full">
+                          <h3 className="text-lg font-bold text-slate-900 dark:text-white">{section.title}</h3>
+                          <div className="grid grid-cols-1 gap-3">
+                            {section.content.map((item, itemIndex) => (
+                              <div key={`backup-guide-item-${index}-${itemIndex}`} className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#09090B] px-4 py-3 text-sm text-slate-700 dark:text-slate-300 leading-7">
+                                {item}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </section>
+                  ))}
+
+                  <div className="rounded-3xl border border-blue-200 dark:border-blue-500/20 bg-blue-50 dark:bg-blue-500/10 px-6 py-5">
+                    <div className="flex items-start gap-3">
+                      <CheckCircle2 className="text-blue-600 dark:text-blue-400 mt-1" size={18} />
+                      <div>
+                        <div className="font-bold text-blue-800 dark:text-blue-300 mb-2">
+                          {isRTL ? 'الخلاصة العملية للمبتدئ' : 'Beginner Practical Summary'}
+                        </div>
+                        <div className="text-sm text-blue-700 dark:text-blue-200 leading-7">
+                          {isRTL
+                            ? '1) أنشئ نسخة كاملة. 2) احمِ نسخة مهمة من الحذف التلقائي. 3) فعّل الجدولة. 4) فعّل Google Drive إذا أردت نسخة خارجية. 5) استخدم المعاينة دائمًا قبل أي استعادة. 6) لا تنس كلمة مرور التشفير إذا كانت النسخة مشفرة.'
+                            : '1) Create a full backup. 2) Protect an important backup from auto deletion. 3) Enable scheduling. 4) Enable Google Drive if you need an external copy. 5) Always preview before restore. 6) Never forget the encryption password if the archive is encrypted.'}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap gap-3 justify-end">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsBackupGuideOpen(false);
+                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                      }}
+                      className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl text-sm font-bold"
+                    >
+                      {isRTL ? 'العودة إلى الإعدادات' : 'Back To Settings'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <AppPromptDialog
         open={isSmsPromptOpen}
