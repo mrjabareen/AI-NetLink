@@ -248,7 +248,7 @@ function shouldIgnoreProjectPath(filePath) {
     || relativePath.startsWith('.trae/')
     || relativePath === 'DB_CLEAN_DEPLOY'
     || relativePath.startsWith('DB_CLEAN_DEPLOY/')
-    relativePath === 'NetLink Enterprise DB'
+    || relativePath === 'NetLink Enterprise DB'
     || relativePath.startsWith('NetLink Enterprise DB/')
     || relativePath === 'AI NetLink Interface/ai-net-link/.wwebjs_cache'
     || relativePath.startsWith('AI NetLink Interface/ai-net-link/.wwebjs_cache/')
