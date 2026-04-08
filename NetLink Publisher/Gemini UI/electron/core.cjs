@@ -462,6 +462,105 @@ async function getRemoteVersionData(repoUrl, token) {
   return JSON.parse(stripBom(content));
 }
 
+async function diagnoseGitHub(input) {
+  const repoUrl = String(input?.repoUrl || '').trim();
+  const token = String(input?.githubToken || '').trim();
+  if (!repoUrl) {
+    throw new Error('Enter the GitHub repository URL first.');
+  }
+
+  const repo = getGitHubRepoInfo(repoUrl);
+  const repoApiUrl = `https://api.github.com/repos/${repo.owner}/${repo.name}`;
+  const headers = getGitHubHeaders(token);
+
+  const result = {
+    repo: `${repo.owner}/${repo.name}`,
+    remotePath: REMOTE_VERSION_PATH,
+    reachable: false,
+    tokenProvided: Boolean(token),
+    authValid: false,
+    tokenUser: null,
+    repoAccess: false,
+    versionFileReadable: false,
+    scopes: [],
+    githubVersion: null,
+    branch: 'main',
+    checks: [],
+  };
+
+  try {
+    if (token) {
+      const authResponse = await fetch('https://api.github.com/user', { headers });
+      if (authResponse.ok) {
+        const authMeta = await authResponse.json();
+        result.authValid = true;
+        result.tokenUser = authMeta?.login || null;
+        result.checks.push({
+          label: 'Token Authentication',
+          ok: true,
+          detail: result.tokenUser ? `Authenticated as ${result.tokenUser}` : 'Authenticated token',
+        });
+      } else {
+        const authError = await authResponse.text().catch(() => '');
+        result.checks.push({
+          label: 'Token Authentication',
+          ok: false,
+          detail: `GitHub rejected the token (${authResponse.status}) ${authError}`.trim(),
+        });
+      }
+    } else {
+      result.checks.push({
+        label: 'Token Authentication',
+        ok: false,
+        detail: 'No GitHub token was provided.',
+      });
+    }
+
+    const repoResponse = await fetch(repoApiUrl, { headers });
+    const scopeHeader = repoResponse.headers.get('x-oauth-scopes') || '';
+    result.scopes = scopeHeader.split(',').map((item) => item.trim()).filter(Boolean);
+
+    if (!repoResponse.ok) {
+      const errorBody = await repoResponse.text().catch(() => '');
+      throw new Error(`GitHub repository access failed (${repoResponse.status}) ${errorBody}`.trim());
+    }
+
+    const repoMeta = await repoResponse.json();
+    result.reachable = true;
+    result.repoAccess = true;
+    if (repoMeta?.default_branch) {
+      result.branch = String(repoMeta.default_branch);
+    }
+    result.checks.push({ label: 'Repository Reachability', ok: true, detail: `${repo.owner}/${repo.name}` });
+
+    const versionMeta = await getGitHubContentMeta(repoUrl, token, REMOTE_VERSION_PATH, result.branch);
+    result.versionFileReadable = Boolean(versionMeta?.content);
+    result.checks.push({ label: 'version.json Access', ok: result.versionFileReadable, detail: REMOTE_VERSION_PATH });
+
+    if (versionMeta?.content) {
+      const content = Buffer.from(String(versionMeta.content).replace(/\n/g, ''), 'base64').toString('utf8');
+      const parsed = JSON.parse(stripBom(content));
+      result.githubVersion = parsed?.version || null;
+    }
+
+    if (token) {
+      result.checks.push({
+        label: 'Token Scope',
+        ok: result.scopes.length > 0,
+        detail: result.scopes.length ? result.scopes.join(', ') : 'No scopes returned by GitHub',
+      });
+    }
+
+    return result;
+  } catch (error) {
+    const message = String(error?.message || error || '');
+    if (/ENOTFOUND|Could not resolve host|fetch failed|Failed to fetch/i.test(message)) {
+      throw new Error('GitHub is unreachable right now. Check your internet connection or DNS settings.');
+    }
+    throw new Error(message);
+  }
+}
+
 async function getProjectState({ projectPath, repoUrl, githubToken }) {
   const context = await resolveProjectContext(projectPath);
   const localVersion = loadVersionData(context.versionPath);
@@ -498,6 +597,7 @@ async function publishRelease(input) {
   const context = await resolveProjectContext(input.projectPath);
   const repoUrl = String(input.repoUrl || '').trim();
   const token = String(input.githubToken || '').trim();
+  const githubUser = String(input.githubUser || '').trim();
   const version = String(input.version || '').trim();
   const buildDate = String(input.buildDate || '').trim();
   const changelog = Array.isArray(input.changelog)
@@ -513,18 +613,26 @@ async function publishRelease(input) {
     throw new Error('The version number is still the same as GitHub. Change the version before publishing.');
   }
 
-  const versionPayload = saveVersionData(context.versionPath, version, buildDate, changelog);
+  saveVersionData(context.versionPath, version, buildDate, changelog);
 
   try {
-    const rawContent = JSON.stringify(versionPayload, null, 2);
-    await updateGitHubFile(
-      repoUrl,
-      token,
-      REMOTE_VERSION_PATH,
-      rawContent,
-      `release: v${version}`,
-      'main'
-    );
+    // Ensure git identity exists for automated release commits.
+    const commitUser = githubUser || 'netlink-publisher';
+    await runGit(['config', 'user.name', commitUser], context.repoRoot);
+    await runGit(['config', 'user.email', `${commitUser}@users.noreply.github.com`], context.repoRoot);
+
+    // Stage only publishable files (excludes DB, binaries, caches...).
+    await stagePublishableChanges(context.repoRoot);
+
+    const stagedResult = await runGit(['diff', '--cached', '--name-only'], context.repoRoot);
+    if (!stagedResult.stdout) {
+      throw new Error('No publishable changes were found. Make sure you saved your code changes before publishing.');
+    }
+
+    await runGit(['commit', '-m', `release: v${version}`], context.repoRoot);
+
+    const authenticatedUrl = buildAuthenticatedUrl(repoUrl, token);
+    await runGit(['push', authenticatedUrl, 'HEAD:main'], context.repoRoot);
     return getProjectState(input);
   } catch (error) {
     const message = String(error?.message || error || '');
@@ -556,6 +664,7 @@ module.exports = {
   deleteSavedProject,
   getInitialState,
   getProjectState,
+  diagnoseGitHub,
   saveVersionDraft,
   publishRelease,
 };

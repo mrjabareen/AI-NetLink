@@ -11,6 +11,7 @@ import { AppState, BaseSubscriberRecord, RouterRecord } from '../types';
 import { dict as originalDict } from '../dict';
 const dict = originalDict as any;
 import { formatCurrency } from '../utils/currency';
+import { formatTime } from '../utils/format';
 import { getSmartMatchScore } from '../utils/search';
 import { 
   fetchSubscribers, extendSubscriber, activateSubscriber, 
@@ -124,7 +125,7 @@ export default function BoiExpiryTab({ state }: BoiExpiryTabProps) {
           });
           
           setOnlineStatuses(newStatuses);
-          setLastStatusUpdate(new Date().toLocaleTimeString());
+          setLastStatusUpdate(formatTime());
         }
       } catch (err) {
         console.error('Failed to poll status', err);

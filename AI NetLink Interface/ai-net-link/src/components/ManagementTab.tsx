@@ -1,9 +1,10 @@
 import React, { useState, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
-import { Users, Truck, ShieldCheck, Search, Plus, Edit2, Trash2, X, Save, CheckCircle2, AlertCircle, UserPlus, Filter, Briefcase, UserCog, PieChart, RefreshCw, Activity, Globe, Wifi, WifiOff, Router, Zap, LogOut, Power, MoreVertical, Lock, Unlock, ShieldOff, Edit, Trash, Calendar, Send, Smartphone, Mail, MessageSquare, CreditCard, Coins, Wallet } from 'lucide-react';
+import { Users, Truck, ShieldCheck, Search, Plus, Edit2, Trash2, X, Save, CheckCircle2, AlertCircle, UserPlus, Filter, Briefcase, UserCog, PieChart, RefreshCw, Activity, Globe, Wifi, WifiOff, Router, Zap, LogOut, Power, MoreVertical, Lock, Unlock, ShieldOff, Edit, Trash, Calendar, Send, Smartphone, Mail, MessageSquare, CreditCard, Coins, Wallet, CircleHelp } from 'lucide-react';
 import { AppState, BaseEntityRecord, Permission, FinancialTransaction, MessageTemplate, NetworkProfile, RouterRecord } from '../types';
 import { dict } from '../dict';
-import { formatNumber, normalizeDigits } from '../utils/format';
+import { formatNumber, normalizeDigits, formatTime } from '../utils/format';
 import { formatCurrency } from '../utils/currency';
 import { fetchSubscribers, fetchSuppliers, fetchInvestors, addSubscriber, updateSubscriber, deleteSubscriber, addSupplier, updateSupplier, deleteSupplier, fetchManagersRaw, addManager, updateManager, deleteManager, addInvestor, updateInvestor, deleteInvestor, directorsApi, deputiesApi, iptvApi, getMikrotikStatus, getMikrotikStatusBatch, disconnectSubscriber, disconnectAllSubscribers, deleteSecret, disableSecret, enableSecret, syncSubscriberToMikrotik, fetchRoutersList, fetchProfiles, activateSubscriber, extendSubscriber, getMessageData, saveMessageData, BASE_URL, topUpManager, updateManagerTxLimit } from '../api';
 import { getSmartMatchScore, smartMatch } from '../utils/search';
@@ -11,6 +12,9 @@ import { toastError, toastInfo, toastSuccess } from '../utils/notify';
 import SecurityGroupsTab from './SecurityGroupsTab';
 import AppConfirmDialog from './AppConfirmDialog';
 import AppPromptDialog from './AppPromptDialog';
+import DateInput from './DateInput';
+import TimeSelectInput from './TimeSelectInput';
+import SystemClockBadge from './SystemClockBadge';
 
 interface ManagementTabProps {
   state: AppState;
@@ -27,6 +31,41 @@ type DynamicItem = BaseEntityRecord & {
   role?: string;
 };
 
+type TableColumnDef = {
+  id: string;
+  label: string;
+  headerClassName?: string;
+  cellClassName?: string;
+  render: (item: DynamicItem) => React.ReactNode;
+};
+
+type FieldHelpLabelProps = {
+  label: string;
+  helpText: string;
+  isRTL: boolean;
+};
+
+function FieldHelpLabel({ label, helpText, isRTL }: FieldHelpLabelProps) {
+  return (
+    <div className="flex items-center justify-between gap-2">
+      <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{label}</label>
+      <div className="relative group shrink-0">
+        <button
+          type="button"
+          tabIndex={-1}
+          className="w-5 h-5 rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#111114] text-slate-400 hover:text-teal-500 hover:border-teal-300 transition-colors flex items-center justify-center"
+          aria-label={isRTL ? `معلومة عن ${label}` : `Info about ${label}`}
+        >
+          <CircleHelp size={12} />
+        </button>
+        <div className={`pointer-events-none absolute top-full mt-2 ${isRTL ? 'left-0' : 'right-0'} w-64 p-3 rounded-xl bg-slate-950 text-white text-[11px] leading-5 shadow-2xl opacity-0 group-hover:opacity-100 transition-opacity z-[80]`}>
+          {helpText}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 type SyncResultDetail = {
   routerId?: string;
   routerName?: string;
@@ -37,6 +76,61 @@ type SyncResultDetail = {
   message?: string;
   error?: string;
   [key: string]: unknown;
+};
+
+type AdvancedFilterOption = {
+  value: string;
+  label: string;
+};
+
+type AdvancedFilterField = {
+  key: string;
+  label: string;
+  options: AdvancedFilterOption[];
+};
+
+type AdvancedFiltersByTab = {
+  subscribers: Record<string, string>;
+  suppliers: Record<string, string>;
+  shareholders: Record<string, string>;
+  managers: Record<string, string>;
+  iptv: Record<string, string>;
+};
+
+const DEFAULT_ADVANCED_FILTERS: AdvancedFiltersByTab = {
+  subscribers: {
+    status: 'all',
+    connection: 'all',
+    plan: 'all',
+    parent: 'all',
+    group: 'all',
+    location: 'all',
+    expiry: 'all',
+    debt: 'all',
+    subType: 'all',
+  },
+  suppliers: {
+    debtState: 'all',
+    balanceState: 'all',
+    noteState: 'all',
+  },
+  shareholders: {
+    ownership: 'all',
+    sharesState: 'all',
+    dividendsState: 'all',
+  },
+  managers: {
+    status: 'all',
+    role: 'all',
+    parent: 'all',
+    balanceState: 'all',
+    limitState: 'all',
+  },
+  iptv: {
+    status: 'all',
+    priceRange: 'all',
+    serviceType: 'all',
+  },
 };
 
 type RouterDiagnostic = {
@@ -78,10 +172,25 @@ const SmartActionMenu = ({
   isLastRows: boolean;
 }) => {
   const [hoveredAction, setHoveredAction] = useState<string | null>(null);
+  const menuRef = React.useRef<HTMLDivElement | null>(null);
+
+  React.useEffect(() => {
+    if (!isOpen) return undefined;
+
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!menuRef.current?.contains(event.target as Node)) {
+        onToggle();
+      }
+    };
+
+    window.addEventListener('mousedown', handlePointerDown);
+    return () => window.removeEventListener('mousedown', handlePointerDown);
+  }, [isOpen, onToggle]);
 
   return (
-    <div className="relative inline-block text-right" onClick={(e) => e.stopPropagation()}>
+    <div ref={menuRef} className="relative inline-block text-right" onClick={(e) => e.stopPropagation()}>
       <button 
+        type="button"
         onClick={onToggle}
         className={`p-2 rounded-xl transition-all ${isOpen ? 'bg-teal-500 text-white shadow-lg shadow-teal-500/20' : 'text-slate-400 hover:text-teal-500 hover:bg-teal-50 dark:hover:bg-teal-500/10'}`}
       >
@@ -100,6 +209,7 @@ const SmartActionMenu = ({
               {actions.map((action, idx) => (
                 <div key={action.id} className="relative">
                   <button 
+                    type="button"
                     onMouseEnter={() => setHoveredAction(action.id)}
                     onMouseLeave={() => setHoveredAction(null)}
                     onClick={() => { action.onClick(item); onToggle(); }}
@@ -162,15 +272,59 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
   const getSupplierCode = (item: DynamicItem) => getSupplierFieldValue(item, 'كود');
   const getSupplierName = (item: DynamicItem) => getSupplierFieldValue(item, 'اسم المورد') || String(item?.id || '');
   const getSupplierNotes = (item: DynamicItem) => getSupplierFieldValue(item, 'ملاحظات');
-  const getSubscriberDisplayName = (item: DynamicItem) => String(item.name || item.firstname || item['الاسم الأول'] || item.username || '-');
-  const getSubscriberStatusLabel = (item: DynamicItem) => t.management.subscribers.statuses[String(item.status || '')] || String(item['حالة الحساب'] || item.status || '-');
-  const isSubscriberActive = (item: DynamicItem) => item.status === 'active' || item['حالة الحساب'] === 'مفعل';
+  const getSubscriberDisplayName = (item: DynamicItem) => {
+    const firstName = getEntityValue(item, 'firstname', 'firstName', 'الاسم الأول', 'الاسم الاول');
+    const lastName = getEntityValue(item, 'lastname', 'lastName', 'اسم العائلة', 'الاسم الثاني');
+    const fullName = `${firstName} ${lastName}`.trim();
+    return String(fullName || item.name || item.username || item['اسم المستخدم'] || '-');
+  };
+  const normalizeSubscriberStatus = (value: unknown) => {
+    const raw = String(value || '').trim().toLowerCase();
+    if (!raw) return 'active';
+    if (['active', 'مفعل', 'نشط'].includes(raw)) return 'active';
+    if (['suspended', 'موقوف', 'معلق'].includes(raw)) return 'suspended';
+    if (['expired', 'منتهي'].includes(raw)) return 'expired';
+    return raw;
+  };
+  const getSubscriberStatusLabel = (item: DynamicItem) => {
+    const normalized = normalizeSubscriberStatus(item.status || item['حالة الحساب']);
+    return t.management.subscribers.statuses[normalized] || String(item['حالة الحساب'] || item.status || '-');
+  };
+  const getSubscriberStatusClass = (item: DynamicItem) => {
+    const normalized = normalizeSubscriberStatus(item.status || item['حالة الحساب']);
+    if (normalized === 'suspended') {
+      return 'bg-amber-100 dark:bg-amber-500/15 text-amber-700 dark:text-amber-400 border border-amber-200/70 dark:border-amber-500/20';
+    }
+    if (normalized === 'expired') {
+      return 'bg-rose-100 dark:bg-rose-500/15 text-rose-700 dark:text-rose-400 border border-rose-200/70 dark:border-rose-500/20';
+    }
+    return 'bg-emerald-100 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-200/70 dark:border-emerald-500/20';
+  };
+  const getSubscriberBalanceClass = (item: DynamicItem) => {
+    const balanceValue = getNumberValue(item.balance ?? item['الرصيد المتبقي له']);
+    if (balanceValue < 0) {
+      return 'bg-rose-100 dark:bg-rose-500/15 text-rose-700 dark:text-rose-400 border border-rose-200/70 dark:border-rose-500/20';
+    }
+    if (balanceValue > 0) {
+      return 'bg-blue-100 dark:bg-blue-500/15 text-blue-700 dark:text-blue-400 border border-blue-200/70 dark:border-blue-500/20';
+    }
+    return 'bg-slate-100 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700';
+  };
+  const isSubscriberActive = (item: DynamicItem) => normalizeSubscriberStatus(item.status || item['حالة الحساب']) === 'active';
   const getInvestorName = (item: DynamicItem) => String(item.name || '-');
   const getManagerName = (item: DynamicItem) => String(item.name || `${item['الاسم الاول'] || item.firstName || ''} ${item['الاسم الثاني'] || item.lastName || ''}`.trim() || item.username || item['اسم الدخول'] || '-');
   const getManagerRole = (item: DynamicItem) => String(item.role || item['الصلاحية'] || (isRTL ? 'موظف' : 'Staff'));
   const isManagerActive = (item: DynamicItem) => item.status === 'active' || item['الحالة'] === 'نشط' || !item.status;
   const getIptvName = (item: DynamicItem) => String(item.name || '-');
   const getIptvStatusLabel = (item: DynamicItem) => t.management.iptv.statuses[String(item.status || '')] || String(item.status || '-');
+  const getIptvServiceTypeLabel = (item: DynamicItem) => {
+    const typeValue = String(item.serviceType || item.type || 'other');
+    return t.management.iptv.serviceTypes[typeValue] || typeValue;
+  };
+  const getIptvBillingCycleLabel = (item: DynamicItem) => {
+    const cycleValue = String(item.billingCycle || 'monthly');
+    return t.management.iptv.billingCycles[cycleValue] || cycleValue;
+  };
   const getIptvStatusClass = (item: DynamicItem) => (
     item.status === 'active'
       ? 'bg-emerald-100 dark:bg-emerald-500/10 text-emerald-600'
@@ -178,12 +332,122 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
         ? 'bg-amber-100 dark:bg-amber-500/10 text-amber-600'
         : 'bg-rose-100 dark:bg-rose-500/10 text-rose-600'
   );
+  const getEntityValue = (item: DynamicItem, ...keys: string[]) => {
+    for (const key of keys) {
+      const value = item[key];
+      if (value === null || value === undefined) continue;
+      const text = String(value).trim();
+      if (text) return text;
+    }
+    return '';
+  };
+  const parseFlexibleDate = (value: unknown) => {
+    const raw = String(value ?? '').trim();
+    if (!raw) return null;
+    const direct = new Date(raw);
+    if (!Number.isNaN(direct.getTime())) return direct;
+    const normalized = raw.replace(/\./g, '/').replace(/-/g, '/');
+    const parts = normalized.split('/');
+    if (parts.length !== 3) return null;
+    const [a, b, c] = parts.map(Number);
+    if ([a, b, c].some((part) => Number.isNaN(part))) return null;
+    if (String(parts[0]).length === 4) {
+      const date = new Date(a, b - 1, c);
+      return Number.isNaN(date.getTime()) ? null : date;
+    }
+    const date = new Date(c, b - 1, a);
+    return Number.isNaN(date.getTime()) ? null : date;
+  };
+  const getDaysUntilDate = (value: unknown) => {
+    const date = parseFlexibleDate(value);
+    if (!date) return null;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const target = new Date(date);
+    target.setHours(0, 0, 0, 0);
+    return Math.round((target.getTime() - today.getTime()) / 86400000);
+  };
+  const getSubscriberUsername = (item: DynamicItem) => getEntityValue(item, 'username', 'اسم الدخول', 'اسم المستخدم');
+  const getSubscriberCode = (item: DynamicItem) => {
+    const raw = getEntityValue(item, 'id', 'كود');
+    return raw.replace(/^SUB-/i, '').trim();
+  };
+  const getSubscriberFirstName = (item: DynamicItem) => getEntityValue(item, 'firstname', 'firstName', 'الاسم الأول', 'الاسم الاول');
+  const getSubscriberLastName = (item: DynamicItem) => getEntityValue(item, 'lastname', 'lastName', 'اسم العائلة', 'الاسم الثاني');
+  const getSubscriberPhone = (item: DynamicItem) => getEntityValue(item, 'phone', 'رقم الموبايل', 'الهاتف');
+  const getSubscriberPlan = (item: DynamicItem) => getEntityValue(item, 'plan', 'الباقة', 'سرعة الخط', 'profile');
+  const getSubscriberParent = (item: DynamicItem) => getEntityValue(item, 'parent', 'تابع لـ', 'تابع إلى', 'تابع الي', 'الوكيل المسؤل', 'agent');
+  const getSubscriberGroup = (item: DynamicItem) => getEntityValue(item, 'group', 'المجموعة', 'groupName', 'اسم المجموعة');
+  const getSubscriberLocation = (item: DynamicItem) => getEntityValue(item, 'city', 'المدينة', 'location', 'عنوان المشترك', 'address');
+  const getSubscriberSubType = (item: DynamicItem) => getEntityValue(item, 'subType', 'نوع الاشتراك');
+  const getSubscriberExpiryValue = (item: DynamicItem) => getEntityValue(item, 'expiry', 'expiration', 'تاريخ انتهاء الاشتراك', 'تاريخ ناهية الاشتراك', 'تاريخ النهاية');
+  const getSubscriberExpiryTimeValue = (item: DynamicItem) => getEntityValue(item, 'expiry_time', 'expiryTime', 'وقت الانتهاء', 'وقت نهاية الاشتراك');
+  const getSubscriberDebtValue = (item: DynamicItem) => parseSupplierAmount(item['عليه دين'] ?? item.debt ?? 0);
+  const getSubscriberMikrotikDisplayName = (item: DynamicItem) => getEntityValue(item, 'name', 'اسم العرض على المايكروتيك', 'الاسم الانجليزي', 'comment');
+  const getSubscriberExpiryDateTime = (item: Record<string, unknown>) => {
+    const expiryValue = String(item.expiry ?? item.expiration ?? item['تاريخ انتهاء الاشتراك'] ?? item['تاريخ ناهية الاشتراك'] ?? item['تاريخ النهاية'] ?? '').trim();
+    const expiryDate = parseFlexibleDate(expiryValue);
+    if (!expiryDate) return null;
+
+    const expiryTimeValue = String(item.expiry_time ?? item.expiryTime ?? item['وقت الانتهاء'] ?? item['وقت نهاية الاشتراك'] ?? '').trim();
+    const normalizedTime = toTimeWithSeconds(expiryTimeValue);
+    const [hours, minutes, seconds] = normalizedTime ? normalizedTime.split(':').map((part) => parseInt(part, 10) || 0) : [23, 59, 59];
+    const result = new Date(expiryDate);
+    result.setHours(hours, minutes, seconds, 0);
+    return result;
+  };
+  const isSubscriberServiceExpired = (item: Record<string, unknown>) => {
+    const expiryAt = getSubscriberExpiryDateTime(item);
+    if (!expiryAt) return false;
+    return expiryAt.getTime() < Date.now();
+  };
+  const getSubscriberMikrotikAccessAction = (item: Record<string, unknown>) => {
+    const normalizedStatus = normalizeSubscriberStatus(item.status || item['حالة الحساب']);
+    if (normalizedStatus === 'expired') return 'delete';
+    if (normalizedStatus === 'suspended') return 'disable';
+    if (isSubscriberServiceExpired(item)) return 'disable';
+    return 'enable';
+  };
+  const isSubscriberOnline = (item: DynamicItem) => {
+    const username = getSubscriberUsername(item).trim();
+    if (!username) return false;
+    const normalizedUsername = username.toLowerCase();
+    return onlineStatuses[username] === true || onlineStatuses[normalizedUsername] === true;
+  };
+  const getSubscriberConnectionState = (item: DynamicItem) => {
+    if (isSubscriberOnline(item)) return 'online';
+    return isSubscriberActive(item) ? 'active_offline' : 'offline';
+  };
+  const getSubscriberExpiryBucket = (item: DynamicItem) => {
+    const days = getDaysUntilDate(getSubscriberExpiryValue(item));
+    if (days === null) return 'unknown';
+    if (days < 0) return 'expired';
+    if (days === 0) return 'today';
+    if (days <= 3) return 'three_days';
+    if (days <= 7) return 'seven_days';
+    return 'later';
+  };
+  const toUniqueOptions = (values: string[], allLabel: string) => [
+    { value: 'all', label: allLabel },
+    ...Array.from(new Set(values.map((value) => value.trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b, 'ar')).map((value) => ({ value, label: value })),
+  ];
+  const getRelativeRangeBucket = (value: number, values: number[]) => {
+    if (value <= 0) return 'zero';
+    const normalized = values.filter((item) => item > 0).sort((a, b) => a - b);
+    if (normalized.length === 0) return 'zero';
+    if (normalized.length === 1) return 'medium';
+    const lowThreshold = normalized[Math.floor((normalized.length - 1) / 3)] ?? normalized[0];
+    const highThreshold = normalized[Math.floor(((normalized.length - 1) * 2) / 3)] ?? normalized[normalized.length - 1];
+    if (value <= lowThreshold) return 'low';
+    if (value <= highThreshold) return 'medium';
+    return 'high';
+  };
   const getTabEntityLabel = () => {
     switch (activeSubTab) {
       case 'subscribers':
         return isRTL ? 'المشترك' : 'subscriber';
       case 'iptv':
-        return isRTL ? 'اشتراك IPTV' : 'IPTV subscription';
+        return isRTL ? 'خدمة رقمية' : 'digital service';
       case 'suppliers':
         return isRTL ? 'المورد' : 'supplier';
       case 'shareholders':
@@ -240,6 +504,106 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
     if (typeof value === 'string') return parseFloat(value) || 0;
     return 0;
   };
+  const formatIsoDate = (date: Date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+  const normalizeTimeInput = (value: string) => normalizeDigits(value).replace(/[^\d:]/g, '').slice(0, 8);
+  const toTimeWithSeconds = (value: string) => {
+    const normalized = normalizeTimeInput(value);
+    if (!normalized) return '';
+    const parts = normalized.split(':').filter(Boolean);
+    const hours = String(Math.min(23, Math.max(0, parseInt(parts[0] || '0', 10) || 0))).padStart(2, '0');
+    const minutes = String(Math.min(59, Math.max(0, parseInt(parts[1] || '0', 10) || 0))).padStart(2, '0');
+    const seconds = String(Math.min(59, Math.max(0, parseInt(parts[2] || '0', 10) || 0))).padStart(2, '0');
+    return `${hours}:${minutes}:${seconds}`;
+  };
+  const getProfileDurationConfig = (profile?: NetworkProfile | null) => {
+    if (!profile) return { value: 1, unit: 'months' };
+    const durationValue = profile.limitByDuration && typeof profile.limitByDuration === 'object' && (profile.limitByDuration as Record<string, unknown>).enabled
+      ? Number((profile.limitByDuration as Record<string, unknown>).value || 1)
+      : Number(profile.validityValue || 1);
+    const durationUnit = profile.limitByDuration && typeof profile.limitByDuration === 'object' && (profile.limitByDuration as Record<string, unknown>).enabled
+      ? String((profile.limitByDuration as Record<string, unknown>).unit || 'months')
+      : String(profile.validityUnit || 'months');
+    return { value: durationValue || 1, unit: durationUnit || 'months' };
+  };
+  const applySubscriberPlanDefaults = (profile?: NetworkProfile | null) => {
+    if (!profile) return;
+
+    const now = new Date();
+    const expiryDate = new Date(now);
+    const { value, unit } = getProfileDurationConfig(profile);
+
+    if (unit === 'months') {
+      expiryDate.setMonth(expiryDate.getMonth() + value);
+    } else if (unit === 'days') {
+      expiryDate.setDate(expiryDate.getDate() + value);
+    } else if (unit === 'hours') {
+      expiryDate.setHours(expiryDate.getHours() + value);
+    } else if (unit === 'minutes') {
+      expiryDate.setMinutes(expiryDate.getMinutes() + value);
+    } else {
+      expiryDate.setMonth(expiryDate.getMonth() + 1);
+    }
+
+    const hasFixedTime = Boolean(profile.fixedExpirationTimeEnabled && profile.fixedExpirationTime);
+    if (hasFixedTime) {
+      const [hh, mm] = String(profile.fixedExpirationTime).split(':');
+      expiryDate.setHours(parseInt(hh || '0', 10) || 0, parseInt(mm || '0', 10) || 0, 0, 0);
+    }
+
+    const nextExpiryDate = formatIsoDate(expiryDate);
+    const nextExpiryTime = hasFixedTime
+      ? toTimeWithSeconds(String(profile.fixedExpirationTime))
+      : formatTime(expiryDate, { second: '2-digit' });
+    const nextPrice = Number(profile.price || 0);
+
+    setSubscriberFormField('bill', String(nextPrice), {
+      'قيمة الفاتورة': String(nextPrice),
+      expiry: nextExpiryDate,
+      'تاريخ الانتهاء': nextExpiryDate,
+      expiry_time: nextExpiryTime,
+      'وقت الانتهاء': nextExpiryTime,
+      price: String(nextPrice),
+    });
+  };
+  const buildSubscriberPayload = <T extends Record<string, unknown>>(source: T): T & Record<string, unknown> => {
+    const firstName = getStringValue(source.firstname ?? source.firstName ?? source['الاسم الأول']);
+    const lastName = getStringValue(source.lastname ?? source.lastName ?? source['اسم العائلة']);
+    const username = getStringValue(source.username ?? source['اسم المستخدم'] ?? source['اسم الدخول']);
+    const password = getStringValue(source.password ?? source['كلمة المرور']);
+    const status = normalizeSubscriberStatus(source.status ?? source['حالة الحساب']);
+    const statusArabic = status === 'suspended' ? 'معلق' : status === 'expired' ? 'منتهي' : 'مفعل';
+    const displayName = getStringValue(
+      source.name ??
+      source['اسم العرض على المايكروتيك'] ??
+      source['الاسم الانجليزي']
+    );
+
+    return {
+      ...source,
+      firstname: firstName,
+      'الاسم الأول': firstName,
+      lastname: lastName,
+      'اسم العائلة': lastName,
+      username,
+      'اسم المستخدم': username,
+      'اسم الدخول': username,
+      password,
+      'كلمة المرور': password,
+      status,
+      'حالة الحساب': statusArabic,
+      name: displayName,
+      'اسم العرض على المايكروتيك': displayName,
+      balance: String(source.balance ?? source['الرصيد المتبقي له'] ?? '0'),
+      'الرصيد المتبقي له': String(source.balance ?? source['الرصيد المتبقي له'] ?? '0'),
+      debt: String(source.debt ?? source['عليه دين'] ?? '0'),
+      'عليه دين': String(source.debt ?? source['عليه دين'] ?? '0'),
+    };
+  };
 
   const [activeSubTab, setActiveSubTab] = useState<ManagementSubTab>(() => {
     const saved = localStorage.getItem('sas4_active_subtab');
@@ -264,8 +628,14 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
   const [editingItem, setEditingItem] = useState<DynamicItem | null>(null);
   const [newItem, setNewItem] = useState<Record<string, unknown>>({});
   const [showSuccess, setShowSuccess] = useState(false);
-  const [statusFilter, setStatusFilter] = useState('all');
   const [showFilters, setShowFilters] = useState(false);
+  const [showColumnControls, setShowColumnControls] = useState(false);
+  const [subscriberWorkspaceMode, setSubscriberWorkspaceMode] = useState<'list' | 'add' | 'edit'>('list');
+  const [isSubscriberHelpOpen, setIsSubscriberHelpOpen] = useState(false);
+  const [subscriberQuickFilter, setSubscriberQuickFilter] = useState<'all' | 'active' | 'online'>('all');
+  const [subscriberPage, setSubscriberPage] = useState(1);
+  const [subscriberPageSize, setSubscriberPageSize] = useState(10);
+  const [advancedFilters, setAdvancedFilters] = useState<AdvancedFiltersByTab>(DEFAULT_ADVANCED_FILTERS);
   const [showName, setShowName] = useState(() => localStorage.getItem('sas4_mgmt_show_name') !== 'false');
   const [showChannel, setShowChannel] = useState(() => localStorage.getItem('sas4_mgmt_show_channel') !== 'false');
 
@@ -276,6 +646,19 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
   React.useEffect(() => {
     localStorage.setItem('sas4_mgmt_show_channel', String(showChannel));
   }, [showChannel]);
+
+  React.useEffect(() => {
+    if (!showFilters) return undefined;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setShowFilters(false);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [showFilters]);
   const [apiError, setApiError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isActivateModalOpen, setIsActivateModalOpen] = useState(false);
@@ -296,6 +679,7 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
   // ─── MIKROTIK SYNC STATE ────────────────────────────────────────────────────
   // ─── NETWORK PROFILES (for plan dropdown) ─────────────────────────────────
   const [networkProfiles, setNetworkProfiles] = useState<NetworkProfile[]>([]);
+  const [subscriberGroupOptions, setSubscriberGroupOptions] = useState<string[]>([]);
 
   const loadNetworkProfiles = async () => {
     try {
@@ -306,12 +690,45 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
     }
   };
 
+  const loadRoutersForSubscriberForm = async () => {
+    try {
+      const routers = await fetchRoutersList();
+      setRoutersList(Array.isArray(routers) ? routers : []);
+    } catch (e) {
+      setRoutersList([]);
+    }
+  };
+
+  const loadSubscriberGroups = async () => {
+    try {
+      const data = await getMessageData();
+      const groups = Array.isArray(data?.groups)
+        ? data.groups
+            .map((group: unknown) => {
+              if (typeof group === 'string') return group.trim();
+              if (group && typeof group === 'object') {
+                const value = (group as Record<string, unknown>).name ?? (group as Record<string, unknown>).label ?? (group as Record<string, unknown>).groupName;
+                return String(value || '').trim();
+              }
+              return '';
+            })
+            .filter(Boolean)
+        : [];
+      setSubscriberGroupOptions(Array.from(new Set(groups as string[])).sort((a, b) => a.localeCompare(b)));
+    } catch (e) {
+      setSubscriberGroupOptions([]);
+    }
+  };
+
   const [isSyncModalOpen, setIsSyncModalOpen] = useState(false);
   const [syncingSubscriber, setSyncingSubscriber] = useState<DynamicItem | null>(null);
+  const [syncModalMode, setSyncModalMode] = useState<'single' | 'bulk'>('single');
   const [syncTarget, setSyncTarget] = useState('all');
   const [routersList, setRoutersList] = useState<RouterRecord[]>([]);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isBulkSyncingSubscribers, setIsBulkSyncingSubscribers] = useState(false);
   const [syncResult, setSyncResult] = useState<{ success: boolean; message: string; details?: SyncResultDetail[] } | null>(null);
+  const useSubscriberWorkspace = activeSubTab === 'subscribers';
 
   const SUBSCRIBER_COLUMNS = [
     { id: 'id', label: isRTL ? 'المعرف' : 'ID', defaultVisible: true },
@@ -416,10 +833,6 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
     return initial;
   });
 
-  React.useEffect(() => {
-    localStorage.setItem('sas4_visible_columns', JSON.stringify(visibleColumns));
-  }, [visibleColumns]);
-
   // ─── LIVE DATA FROM API ─────────────────────────────────────────────────────
   const [subscribers, setSubscribers] = useState<DynamicItem[]>([]);
   const [suppliers, setSuppliers] = useState<DynamicItem[]>([]);
@@ -427,6 +840,366 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
   const [managers, setManagers] = useState<DynamicItem[]>([]);
   const [iptvSubscribers, setIptvSubscribers] = useState<DynamicItem[]>([]);
   const [onlineStatuses, setOnlineStatuses] = useState<Record<string, boolean>>({});
+
+  const activeTableColumns = useMemo<TableColumnDef[]>(() => {
+    if (activeSubTab === 'subscribers') {
+      return SUBSCRIBER_COLUMNS
+        .filter((col) => visibleColumns[col.id])
+        .map((col) => ({
+          id: col.id,
+          label: col.label,
+          render: (item: DynamicItem) => {
+            switch (col.id) {
+              case 'id':
+                return <span className="font-mono text-xs text-slate-500 dark:text-slate-400">{getSubscriberCode(item) || '-'}</span>;
+              case 'firstname':
+                return <span className="text-sm font-bold text-slate-800 dark:text-slate-200">{getSubscriberFirstName(item) || '-'}</span>;
+              case 'lastname':
+                return <span className="text-sm font-bold text-slate-800 dark:text-slate-200">{getSubscriberLastName(item) || '-'}</span>;
+              case 'username':
+                return <span className="text-xs font-medium text-slate-600 dark:text-slate-400">{getSubscriberUsername(item) || '-'}</span>;
+              case 'phone':
+                return <span className="font-mono text-xs text-slate-600 dark:text-slate-400">{getSubscriberPhone(item) || '-'}</span>;
+              case 'idNumber':
+                return <span className="font-mono text-xs text-slate-600 dark:text-slate-400">{getEntityValue(item, 'idNumber', 'رقم الهوية') || '-'}</span>;
+              case 'password':
+                return <span className="font-mono text-xs text-slate-600 dark:text-slate-400">{getEntityValue(item, 'password', 'كلمة المرور') || '-'}</span>;
+              case 'status':
+                return (
+                  <span className={`px-2 py-1 rounded-lg text-[10px] font-bold uppercase ${getSubscriberStatusClass(item)}`}>
+                    {getSubscriberStatusLabel(item)}
+                  </span>
+                );
+              case 'plan':
+                return <span className="text-xs font-medium text-slate-600 dark:text-slate-400">{getSubscriberPlan(item) || '-'}</span>;
+              case 'balance':
+                return <span className={`inline-flex px-2 py-1 rounded-lg text-sm font-black whitespace-nowrap ${getSubscriberBalanceClass(item)}`}>{formatCurrency(getNumberValue(item.balance ?? item['الرصيد المتبقي له']), state.currency, state.lang)}</span>;
+              case 'debt':
+                return <span className="text-sm font-black text-rose-600 dark:text-rose-400 whitespace-nowrap">{formatCurrency(getNumberValue(item['عليه دين']), state.currency, state.lang)}</span>;
+              case 'paid':
+                return <span className="text-sm font-black text-teal-600 dark:text-teal-400 whitespace-nowrap">{formatCurrency(getNumberValue(item['قام بتسديد']), state.currency, state.lang)}</span>;
+              case 'bill':
+                return <span className="text-xs font-medium text-slate-600 dark:text-slate-400">{getEntityValue(item, 'bill', 'قيمة الفاتورة') || '-'}</span>;
+              case 'agent':
+                return <span className="text-xs font-medium text-slate-700 dark:text-slate-300">{getEntityValue(item, 'agent', 'الوكيل المسؤل') || '-'}</span>;
+              case 'subType':
+                return <span className="text-xs text-slate-600 dark:text-slate-400">{getSubscriberSubType(item) || '-'}</span>;
+              case 'startDate':
+                return <span className="font-mono text-[10px] text-slate-500">{getEntityValue(item, 'startDate', 'تاريخ بداية العقد مع الشركة') || '-'}</span>;
+              case 'expiry':
+                return <span className="font-mono text-[10px] text-slate-500">{getSubscriberExpiryValue(item) || '-'}</span>;
+              case 'expiry_time':
+                return <span className="font-mono text-[10px] text-slate-500">{getSubscriberExpiryTimeValue(item) || '-'}</span>;
+              case 'address':
+                return <span className="text-xs text-slate-600 dark:text-slate-400">{getEntityValue(item, 'address', 'عنوان المشترك') || '-'}</span>;
+              case 'city':
+                return <span className="text-xs text-slate-600 dark:text-slate-400">{getEntityValue(item, 'city', 'المدينة') || '-'}</span>;
+              case 'email':
+                return <span className="text-[10px] text-slate-500">{getEntityValue(item, 'email') || '-'}</span>;
+              case 'ip_litebeam':
+                return <span className="font-mono text-xs text-slate-600 dark:text-slate-400">{getEntityValue(item, 'ip', 'ip_litebeam') || '-'}</span>;
+              case 'mac_litebeam':
+                return <span className="font-mono text-xs text-slate-600 dark:text-slate-400">{getEntityValue(item, 'mac', 'mac_litebeam') || '-'}</span>;
+              case 'live':
+                return (
+                  <div className="flex items-center justify-center shrink-0">
+                    {isSubscriberOnline(item) ? (
+                      <span className="flex items-center gap-1 text-emerald-500 font-black text-[9px] bg-emerald-500/10 px-2 py-1 rounded-full border border-emerald-500/20">
+                        <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                        ON
+                      </span>
+                    ) : getSubscriberUsername(item).trim() ? (
+                      <span className="text-[9px] text-slate-400 font-bold opacity-60">OFF</span>
+                    ) : (
+                      <Activity size={10} className="text-slate-300 animate-spin" />
+                    )}
+                  </div>
+                );
+              case 'notes':
+                return <span className="text-xs text-slate-500 dark:text-slate-500">{getEntityValue(item, 'notes', 'ملاحظات اخرى') || '-'}</span>;
+              default:
+                return <span className="text-xs text-slate-500">{getEntityValue(item, col.id, col.key || '') || '-'}</span>;
+            }
+          },
+        }));
+    }
+
+    if (activeSubTab === 'suppliers') {
+      return SUPPLIER_COLUMNS
+        .filter((col) => visibleColumns[col.id])
+        .map((col) => ({
+          id: col.id,
+          label: col.label,
+          headerClassName: `${col.id === 'debt' ? 'hidden md:table-cell ' : ''}${col.id === 'paid' ? 'hidden lg:table-cell ' : ''}${col.id === 'notes' ? 'hidden xl:table-cell ' : ''}`.trim(),
+          cellClassName: `${col.id === 'debt' ? 'hidden md:table-cell ' : ''}${col.id === 'paid' ? 'hidden lg:table-cell ' : ''}${col.id === 'notes' ? 'hidden xl:table-cell ' : ''}`.trim(),
+          render: (item: DynamicItem) => {
+            switch (col.id) {
+              case 'code':
+                return (
+                  <span className="inline-flex items-center rounded-xl bg-slate-100 dark:bg-slate-800 px-3 py-1.5 text-xs font-black text-slate-700 dark:text-slate-300 font-mono">
+                    {getSupplierCode(item) || '-'}
+                  </span>
+                );
+              case 'name':
+                return (
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-full bg-blue-500/10 flex items-center justify-center text-blue-600 font-black text-sm shrink-0">
+                      {(getSupplierName(item) || '?').charAt(0)}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-black text-slate-800 dark:text-slate-200 truncate">{getSupplierName(item) || '-'}</p>
+                      <p className="text-[10px] text-slate-400 font-mono mt-1">{item.id}</p>
+                    </div>
+                  </div>
+                );
+              case 'debt':
+                return <span className="text-sm font-black text-rose-600 dark:text-rose-400 whitespace-nowrap">{formatSupplierAmount(item['مدين'])}</span>;
+              case 'paid':
+                return <span className="text-sm font-black text-emerald-600 dark:text-emerald-400 whitespace-nowrap">{formatSupplierAmount(item['مسدد'])}</span>;
+              case 'balance': {
+                const balanceValue = parseSupplierAmount(item['الرصيد']);
+                const balanceClass = balanceValue < 0
+                  ? 'text-amber-600 dark:text-amber-400'
+                  : balanceValue > 0
+                    ? 'text-blue-600 dark:text-blue-400'
+                    : 'text-slate-500 dark:text-slate-400';
+                return <span className={`text-sm font-black whitespace-nowrap ${balanceClass}`}>{formatSupplierAmount(item['الرصيد'])}</span>;
+              }
+              case 'notes':
+                return <span className="text-xs text-slate-500 dark:text-slate-400">{getSupplierNotes(item) || '-'}</span>;
+              default:
+                return <span className="text-xs text-slate-500">{getEntityValue(item, col.key || '', col.id) || '-'}</span>;
+            }
+          },
+        }));
+    }
+
+    if (activeSubTab === 'shareholders') {
+      return INVESTOR_COLUMNS
+        .filter((col) => visibleColumns[col.id])
+        .map((col) => ({
+          id: col.id,
+          label: col.label,
+          headerClassName: `${['buyPrice', 'ownership'].includes(col.id) ? 'hidden md:table-cell ' : ''}${col.id === 'dividends' ? 'hidden lg:table-cell ' : ''}`.trim(),
+          cellClassName: `${['buyPrice', 'ownership'].includes(col.id) ? 'hidden md:table-cell ' : ''}${col.id === 'dividends' ? 'hidden lg:table-cell ' : ''}`.trim(),
+          render: (item: DynamicItem) => {
+            switch (col.id) {
+              case 'name':
+                return (
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-full bg-amber-500/10 flex items-center justify-center text-amber-600 font-bold text-xs shrink-0">
+                      {getStringValue(item.name, '?').charAt(0)}
+                    </div>
+                    <p className="text-sm font-bold text-slate-800 dark:text-slate-200 line-clamp-1">{getStringValue(item.name, '-')}</p>
+                  </div>
+                );
+              case 'shares':
+                return (
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const newShares = Math.max(0, getNumberValue(item.shares) - 10);
+                        setShareholders(prev => prev.map(s => s.id === item.id ? { ...s, shares: newShares } : s));
+                      }}
+                      className="w-6 h-6 flex items-center justify-center bg-rose-500/10 text-rose-600 rounded hover:bg-rose-500/20 transition-colors text-xs"
+                    >
+                      -
+                    </button>
+                    <span className="text-xs font-bold text-slate-800 dark:text-slate-200 min-w-[50px] text-center">
+                      {formatNumber(getNumberValue(item.shares))}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const newShares = getNumberValue(item.shares) + 10;
+                        setShareholders(prev => prev.map(s => s.id === item.id ? { ...s, shares: newShares } : s));
+                      }}
+                      className="w-6 h-6 flex items-center justify-center bg-emerald-500/10 text-emerald-600 rounded hover:bg-emerald-500/20 transition-colors text-xs"
+                    >
+                      +
+                    </button>
+                  </div>
+                );
+              case 'buyPrice':
+                return <span className="text-xs font-black text-slate-600 dark:text-slate-400">{formatCurrency(getNumberValue(item.buyPrice), state.currency, state.lang)}</span>;
+              case 'ownership':
+                return <span className="text-xs font-bold text-slate-600 dark:text-slate-400">{getStringValue(item.ownership, '0%')}</span>;
+              case 'investment':
+                return <span className="text-sm font-black text-slate-800 dark:text-slate-200">{formatCurrency(getNumberValue(item.investment), state.currency, state.lang)}</span>;
+              case 'dividends':
+                return <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400">{formatCurrency(getNumberValue(item.dividends), state.currency, state.lang)}</span>;
+              default:
+                return <span className="text-xs text-slate-600 dark:text-slate-400">{getEntityValue(item, col.id) || '-'}</span>;
+            }
+          },
+        }));
+    }
+
+    if (activeSubTab === 'managers') {
+      return MANAGER_COLUMNS
+        .filter((col) => visibleColumns[col.id])
+        .map((col) => ({
+          id: col.id,
+          label: col.label,
+          render: (item: DynamicItem) => {
+            switch (col.id) {
+              case 'name':
+                return (
+                  <div className="flex items-center gap-3">
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs shrink-0 ${
+                      (item.role === 'super_admin' || item['الصلاحية'] === 'Super Admin') ? 'bg-amber-500/10 text-amber-600' : 'bg-teal-500/10 text-teal-600'
+                    }`}>
+                      {getStringValue(item.name || item.username || item['اسم الدخول'], '?').charAt(0)}
+                    </div>
+                    <p className="text-sm font-bold text-slate-800 dark:text-slate-200 line-clamp-1">
+                      {item.name || `${item['الاسم الاول'] || item.firstName || ''} ${item['الاسم الثاني'] || item.lastName || ''}`.trim() || item.username || item['اسم الدخول']}
+                    </p>
+                  </div>
+                );
+              case 'username':
+                return <span className="text-xs text-slate-600 dark:text-slate-400 font-mono">{item.username || item['اسم الدخول'] || '-'}</span>;
+              case 'role':
+                return (
+                  <span className={`inline-block px-2 py-1 rounded-lg text-[9px] font-black uppercase tracking-tighter truncate max-w-[120px] ${
+                    (item.role === 'super_admin' || item['الصلاحية'] === 'Super Admin') ? 'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400' : 'bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400'
+                  }`}>
+                    {item.role || item['الصلاحية'] || (isRTL ? 'موظف' : 'Staff')}
+                  </span>
+                );
+              case 'balance':
+                return <span className="text-sm font-black text-slate-800 dark:text-slate-200 whitespace-nowrap">{formatCurrency(getNumberValue(item.balance ?? item['الرصيد']), state.currency, state.lang)}</span>;
+              case 'maxTxLimit':
+                return (item.maxTxLimit || item['الحد المالي']) ? (
+                  <div className="flex flex-col">
+                    <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                      {formatCurrency(getNumberValue(item.maxTxLimit ?? item['الحد المالي']), state.currency, state.lang)}
+                    </span>
+                    <span className="text-[8px] text-emerald-500 uppercase font-black">Limit ON</span>
+                  </div>
+                ) : (
+                  <span className="text-[10px] text-slate-400 italic">{isRTL ? 'بدون قيود' : 'No Limit'}</span>
+                );
+              case 'status':
+                return (
+                  <span className={`px-2 py-1 rounded-lg text-[10px] font-bold uppercase ${
+                    (item.status === 'active' || item['الحالة'] === 'نشط' || !item.status) ? 'bg-emerald-100 dark:bg-emerald-500/10 text-emerald-600' : 'bg-rose-100 dark:bg-rose-500/10 text-rose-600'
+                  }`}>
+                    {(item.status === 'active' || item['الحالة'] === 'نشط' || !item.status) ? (isRTL ? 'نشط' : 'Active') : (isRTL ? 'مجمد' : 'Disabled')}
+                  </span>
+                );
+              default:
+                return <span className="text-xs text-slate-600 dark:text-slate-400">{getEntityValue(item, col.id, col.key || '') || '-'}</span>;
+            }
+          },
+        }));
+    }
+
+    if (activeSubTab === 'iptv') {
+      const cols: TableColumnDef[] = [];
+      if (showName) {
+        cols.push({
+          id: 'name',
+          label: t.management.iptv.table.name,
+          render: (item) => (
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-full bg-teal-500/10 flex items-center justify-center text-teal-600 font-bold text-xs shrink-0">
+                {getStringValue(item.name, '?').charAt(0)}
+              </div>
+              <p className="text-sm font-bold text-slate-800 dark:text-slate-200 line-clamp-1">{getStringValue(item.name, '-')}</p>
+            </div>
+          ),
+        });
+      }
+      if (showChannel) {
+        cols.push({
+          id: 'serviceType',
+          label: t.management.iptv.table.serviceType,
+          headerClassName: 'hidden sm:table-cell',
+          cellClassName: 'hidden sm:table-cell',
+          render: (item) => <span className="text-xs font-bold text-slate-800 dark:text-slate-200">{getIptvServiceTypeLabel(item)}</span>,
+        });
+      }
+      cols.push(
+        {
+          id: 'phone',
+          label: t.management.iptv.table.phone,
+          headerClassName: 'hidden md:table-cell',
+          cellClassName: 'hidden md:table-cell',
+          render: (item) => <span className="text-xs font-mono text-slate-600 dark:text-slate-400">{getEntityValue(item, 'phone') || '-'}</span>,
+        },
+        {
+          id: 'platform',
+          label: t.management.iptv.table.provider,
+          render: (item) => <span className="text-xs font-medium text-slate-600 dark:text-slate-400">{getEntityValue(item, 'platform') || '-'}</span>,
+        },
+        {
+          id: 'billingCycle',
+          label: t.management.iptv.table.billingCycle,
+          headerClassName: 'hidden lg:table-cell',
+          cellClassName: 'hidden lg:table-cell',
+          render: (item) => <span className="text-xs font-medium text-slate-600 dark:text-slate-400">{getIptvBillingCycleLabel(item)}</span>,
+        },
+        {
+          id: 'host',
+          label: t.management.iptv.table.host,
+          render: (item) => <span className="text-xs font-mono text-slate-500">{getEntityValue(item, 'host') || '-'}</span>,
+        },
+        {
+          id: 'price',
+          label: t.management.iptv.table.price,
+          render: (item) => <span className="text-sm font-black text-slate-800 dark:text-slate-200">{formatCurrency(getNumberValue(item.price), state.currency, state.lang)}</span>,
+        },
+        {
+          id: 'cost',
+          label: t.management.iptv.table.cost,
+          render: (item) => <span className="text-sm font-black text-amber-600 dark:text-amber-400">{formatCurrency(getNumberValue(item.cost), state.currency, state.lang)}</span>,
+        },
+        {
+          id: 'status',
+          label: t.management.iptv.table.status,
+          render: (item) => (
+            <span className={`px-2 py-1 rounded-lg text-[10px] font-bold uppercase ${
+              item.status === 'active' ? 'bg-emerald-100 dark:bg-emerald-500/10 text-emerald-600' :
+              item.status === 'suspended' ? 'bg-amber-100 dark:bg-amber-500/10 text-amber-600' :
+              'bg-rose-100 dark:bg-rose-500/10 text-rose-600'
+            }`}>
+              {t.management.iptv.statuses[getStringValue(item.status)] || getStringValue(item.status)}
+            </span>
+          ),
+        },
+      );
+      return cols;
+    }
+
+    return [];
+  }, [
+    activeSubTab,
+    visibleColumns,
+    showName,
+    showChannel,
+    onlineStatuses,
+    isRTL,
+    state.currency,
+    state.lang,
+    t.management.iptv.table.name,
+    t.management.iptv.table.phone,
+    t.management.iptv.table.host,
+    t.management.iptv.table.provider,
+    t.management.iptv.table.billingCycle,
+    t.management.iptv.table.serviceType,
+    t.management.iptv.table.price,
+    t.management.iptv.table.cost,
+    t.management.iptv.table.status,
+    t.management.iptv.serviceTypes,
+    t.management.iptv.billingCycles,
+    t.management.iptv.statuses,
+    t.management.subscribers.statuses,
+  ]);
+
+  React.useEffect(() => {
+    localStorage.setItem('sas4_visible_columns', JSON.stringify(visibleColumns));
+  }, [visibleColumns]);
 
   const supplierSummary = useMemo(() => {
     const totalDebt = suppliers.reduce((sum, item) => sum + parseSupplierAmount(item['مدين']), 0);
@@ -445,12 +1218,141 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
 
   const subscriberSummary = useMemo(() => {
     const activeCount = subscribers.filter(isSubscriberActive).length;
-    const onlineCount = subscribers.filter(item => onlineStatuses[item.username] === true).length;
+    const onlineCount = subscribers.filter((item) => isSubscriberOnline(item)).length;
     const totalBalance = subscribers.reduce((sum, item) => sum + (parseFloat(item.balance || item['الرصيد المتبقي له'] || 0) || 0), 0);
     const debtCount = subscribers.filter(item => (parseFloat(item['عليه دين'] || 0) || 0) > 0).length;
 
     return { count: subscribers.length, activeCount, onlineCount, totalBalance, debtCount };
   }, [subscribers, onlineStatuses]);
+
+  const subscriberManagerOptions = useMemo(() => {
+    const fromState = (state.teamMembers || []).map((member) => ({
+      value: String(member.username || member['اسم الدخول'] || member.name || '').trim(),
+      label: String(member.name || member.username || member['اسم الدخول'] || '').trim(),
+    }));
+    const fromManagers = managers.map((manager) => ({
+      value: String(manager.username || manager['اسم الدخول'] || manager.name || '').trim(),
+      label: String(manager.name || manager.username || manager['اسم الدخول'] || '').trim(),
+    }));
+
+    return [...fromState, ...fromManagers].filter((option, index, array) => {
+      if (!option.value || !option.label) return false;
+      return array.findIndex((item) => item.value === option.value) === index;
+    });
+  }, [managers, state.teamMembers]);
+
+  const subscriberFieldHelp = useMemo<Record<string, string>>(() => ({
+    status: isRTL ? 'تحدد ما إذا كان الاشتراك مفعلاً أو موقوفًا أو منتهيًا داخل النظام.' : 'Controls whether the subscription is active, suspended, or expired in the system.',
+    subType: isRTL ? 'يحدد نوع الخدمة الأساسية مثل PPPoE أو Hotspot أو اشتراك ثابت. يؤثر على طريقة إنشاء السر في المايكروتيك.' : 'Defines the service type such as PPPoE, Hotspot, or a static subscription. It affects how the secret is created in MikroTik.',
+    plan: isRTL ? 'اختر الباقة من الباقات المعرفة مسبقًا. منها يتم أخذ السعر ومدة الانتهاء ووقت الانتهاء الافتراضي وخصائص الخدمة.' : 'Choose a predefined package. It provides the default price, duration, expiry time, and service settings.',
+    parent: isRTL ? 'يحدد المدير أو الوكيل المسؤول عن هذا المشترك إداريًا وماليًا.' : 'Assigns the manager or agent responsible for this subscriber administratively and financially.',
+    router: isRTL ? 'الراوتر أو الموقع الذي يرتبط به هذا المشترك ميدانيًا أو شبكيًا.' : 'The router or site this subscriber is associated with.',
+    group: isRTL ? 'تجميع منطقي للمشتركين حسب منطقة أو حملة أو تصنيف داخلي.' : 'A logical grouping for subscribers by area, campaign, or internal classification.',
+    expiry: isRTL ? 'تاريخ انتهاء الاشتراك. يملأ تلقائيًا من الباقة ويمكن تعديله يدويًا. إذا انتهى التاريخ يتوقف وصول المشترك للإنترنت تلقائيًا.' : 'Subscription expiry date. Filled from the package first and can be edited manually. When this date passes, internet access is automatically stopped.',
+    expiryTime: isRTL ? 'وقت انتهاء الخدمة خلال يوم الانتهاء. اختره من القوائم بالساعات والدقائق والثواني و ص/م أو AM/PM حسب لغة النظام.' : 'Service expiry time on the expiry day. Choose it from lists for hours, minutes, seconds, and AM/PM depending on the current language.',
+    firstName: isRTL ? 'الاسم الأول الحقيقي للمشترك كما تريد ظهوره في النظام.' : 'The subscriber real first name as shown inside the system.',
+    lastName: isRTL ? 'اسم العائلة أو الاسم الثاني للمشترك.' : 'The subscriber family or last name.',
+    username: isRTL ? 'اسم الدخول الفعلي إلى خدمة المايكروتيك.' : 'The actual username used to log in to the MikroTik service.',
+    password: isRTL ? 'كلمة المرور الفعلية التي يستخدمها المشترك للدخول.' : 'The actual password used by the subscriber to log in.',
+    mikrotikName: isRTL ? 'اسم لاتيني أو تعليق يظهر داخل المايكروتيك لتمييز المشترك هناك.' : 'A Latin display/comment name used to identify the subscriber inside MikroTik.',
+    phone: isRTL ? 'رقم هاتف المشترك للتواصل والرسائل.' : 'The subscriber phone number used for contact and messaging.',
+    idNumber: isRTL ? 'رقم الهوية أو الرقم الوطني إذا كنت تريد توثيق المشترك.' : 'National or identity number used to document the subscriber.',
+    email: isRTL ? 'البريد الإلكتروني للمراسلات والتنبيهات إن وجد.' : 'Email address for notifications and correspondence, if available.',
+    city: isRTL ? 'المدينة الرئيسية التي ينتمي لها المشترك.' : 'The main city this subscriber belongs to.',
+    location: isRTL ? 'الموقع أو الحي أو الوصف الجغرافي المختصر للمشترك.' : 'Area, location, or short geographic descriptor for the subscriber.',
+    balance: isRTL ? 'الرصيد الحالي سيأتي من النظام المالي ولا يعدل يدويًا هنا.' : 'Current balance will come from the financial system and is not edited here manually.',
+    debt: isRTL ? 'المديونية الحالية ستأتي من النظام المالي ولا تعدل يدويًا هنا.' : 'Current debt will come from the financial system and is not edited here manually.',
+    bill: isRTL ? 'قيمة الفاتورة الأساسية للمشترك، وعادةً تؤخذ من الباقة.' : 'Base bill value for the subscriber, usually taken from the selected package.',
+    rewardPoints: isRTL ? 'النقاط التشجيعية أو نقاط الولاء التي قد تستخدم لاحقًا.' : 'Reward or loyalty points that can be used later.',
+    litebeamIp: isRTL ? 'عنوان IP الخاص بجهاز اللايت بيم لدى المشترك.' : 'The LiteBeam device IP address for the subscriber.',
+    litebeamMac: isRTL ? 'عنوان MAC الخاص بجهاز اللايت بيم لدى المشترك.' : 'The LiteBeam device MAC address for the subscriber.',
+    address: isRTL ? 'العنوان التفصيلي للمشترك.' : 'The detailed address of the subscriber.',
+    notes: isRTL ? 'أي ملاحظات إدارية أو فنية تخص هذا المشترك.' : 'Any administrative or technical notes related to this subscriber.',
+  }), [isRTL]);
+
+  const subscriberHelpSections = useMemo(() => ([
+    {
+      title: isRTL ? 'معلومات الخدمة' : 'Service Details',
+      items: [
+        ['الحالة', subscriberFieldHelp.status],
+        [isRTL ? 'نوع الاشتراك' : 'Subscription Type', subscriberFieldHelp.subType],
+        [isRTL ? 'الباقة' : 'Plan', subscriberFieldHelp.plan],
+        [isRTL ? 'تابع إلى مدير' : 'Assigned Manager', subscriberFieldHelp.parent],
+        [isRTL ? 'الراوتر / الموقع' : 'Router / Site', subscriberFieldHelp.router],
+        [isRTL ? 'المجموعة' : 'Group', subscriberFieldHelp.group],
+        [isRTL ? 'تاريخ الانتهاء' : 'Expiry Date', subscriberFieldHelp.expiry],
+        [isRTL ? 'وقت الانتهاء' : 'Expiry Time', subscriberFieldHelp.expiryTime],
+      ],
+    },
+    {
+      title: isRTL ? 'الهوية والتواصل' : 'Identity & Contact',
+      items: [
+        [isRTL ? 'الاسم الأول' : 'First Name', subscriberFieldHelp.firstName],
+        [isRTL ? 'اسم العائلة' : 'Last Name', subscriberFieldHelp.lastName],
+        [isRTL ? 'اسم المستخدم' : 'Username', subscriberFieldHelp.username],
+        [isRTL ? 'كلمة المرور' : 'Password', subscriberFieldHelp.password],
+        [isRTL ? 'اسم العرض على المايكروتيك' : 'MikroTik Display Name', subscriberFieldHelp.mikrotikName],
+        [isRTL ? 'الهاتف' : 'Phone', subscriberFieldHelp.phone],
+        [isRTL ? 'الرقم الوطني' : 'National ID', subscriberFieldHelp.idNumber],
+        [isRTL ? 'البريد الإلكتروني' : 'Email', subscriberFieldHelp.email],
+        [isRTL ? 'المدينة' : 'City', subscriberFieldHelp.city],
+        [isRTL ? 'الحي / الموقع' : 'Area / Location', subscriberFieldHelp.location],
+        [isRTL ? 'العنوان' : 'Address', subscriberFieldHelp.address],
+      ],
+    },
+    {
+      title: isRTL ? 'المال والشبكة' : 'Finance & Network',
+      items: [
+        [isRTL ? 'الرصيد' : 'Balance', subscriberFieldHelp.balance],
+        [isRTL ? 'المديونية' : 'Debt', subscriberFieldHelp.debt],
+        [isRTL ? 'قيمة الفاتورة' : 'Bill Value', subscriberFieldHelp.bill],
+        [isRTL ? 'النقاط التشجيعية' : 'Reward Points', subscriberFieldHelp.rewardPoints],
+        [isRTL ? 'IP اللايت بيم' : 'LiteBeam IP', subscriberFieldHelp.litebeamIp],
+        [isRTL ? 'MAC اللايت بيم' : 'LiteBeam MAC', subscriberFieldHelp.litebeamMac],
+        [isRTL ? 'ملاحظات' : 'Notes', subscriberFieldHelp.notes],
+      ],
+    },
+  ]), [isRTL, subscriberFieldHelp]);
+
+  const subscriberFormState = useMemo<Record<string, unknown> | null>(() => {
+    if (subscriberWorkspaceMode === 'add') return newItem;
+    if (subscriberWorkspaceMode === 'edit' && editingItem) return editingItem;
+    return null;
+  }, [subscriberWorkspaceMode, newItem, editingItem]);
+
+  React.useEffect(() => {
+    setSubscriberWorkspaceMode('list');
+    setSubscriberPage(1);
+    setSubscriberQuickFilter('all');
+  }, [activeSubTab]);
+
+  React.useEffect(() => {
+    setSubscriberPage(1);
+  }, [subscriberQuickFilter]);
+
+  React.useEffect(() => {
+    if (!useSubscriberWorkspace) return;
+    loadNetworkProfiles();
+    loadRoutersForSubscriberForm();
+    loadSubscriberGroups();
+  }, [useSubscriberWorkspace]);
+
+  const setSubscriberFormField = (key: string, value: unknown, extra: Record<string, unknown> = {}) => {
+    if (subscriberWorkspaceMode === 'edit' && editingItem) {
+      setEditingItem((prev) => (prev ? { ...prev, [key]: value, ...extra } : prev));
+      return;
+    }
+    if (subscriberWorkspaceMode === 'add') {
+      setNewItem((prev) => ({ ...prev, [key]: value, ...extra }));
+    }
+  };
+
+  const closeSubscriberWorkspace = () => {
+    setSubscriberWorkspaceMode('list');
+    setEditingItem(null);
+    setNewItem({});
+    setIsSubscriberHelpOpen(false);
+  };
 
   const investorSummary = useMemo(() => {
     const totalShares = shareholders.reduce((sum, item) => sum + (Number(item.shares) || 0), 0);
@@ -469,9 +1371,225 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
   const iptvSummary = useMemo(() => {
     const activeCount = iptvSubscribers.filter(item => item.status === 'active').length;
     const totalRevenue = iptvSubscribers.reduce((sum, item) => sum + (Number(item.price) || 0), 0);
+    const totalCost = iptvSubscribers.reduce((sum, item) => sum + (Number(item.cost) || 0), 0);
     const suspendedCount = iptvSubscribers.filter(item => item.status === 'suspended').length;
-    return { count: iptvSubscribers.length, activeCount, totalRevenue, suspendedCount };
+    return { count: iptvSubscribers.length, activeCount, totalRevenue, totalCost, suspendedCount };
   }, [iptvSubscribers]);
+
+  const subscriberFilterFields = useMemo<AdvancedFilterField[]>(() => ([
+    {
+      key: 'status',
+      label: isRTL ? 'الحالة' : 'Status',
+      options: toUniqueOptions(subscribers.map((item) => getSubscriberStatusLabel(item)), isRTL ? 'الكل' : 'All'),
+    },
+    {
+      key: 'connection',
+      label: isRTL ? 'الاتصال' : 'Connection',
+      options: [
+        { value: 'all', label: isRTL ? 'الكل' : 'All' },
+        { value: 'online', label: isRTL ? 'متصل' : 'Online' },
+        { value: 'active_offline', label: isRTL ? 'فعال دون اتصال' : 'Active Offline' },
+        { value: 'offline', label: isRTL ? 'غير متصل' : 'Offline' },
+      ],
+    },
+    {
+      key: 'plan',
+      label: isRTL ? 'الباقة' : 'Plan',
+      options: toUniqueOptions(subscribers.map((item) => getSubscriberPlan(item)), isRTL ? 'كل الباقات' : 'All Plans'),
+    },
+    {
+      key: 'parent',
+      label: isRTL ? 'تابع إلى' : 'Parent',
+      options: toUniqueOptions(subscribers.map((item) => getSubscriberParent(item)), isRTL ? 'الكل' : 'All'),
+    },
+    {
+      key: 'group',
+      label: isRTL ? 'المجموعة' : 'Group',
+      options: toUniqueOptions(subscribers.map((item) => getSubscriberGroup(item)), isRTL ? 'الكل' : 'All'),
+    },
+    {
+      key: 'location',
+      label: isRTL ? 'الموقع' : 'Location',
+      options: toUniqueOptions(subscribers.map((item) => getSubscriberLocation(item)), isRTL ? 'كل المواقع' : 'All Locations'),
+    },
+    {
+      key: 'expiry',
+      label: isRTL ? 'تاريخ الانتهاء' : 'Expiry',
+      options: [
+        { value: 'all', label: isRTL ? 'الكل' : 'All' },
+        { value: 'expired', label: isRTL ? 'منتهي' : 'Expired' },
+        { value: 'today', label: isRTL ? 'ينتهي اليوم' : 'Expires Today' },
+        { value: 'three_days', label: isRTL ? 'خلال 3 أيام' : 'Within 3 Days' },
+        { value: 'seven_days', label: isRTL ? 'خلال 7 أيام' : 'Within 7 Days' },
+        { value: 'later', label: isRTL ? 'لاحقًا' : 'Later' },
+        { value: 'unknown', label: isRTL ? 'غير محدد' : 'Unknown' },
+      ],
+    },
+    {
+      key: 'debt',
+      label: isRTL ? 'الديون' : 'Debt',
+      options: [
+        { value: 'all', label: isRTL ? 'الكل' : 'All' },
+        { value: 'with_debt', label: isRTL ? 'عليه دين' : 'With Debt' },
+        { value: 'clear', label: isRTL ? 'بدون دين' : 'No Debt' },
+      ],
+    },
+    {
+      key: 'subType',
+      label: isRTL ? 'نوع الاشتراك' : 'Subscription Type',
+      options: toUniqueOptions(subscribers.map((item) => getSubscriberSubType(item)), isRTL ? 'الكل' : 'All'),
+    },
+  ]), [subscribers, isRTL, onlineStatuses]);
+
+  const supplierFilterFields = useMemo<AdvancedFilterField[]>(() => ([
+    {
+      key: 'debtState',
+      label: isRTL ? 'الديون' : 'Debt',
+      options: [
+        { value: 'all', label: isRTL ? 'الكل' : 'All' },
+        { value: 'has_debt', label: isRTL ? 'عليه دين' : 'Has Debt' },
+        { value: 'clear', label: isRTL ? 'بدون دين' : 'Clear' },
+      ],
+    },
+    {
+      key: 'balanceState',
+      label: isRTL ? 'الرصيد' : 'Balance',
+      options: [
+        { value: 'all', label: isRTL ? 'الكل' : 'All' },
+        { value: 'positive', label: isRTL ? 'رصيد موجب' : 'Positive' },
+        { value: 'negative', label: isRTL ? 'رصيد سالب' : 'Negative' },
+        { value: 'zero', label: isRTL ? 'رصيد صفري' : 'Zero' },
+      ],
+    },
+    {
+      key: 'noteState',
+      label: isRTL ? 'الملاحظات' : 'Notes',
+      options: [
+        { value: 'all', label: isRTL ? 'الكل' : 'All' },
+        { value: 'has_notes', label: isRTL ? 'لديه ملاحظات' : 'Has Notes' },
+        { value: 'no_notes', label: isRTL ? 'بلا ملاحظات' : 'No Notes' },
+      ],
+    },
+  ]), [isRTL]);
+
+  const shareholderFilterFields = useMemo<AdvancedFilterField[]>(() => ([
+    {
+      key: 'ownership',
+      label: isRTL ? 'نوع الملكية' : 'Ownership',
+      options: toUniqueOptions(shareholders.map((item) => getEntityValue(item, 'ownership')), isRTL ? 'الكل' : 'All'),
+    },
+    {
+      key: 'sharesState',
+      label: isRTL ? 'الأسهم' : 'Shares',
+      options: [
+        { value: 'all', label: isRTL ? 'الكل' : 'All' },
+        { value: 'high', label: isRTL ? 'مرتفعة' : 'High' },
+        { value: 'medium', label: isRTL ? 'متوسطة' : 'Medium' },
+        { value: 'low', label: isRTL ? 'منخفضة' : 'Low' },
+      ],
+    },
+    {
+      key: 'dividendsState',
+      label: isRTL ? 'الأرباح' : 'Dividends',
+      options: [
+        { value: 'all', label: isRTL ? 'الكل' : 'All' },
+        { value: 'has_dividends', label: isRTL ? 'لديه أرباح' : 'Has Dividends' },
+        { value: 'no_dividends', label: isRTL ? 'بدون أرباح' : 'No Dividends' },
+      ],
+    },
+  ]), [shareholders, isRTL]);
+
+  const managerFilterFields = useMemo<AdvancedFilterField[]>(() => ([
+    {
+      key: 'status',
+      label: isRTL ? 'الحالة' : 'Status',
+      options: [
+        { value: 'all', label: isRTL ? 'الكل' : 'All' },
+        { value: 'active', label: isRTL ? 'نشط' : 'Active' },
+        { value: 'inactive', label: isRTL ? 'غير نشط' : 'Inactive' },
+      ],
+    },
+    {
+      key: 'role',
+      label: isRTL ? 'الدور / المجموعة' : 'Role / Group',
+      options: toUniqueOptions(managers.map((item) => getManagerRole(item)), isRTL ? 'الكل' : 'All'),
+    },
+    {
+      key: 'parent',
+      label: isRTL ? 'تابع لـ' : 'Parent',
+      options: toUniqueOptions(managers.map((item) => getEntityValue(item, 'تابع لـ', 'parent')), isRTL ? 'الكل' : 'All'),
+    },
+    {
+      key: 'balanceState',
+      label: isRTL ? 'الرصيد' : 'Balance',
+      options: [
+        { value: 'all', label: isRTL ? 'الكل' : 'All' },
+        { value: 'positive', label: isRTL ? 'رصيد موجب' : 'Positive' },
+        { value: 'zero', label: isRTL ? 'رصيد صفري' : 'Zero' },
+      ],
+    },
+    {
+      key: 'limitState',
+      label: isRTL ? 'الحد المالي' : 'Tx Limit',
+      options: [
+        { value: 'all', label: isRTL ? 'الكل' : 'All' },
+        { value: 'limited', label: isRTL ? 'يوجد حد' : 'Limited' },
+        { value: 'unlimited', label: isRTL ? 'بدون حد' : 'Unlimited' },
+      ],
+    },
+  ]), [managers, isRTL]);
+
+  const iptvFilterFields = useMemo<AdvancedFilterField[]>(() => ([
+    {
+      key: 'status',
+      label: isRTL ? 'الحالة' : 'Status',
+      options: toUniqueOptions(iptvSubscribers.map((item) => getIptvStatusLabel(item)), isRTL ? 'الكل' : 'All'),
+    },
+    {
+      key: 'priceRange',
+      label: isRTL ? 'السعر' : 'Price',
+      options: [
+        { value: 'all', label: isRTL ? 'الكل' : 'All' },
+        { value: 'low', label: isRTL ? 'منخفض' : 'Low' },
+        { value: 'medium', label: isRTL ? 'متوسط' : 'Medium' },
+        { value: 'high', label: isRTL ? 'مرتفع' : 'High' },
+      ],
+    },
+    {
+      key: 'serviceType',
+      label: t.management.iptv.table.serviceType,
+      options: toUniqueOptions(iptvSubscribers.map((item) => getIptvServiceTypeLabel(item)), isRTL ? 'الكل' : 'All'),
+    },
+  ]), [iptvSubscribers, isRTL, t.management.iptv.table.serviceType, t.management.iptv.serviceTypes]);
+
+  const advancedFilterFields = useMemo<Record<ManagementSubTab, AdvancedFilterField[]>>(() => ({
+    subscribers: subscriberFilterFields,
+    suppliers: supplierFilterFields,
+    shareholders: shareholderFilterFields,
+    managers: managerFilterFields,
+    iptv: iptvFilterFields,
+    groups: [],
+  }), [subscriberFilterFields, supplierFilterFields, shareholderFilterFields, managerFilterFields, iptvFilterFields]);
+
+  const activeAdvancedFilterValues = activeSubTab === 'groups' ? {} : advancedFilters[activeSubTab];
+  const activeAdvancedFilterCount = Object.values(activeAdvancedFilterValues || {}).filter((value) => value && value !== 'all').length;
+  const setAdvancedFilterValue = (key: string, value: string) => {
+    if (activeSubTab === 'groups') return;
+    setAdvancedFilters((prev) => ({
+      ...prev,
+      [activeSubTab]: {
+        ...prev[activeSubTab],
+        [key]: value,
+      },
+    }));
+  };
+  const resetAdvancedFilters = () => {
+    if (activeSubTab === 'groups') return;
+    setAdvancedFilters((prev) => ({
+      ...prev,
+      [activeSubTab]: { ...DEFAULT_ADVANCED_FILTERS[activeSubTab] },
+    }));
+  };
 
   // Directors, Deputies, IPTV — Now live via API
   const [directors, setDirectors] = useState<DynamicItem[]>([]);
@@ -653,12 +1771,6 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
     return actions;
   };
   
-  // Close menu on click outside
-  React.useEffect(() => {
-    const handleClick = () => setOpenActionMenuId(null);
-    window.addEventListener('click', handleClick);
-    return () => window.removeEventListener('click', handleClick);
-  }, []);
   // ─── UNIFIED DATA FETCH (runs on sub-tab switch) ──────────────────────────────
   React.useEffect(() => {
     const loadData = async () => {
@@ -667,25 +1779,24 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
       try {
         if (activeSubTab === 'subscribers') {
           const subs = await fetchSubscribers();
-          if (subs && subs.length > 0) setSubscribers(subs);
+          if (subs && subs.length > 0) {
+            setSubscribers(subs);
+            void reconcileSubscribersMikrotikAccess(subs);
+          }
           else setApiError('القائمة فارغة أو يبدو أن الخادم لم يعثر على بيانات.');
         } else if (activeSubTab === 'suppliers') {
           const data = await fetchSuppliers();
-          if (data && data.length > 0) setSuppliers(data);
-          else setApiError('لم يتم العثور على موردين في قاعدة البيانات.');
+          setSuppliers(data || []);
         } else if (activeSubTab === 'shareholders') {
           const data = await fetchInvestors();
-          if (data && data.length > 0) setShareholders(data);
-          else setApiError('لم يتم العثور على مستثمرين في قاعدة البيانات.');
+          setShareholders(data || []);
         } else if (activeSubTab === 'managers') {
           const adminsRaw = await fetchManagersRaw();
           const safeAdmins = adminsRaw || [];
           setManagers(safeAdmins);
-          if (safeAdmins.length === 0) setApiError('لا يوجد طاقم إداري حالياً.');
         } else if (activeSubTab === 'iptv') {
           const data = await iptvApi.fetch();
-          if (data && data.length > 0) setIptvSubscribers(data);
-          else setApiError('لم يتم العثور على اشتراكات IPTV.');
+          setIptvSubscribers(data || []);
         }
       } catch (err: unknown) {
         console.error('Failed to load data', err);
@@ -724,7 +1835,7 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
           });
           
           setOnlineStatuses(newStatuses);
-          setLastStatusUpdate(new Date().toLocaleTimeString());
+          setLastStatusUpdate(formatTime());
           setFailedRouters(result.failedRouters || []);
           setOnlineNamesList(result.onlineUsers || []);
           setRouterDiagnostics(result.resultsPerRouter || {});
@@ -923,6 +2034,7 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
   };
 
   const openSyncModal = async (item: DynamicItem) => {
+    setSyncModalMode('single');
     setSyncingSubscriber(item);
     setSyncTarget('all');
     setSyncResult(null);
@@ -932,13 +2044,80 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
     setRoutersList(routers);
   };
 
+  const openBulkSyncModal = async () => {
+    setSyncModalMode('bulk');
+    setSyncingSubscriber(null);
+    setSyncTarget('all');
+    setSyncResult(null);
+    setIsSyncModalOpen(true);
+    const routers = await fetchRoutersList();
+    setRoutersList(routers);
+  };
+
+  const getBulkSyncTargets = () => {
+    const targets = subscribers.filter((item) => getSubscriberUsername(item).trim());
+    return {
+      targets,
+      skippedCount: subscribers.length - targets.length,
+    };
+  };
+
   const handleSyncSubscriber = async () => {
-    if (!syncingSubscriber) return;
+    const isBulkMode = syncModalMode === 'bulk';
+    if (isBulkMode) setIsBulkSyncingSubscribers(true);
     setIsSyncing(true);
     setSyncResult(null);
     try {
-      const res = await syncSubscriberToMikrotik(syncingSubscriber.id, syncTarget);
-      setSyncResult({ success: true, message: res.message, details: res.data });
+      if (syncModalMode === 'bulk') {
+        const { targets, skippedCount } = getBulkSyncTargets();
+
+        if (targets.length === 0) {
+          setSyncResult({
+            success: false,
+            message: isRTL ? 'لا يوجد مشتركون صالحون للمزامنة حالياً.' : 'There are no valid subscribers to sync right now.',
+            details: []
+          });
+          return;
+        }
+
+        let successCount = 0;
+        let failedCount = 0;
+
+        for (const item of targets) {
+          try {
+            await applySubscriberStatusToMikrotik(String(item.id || ''), item, syncTarget);
+            successCount += 1;
+          } catch (error) {
+            failedCount += 1;
+            console.error('Bulk subscriber sync failed', item.id, error);
+          }
+        }
+
+        const data = await fetchSubscribers();
+        setSubscribers(data);
+        setTimeout(() => pollStatus(false), 1500);
+
+        setSyncResult({
+          success: failedCount === 0,
+          message: failedCount > 0
+            ? (isRTL
+              ? `اكتملت المزامنة جزئياً. نجح ${successCount}، فشل ${failedCount}${skippedCount ? `، وتجاوز ${skippedCount}` : ''}.`
+              : `Bulk sync completed partially. Success: ${successCount}, Failed: ${failedCount}${skippedCount ? `, Skipped: ${skippedCount}` : ''}.`)
+            : (isRTL
+              ? `تمت مزامنة ${successCount} مشترك${skippedCount ? `، وتجاوز ${skippedCount} سجل غير صالح` : ''}.`
+              : `Synced ${successCount} subscribers${skippedCount ? `, skipped ${skippedCount} invalid record(s)` : ''}.`),
+          details: []
+        });
+        return;
+      }
+
+      if (!syncingSubscriber) return;
+      await applySubscriberStatusToMikrotik(String(syncingSubscriber.id || ''), syncingSubscriber, syncTarget);
+      setSyncResult({
+        success: true,
+        message: isRTL ? 'تمت مزامنة المشترك وتطبيق حالته بنجاح.' : 'Subscriber synced and status rules applied successfully.',
+        details: []
+      });
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : (isRTL ? 'فشلت المزامنة' : 'Sync failed');
       const details = typeof err === 'object' && err !== null && 'details' in err && Array.isArray((err as { details?: unknown[] }).details)
@@ -952,7 +2131,65 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
       });
     } finally {
       setIsSyncing(false);
+      if (isBulkMode) setIsBulkSyncingSubscribers(false);
     }
+  };
+
+  const applySubscriberStatusToMikrotik = async (subscriberId: string, payload: Record<string, unknown>, target: string = 'all') => {
+    const accessAction = getSubscriberMikrotikAccessAction(payload);
+    const username = getStringValue(payload.username ?? payload['اسم المستخدم'] ?? payload['اسم الدخول']);
+    if (!username) return;
+
+    if (accessAction === 'delete') {
+      await deleteSecret(username);
+      await disconnectSubscriber(username);
+      return;
+    }
+
+    await syncSubscriberToMikrotik(subscriberId, target);
+
+    if (accessAction === 'disable') {
+      await disableSecret(username);
+      await disconnectSubscriber(username);
+      return;
+    }
+
+    await enableSecret(username);
+  };
+
+  const reconcileSubscribersMikrotikAccess = async (items: DynamicItem[]) => {
+    const targets = items.filter((item) => {
+      const username = getSubscriberUsername(item).trim();
+      if (!username) return false;
+      return getSubscriberMikrotikAccessAction(item) !== 'enable';
+    });
+
+    await Promise.all(targets.map(async (item) => {
+      try {
+        await applySubscriberStatusToMikrotik(String(item.id || ''), item);
+      } catch (error) {
+        console.error('Failed to reconcile subscriber access state', item.id, error);
+      }
+    }));
+  };
+
+  const handleSyncAllSubscribers = async () => {
+    const { targets } = getBulkSyncTargets();
+    if (targets.length === 0) {
+      toastInfo(
+        isRTL ? 'لا يوجد مشتركون صالحون للمزامنة حالياً.' : 'There are no valid subscribers to sync right now.',
+        isRTL ? 'لا توجد بيانات' : 'Nothing To Sync'
+      );
+      return;
+    }
+    await openBulkSyncModal();
+  };
+
+  const closeSyncModal = () => {
+    setIsSyncModalOpen(false);
+    setSyncResult(null);
+    setSyncingSubscriber(null);
+    setSyncModalMode('single');
   };
 
   const loadMsgTemplates = async () => {
@@ -1035,6 +2272,15 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
         lastName: String(item.lastName || item['الاسم الثاني'] || ''),
         username: String(item.username || item['اسم الدخول'] || '')
       };
+    } else if (activeSubTab === 'subscribers') {
+      editObj = buildSubscriberPayload({
+        ...editObj,
+        firstname: String(item.firstname || item.firstName || item['الاسم الأول'] || ''),
+        lastname: String(item.lastname || item.lastName || item['اسم العائلة'] || ''),
+        username: String(item.username || item['اسم المستخدم'] || item['اسم الدخول'] || ''),
+        password: String(item.password || item['كلمة المرور'] || ''),
+        name: String(item.name || item['اسم العرض على المايكروتيك'] || item['الاسم الانجليزي'] || '')
+      });
     } else if (activeSubTab === 'suppliers') {
       editObj = {
         ...editObj,
@@ -1058,14 +2304,29 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
     }
     
     setEditingItem(editObj);
+    if (activeSubTab === 'subscribers') {
+      loadNetworkProfiles();
+      setSubscriberWorkspaceMode('edit');
+      return;
+    }
     setIsEditModalOpen(true);
-    if (activeSubTab === 'subscribers') loadNetworkProfiles();
   };
 
   const handleAdd = () => {
     let item: DynamicItem = { id: `${activeSubTab === 'shareholders' ? 'SH' : activeSubTab.substring(0, 3).toUpperCase()}-${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}` };
     if (activeSubTab === 'subscribers') {
-      item = { ...item, name: '', plan: '', status: 'active', expiry: new Date().toISOString().split('T')[0], balance: 0 };
+      item = buildSubscriberPayload({
+        ...item,
+        firstname: '',
+        lastname: '',
+        username: '',
+        password: '',
+        name: '',
+        plan: '',
+        status: 'active',
+        expiry: new Date().toISOString().split('T')[0],
+        balance: 0
+      });
       loadNetworkProfiles();
     } else if (activeSubTab === 'suppliers') {
       item = {
@@ -1092,9 +2353,28 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
     } else if (activeSubTab === 'managers') {
       item = { ...item, ...buildEmptyFromFields(MANAGER_FIELDS) };
     } else if (activeSubTab === 'iptv') {
-      item = { ...item, name: '', phone: '', host: 'iptv.netlink.ai', username: '', password: '', status: 'active', expiry: new Date().toISOString().split('T')[0], price: 0, platform: '', notes: '', channelNumber: '' };
+      item = {
+        ...item,
+        name: '',
+        serviceType: 'iptv',
+        platform: '',
+        host: '',
+        phone: '',
+        username: '',
+        password: '',
+        status: 'active',
+        billingCycle: 'monthly',
+        expiry: '',
+        price: 0,
+        cost: 0,
+        notes: '',
+      };
     }
     setNewItem(item);
+    if (activeSubTab === 'subscribers') {
+      setSubscriberWorkspaceMode('add');
+      return;
+    }
     setIsAddModalOpen(true);
   };
 
@@ -1102,7 +2382,17 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
     if (activeSubTab === 'subscribers') {
       try {
         setIsLoading(true);
-        await addSubscriber(newItem);
+        const payload = buildSubscriberPayload(newItem);
+        await addSubscriber(payload);
+        try {
+          await applySubscriberStatusToMikrotik(String(payload.id || ''), payload);
+        } catch (mikrotikError) {
+          console.error('Subscriber MikroTik status apply failed after add', mikrotikError);
+          toastInfo(
+            isRTL ? 'تم حفظ المشترك لكن تعذر تطبيق حالته على المايكروتيك تلقائياً.' : 'Subscriber saved, but MikroTik status could not be applied automatically.',
+            isRTL ? 'تنبيه مزامنة' : 'Sync Notice'
+          );
+        }
         const data = await fetchSubscribers();
         setSubscribers(data);
       } catch (err) {
@@ -1154,9 +2444,14 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
         setIsLoading(false);
       }
     } else if (activeSubTab === 'iptv') {
-      try { setIsLoading(true); await iptvApi.add(newItem); const data = await iptvApi.fetch(); if(data) setIptvSubscribers(data); } catch(err) { setApiError('Failed to add IPTV sub'); } finally { setIsLoading(false); }
+      try { setIsLoading(true); await iptvApi.add(newItem); const data = await iptvApi.fetch(); if(data) setIptvSubscribers(data); } catch(err) { setApiError(isRTL ? 'فشل إضافة الخدمة الرقمية' : 'Failed to add digital service'); } finally { setIsLoading(false); }
     }
-    setIsAddModalOpen(false);
+    if (activeSubTab === 'subscribers') {
+      closeSubscriberWorkspace();
+      setSubscriberPage(1);
+    } else {
+      setIsAddModalOpen(false);
+    }
     setShowSuccess(true);
     setTimeout(() => setShowSuccess(false), 3000);
   };
@@ -1207,7 +2502,7 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
           setIsLoading(false);
         }
       } else if (activeSubTab === 'iptv') {
-        try { setIsLoading(true); await iptvApi.remove(id); const data = await iptvApi.fetch(); if(data) setIptvSubscribers(data); } catch(err) { setApiError('Failed to delete IPTV sub'); } finally { setIsLoading(false); }
+        try { setIsLoading(true); await iptvApi.remove(id); const data = await iptvApi.fetch(); if(data) setIptvSubscribers(data); } catch(err) { setApiError(isRTL ? 'فشل حذف الخدمة الرقمية' : 'Failed to delete digital service'); } finally { setIsLoading(false); }
       }
       setDeleteCandidateId(null);
   };
@@ -1264,7 +2559,17 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
     if (activeSubTab === 'subscribers') {
       try {
         setIsLoading(true);
-        await updateSubscriber(editingItem.id, editingItem);
+        const payload = buildSubscriberPayload(editingItem);
+        await updateSubscriber(editingItem.id, payload);
+        try {
+          await applySubscriberStatusToMikrotik(String(editingItem.id || payload.id || ''), payload);
+        } catch (mikrotikError) {
+          console.error('Subscriber MikroTik status apply failed after update', mikrotikError);
+          toastInfo(
+            isRTL ? 'تم حفظ التعديل لكن تعذر تطبيق الحالة على المايكروتيك تلقائياً.' : 'Changes saved, but MikroTik status could not be applied automatically.',
+            isRTL ? 'تنبيه مزامنة' : 'Sync Notice'
+          );
+        }
         const data = await fetchSubscribers();
         setSubscribers(data);
       } catch (err) {
@@ -1319,10 +2624,14 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
         setIsLoading(false);
       }
     } else if (activeSubTab === 'iptv') {
-      try { setIsLoading(true); await iptvApi.update(editingItem.id, editingItem); const data = await iptvApi.fetch(); if(data) setIptvSubscribers(data); } catch(err) { setApiError('Failed to update IPTV sub'); } finally { setIsLoading(false); }
+      try { setIsLoading(true); await iptvApi.update(editingItem.id, editingItem); const data = await iptvApi.fetch(); if(data) setIptvSubscribers(data); } catch(err) { setApiError(isRTL ? 'فشل تعديل الخدمة الرقمية' : 'Failed to update digital service'); } finally { setIsLoading(false); }
     }
     
-    setIsEditModalOpen(false);
+    if (activeSubTab === 'subscribers') {
+      closeSubscriberWorkspace();
+    } else {
+      setIsEditModalOpen(false);
+    }
     setShowSuccess(true);
     setTimeout(() => setShowSuccess(false), 3000);
   };
@@ -1330,72 +2639,140 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
   const filteredData = () => {
     let data: DynamicItem[] = [];
     const getSubscriberSearchBlob = (subscriber: DynamicItem) => [
-      subscriber.name,
+      getSubscriberDisplayName(subscriber),
       subscriber.firstname,
       subscriber.lastname,
       subscriber['الاسم الأول'],
       subscriber['اسم العائلة'],
-      subscriber.username,
+      getSubscriberUsername(subscriber),
+      getSubscriberCode(subscriber),
       subscriber.phone,
       subscriber.address,
       subscriber['عنوان المشترك'],
-      subscriber.agent,
-      subscriber['الوكيل المسؤل'],
+      getSubscriberParent(subscriber),
       subscriber.notes,
     ].filter(Boolean).join(' ');
+    const getSupplierSearchBlob = (item: DynamicItem) => [getSupplierCode(item), getSupplierName(item), getSupplierNotes(item)].filter(Boolean).join(' ');
+    const getShareholderSearchBlob = (item: DynamicItem) => [getInvestorName(item), item.ownership, item.id].filter(Boolean).join(' ');
+    const getManagerSearchBlob = (item: DynamicItem) => [getManagerName(item), getEntityValue(item, 'username', 'اسم الدخول'), getManagerRole(item), getEntityValue(item, 'تابع لـ', 'parent')].filter(Boolean).join(' ');
+    const getIptvSearchBlob = (item: DynamicItem) => [
+      getIptvName(item),
+      getEntityValue(item, 'serviceType', 'type'),
+      getEntityValue(item, 'platform'),
+      getEntityValue(item, 'host'),
+      getEntityValue(item, 'username'),
+      getEntityValue(item, 'notes'),
+    ].filter(Boolean).join(' ');
+
+    const matchesAdvancedFilters = (item: DynamicItem) => {
+      if (activeSubTab === 'subscribers') {
+        const filters = advancedFilters.subscribers;
+        if (filters.status !== 'all' && getSubscriberStatusLabel(item) !== filters.status) return false;
+        if (filters.connection !== 'all' && getSubscriberConnectionState(item) !== filters.connection) return false;
+        if (filters.plan !== 'all' && getSubscriberPlan(item) !== filters.plan) return false;
+        if (filters.parent !== 'all' && getSubscriberParent(item) !== filters.parent) return false;
+        if (filters.group !== 'all' && getSubscriberGroup(item) !== filters.group) return false;
+        if (filters.location !== 'all' && getSubscriberLocation(item) !== filters.location) return false;
+        if (filters.expiry !== 'all' && getSubscriberExpiryBucket(item) !== filters.expiry) return false;
+        if (filters.debt === 'with_debt' && getSubscriberDebtValue(item) <= 0) return false;
+        if (filters.debt === 'clear' && getSubscriberDebtValue(item) > 0) return false;
+        if (filters.subType !== 'all' && getSubscriberSubType(item) !== filters.subType) return false;
+        if (subscriberQuickFilter === 'active' && !isSubscriberActive(item)) return false;
+        if (subscriberQuickFilter === 'online' && !isSubscriberOnline(item)) return false;
+        return true;
+      }
+      if (activeSubTab === 'suppliers') {
+        const filters = advancedFilters.suppliers;
+        const debtValue = parseSupplierAmount(item['مدين']);
+        const balanceValue = parseSupplierAmount(item['الرصيد']);
+        const hasNotes = Boolean(getSupplierNotes(item));
+        if (filters.debtState === 'has_debt' && debtValue <= 0) return false;
+        if (filters.debtState === 'clear' && debtValue > 0) return false;
+        if (filters.balanceState === 'positive' && balanceValue <= 0) return false;
+        if (filters.balanceState === 'negative' && balanceValue >= 0) return false;
+        if (filters.balanceState === 'zero' && Math.abs(balanceValue) > 0.0001) return false;
+        if (filters.noteState === 'has_notes' && !hasNotes) return false;
+        if (filters.noteState === 'no_notes' && hasNotes) return false;
+        return true;
+      }
+      if (activeSubTab === 'shareholders') {
+        const filters = advancedFilters.shareholders;
+        const sharesValue = Number(item.shares || 0);
+        const sharesBucket = getRelativeRangeBucket(sharesValue, shareholders.map((holder) => Number(holder.shares || 0)));
+        const hasDividends = Number(item.dividends || 0) > 0;
+        if (filters.ownership !== 'all' && String(item.ownership || '') !== filters.ownership) return false;
+        if (filters.sharesState !== 'all' && sharesBucket !== filters.sharesState) return false;
+        if (filters.dividendsState === 'has_dividends' && !hasDividends) return false;
+        if (filters.dividendsState === 'no_dividends' && hasDividends) return false;
+        return true;
+      }
+      if (activeSubTab === 'managers') {
+        const filters = advancedFilters.managers;
+        const balanceValue = Number(item.balance || item['الرصيد'] || 0);
+        const hasLimit = Boolean(item.isLimitEnabled || Number(item.maxTxLimit || item['الحد المالي']) > 0);
+        if (filters.status === 'active' && !isManagerActive(item)) return false;
+        if (filters.status === 'inactive' && isManagerActive(item)) return false;
+        if (filters.role !== 'all' && getManagerRole(item) !== filters.role) return false;
+        if (filters.parent !== 'all' && getEntityValue(item, 'تابع لـ', 'parent') !== filters.parent) return false;
+        if (filters.balanceState === 'positive' && balanceValue <= 0) return false;
+        if (filters.balanceState === 'zero' && balanceValue !== 0) return false;
+        if (filters.limitState === 'limited' && !hasLimit) return false;
+        if (filters.limitState === 'unlimited' && hasLimit) return false;
+        return true;
+      }
+      if (activeSubTab === 'iptv') {
+        const filters = advancedFilters.iptv;
+        const priceBucket = getRelativeRangeBucket(Number(item.price || 0), iptvSubscribers.map((entry) => Number(entry.price || 0)));
+        if (filters.status !== 'all' && getIptvStatusLabel(item) !== filters.status) return false;
+        if (filters.priceRange !== 'all' && priceBucket !== filters.priceRange) return false;
+        if (filters.serviceType !== 'all' && getIptvServiceTypeLabel(item) !== filters.serviceType) return false;
+        return true;
+      }
+      return true;
+    };
 
     if (activeSubTab === 'subscribers') {
       data = subscribers.filter(s => {
         const searchBlob = getSubscriberSearchBlob(s);
-        return smartMatch(searchTerm, searchBlob) || smartMatch(searchTerm, String(s.id));
+        return smartMatch(searchTerm, searchBlob) || smartMatch(searchTerm, getSubscriberCode(s));
       });
-      if (statusFilter !== 'all') {
-        data = data.filter(s => s.status === statusFilter);
-      }
     } else if (activeSubTab === 'suppliers') {
       data = suppliers.filter((s) => {
-        const values = SUPPLIER_FIELDS.map(f => String(s[f.key] || '')).join(' ');
+        const values = getSupplierSearchBlob(s);
         return smartMatch(searchTerm, values) || smartMatch(searchTerm, String(s.id));
       });
     } else if (activeSubTab === 'shareholders') {
-      data = shareholders.filter(s => smartMatch(searchTerm, s.name) || smartMatch(searchTerm, String(s.id)));
+      data = shareholders.filter(s => smartMatch(searchTerm, getShareholderSearchBlob(s)) || smartMatch(searchTerm, String(s.id)));
     } else if (activeSubTab === 'managers') {
-      data = managers.filter(s => 
-        smartMatch(searchTerm, s.name || s['الاسم الاول'] || s['الاسم الثاني'] || '') || 
-        smartMatch(searchTerm, s.username || s['اسم الدخول'] || '') || 
-        smartMatch(searchTerm, s.role || s['الصلاحية'] || '')
-      );
+      data = managers.filter(s => smartMatch(searchTerm, getManagerSearchBlob(s)));
     } else if (activeSubTab === 'iptv') {
-      data = iptvSubscribers.filter(s => smartMatch(searchTerm, s.name) || smartMatch(searchTerm, s.username));
+      data = iptvSubscribers.filter(s => smartMatch(searchTerm, getIptvSearchBlob(s)));
     } else {
       data = admins.filter((a) => {
         const values = MANAGER_FIELDS.map(f => String(a[f.key] || '')).join(' ');
         return smartMatch(searchTerm, values) || smartMatch(searchTerm, String(a.id));
       });
     }
+    data = data.filter(matchesAdvancedFilters);
     if (!searchTerm.trim()) return data;
 
     const getItemScore = (item: DynamicItem) => {
       if (activeSubTab === 'subscribers') {
         const searchBlob = getSubscriberSearchBlob(item);
-        return Math.max(getSmartMatchScore(searchTerm, searchBlob), getSmartMatchScore(searchTerm, String(item.id)));
+        return Math.max(getSmartMatchScore(searchTerm, searchBlob), getSmartMatchScore(searchTerm, getSubscriberCode(item)));
       }
       if (activeSubTab === 'suppliers') {
-        const values = SUPPLIER_FIELDS.map(f => String(item[f.key] || '')).join(' ');
+        const values = getSupplierSearchBlob(item);
         return Math.max(getSmartMatchScore(searchTerm, values), getSmartMatchScore(searchTerm, String(item.id)));
       }
       if (activeSubTab === 'shareholders') {
-        return Math.max(getSmartMatchScore(searchTerm, item.name), getSmartMatchScore(searchTerm, String(item.id)));
+        return Math.max(getSmartMatchScore(searchTerm, getShareholderSearchBlob(item)), getSmartMatchScore(searchTerm, String(item.id)));
       }
       if (activeSubTab === 'managers') {
-        return Math.max(
-          getSmartMatchScore(searchTerm, String(item.name || item['الاسم الاول'] || item['الاسم الثاني'] || '')), 
-          getSmartMatchScore(searchTerm, String(item.username || item['اسم الدخول'] || '')),
-          getSmartMatchScore(searchTerm, String(item.role || item['الصلاحية'] || ''))
-        );
+        return getSmartMatchScore(searchTerm, getManagerSearchBlob(item));
       }
       if (activeSubTab === 'iptv') {
-        return Math.max(getSmartMatchScore(searchTerm, item.name), getSmartMatchScore(searchTerm, item.username));
+        return getSmartMatchScore(searchTerm, getIptvSearchBlob(item));
       }
 
       const values = MANAGER_FIELDS.map(f => String(item[f.key] || '')).join(' ');
@@ -1405,8 +2782,26 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
     return [...data].sort((a, b) => getItemScore(b) - getItemScore(a));
   };
 
+  const filteredItems = useMemo(
+    () => filteredData(),
+    [activeSubTab, searchTerm, advancedFilters, subscriberQuickFilter, subscribers, suppliers, shareholders, managers, iptvSubscribers, onlineStatuses, isRTL]
+  );
 
-  const filteredItems = filteredData();
+  const subscriberPagedItems = useMemo(() => {
+    if (!useSubscriberWorkspace) return [] as DynamicItem[];
+    const start = (subscriberPage - 1) * subscriberPageSize;
+    return filteredItems.slice(start, start + subscriberPageSize);
+  }, [useSubscriberWorkspace, filteredItems, subscriberPage, subscriberPageSize]);
+
+  const subscriberTotalPages = useMemo(() => {
+    if (!useSubscriberWorkspace) return 1;
+    return Math.max(1, Math.ceil(filteredItems.length / subscriberPageSize));
+  }, [useSubscriberWorkspace, filteredItems.length, subscriberPageSize]);
+
+  React.useEffect(() => {
+    if (!useSubscriberWorkspace) return;
+    setSubscriberPage((current) => Math.min(current, Math.max(1, Math.ceil(filteredItems.length / subscriberPageSize))));
+  }, [useSubscriberWorkspace, filteredItems.length, subscriberPageSize]);
   return (
     <motion.div 
       key="management" 
@@ -1426,116 +2821,267 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
           </p>
         </div>
         
-        <div className="flex items-center gap-3">
-          <div className="relative w-64">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="relative w-72 max-w-full">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
             <input 
               type="text" 
-              placeholder={t.search.placeholder}
+              placeholder={
+                activeSubTab === 'subscribers'
+                  ? (isRTL ? 'ابحث بالاسم أو كود المستخدم أو اليوزرنيم...' : 'Search by name, code, or username...')
+                  : activeSubTab === 'suppliers'
+                    ? (isRTL ? 'ابحث باسم المورد أو الكود...' : 'Search by supplier name or code...')
+                    : activeSubTab === 'shareholders'
+                      ? (isRTL ? 'ابحث باسم المستثمر أو الرقم...' : 'Search by investor name or id...')
+                      : activeSubTab === 'managers'
+                        ? (isRTL ? 'ابحث بالاسم أو اسم الدخول أو الدور...' : 'Search by name, username, or role...')
+                        : (isRTL ? 'ابحث بالاسم أو اسم المستخدم...' : 'Search by name or username...')
+              }
               className="w-full bg-white dark:bg-[#09090B] border border-slate-200 dark:border-slate-800 rounded-xl pl-10 pr-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
           <button 
-            onClick={() => setShowFilters(!showFilters)}
-            className={`p-2.5 bg-white dark:bg-[#09090B] border rounded-xl transition-colors ${showFilters ? 'border-teal-500 text-teal-500' : 'border-slate-200 dark:border-slate-800 text-slate-500 hover:text-teal-500'}`}
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowFilters((prev) => !prev);
+            }}
+            className={`inline-flex items-center gap-2 px-3 py-2.5 bg-white dark:bg-[#09090B] border rounded-xl transition-colors ${showFilters ? 'border-teal-500 text-teal-500' : 'border-slate-200 dark:border-slate-800 text-slate-500 hover:text-teal-500'}`}
           >
             <Filter size={20} />
+            <span className="text-sm font-bold">{isRTL ? 'بحث متقدم' : 'Advanced Search'}</span>
+            {activeAdvancedFilterCount > 0 && (
+              <span className="min-w-6 h-6 px-2 rounded-full bg-teal-500 text-white text-xs font-black flex items-center justify-center">
+                {activeAdvancedFilterCount}
+              </span>
+            )}
           </button>
+          {(searchTerm.trim() || activeAdvancedFilterCount > 0) && (
+            <button
+              onClick={() => {
+                setSearchTerm('');
+                resetAdvancedFilters();
+              }}
+              className="inline-flex items-center gap-2 px-3 py-2.5 bg-white dark:bg-[#09090B] border border-slate-200 dark:border-slate-800 rounded-xl text-slate-500 hover:text-rose-500 transition-colors"
+            >
+              <X size={18} />
+              <span className="text-sm font-bold">{isRTL ? 'مسح البحث' : 'Clear Search'}</span>
+            </button>
+          )}
         </div>
       </header>
 
-      {/* Filters Panel - Only show relevant filters per tab */}
-      <AnimatePresence>
-        {showFilters && (
-          <motion.div 
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            className="overflow-hidden"
-          >
-            <div className="p-4 bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-2xl flex flex-col gap-4">
-              
-              {/* Dynamic Columns Configuration for Subscribers, Managers & Investors */}
-              {(activeSubTab === 'subscribers' || activeSubTab === 'suppliers' || activeSubTab === 'managers' || activeSubTab === 'shareholders') && (
-                <div className="w-full">
-                  <div className="flex justify-between items-center mb-3">
-                    <h4 className="text-sm font-bold text-slate-700 dark:text-slate-300">
-                      {isRTL ? 'الأعمدة المرئية:' : 'Visible Columns:'}
-                    </h4>
-                    <div className="flex gap-3 text-xs">
-                      <button 
-                        onClick={() => {
-                          const columns = activeSubTab === 'subscribers' ? SUBSCRIBER_COLUMNS :
-                                         activeSubTab === 'suppliers' ? SUPPLIER_COLUMNS :
-                                         activeSubTab === 'managers' ? MANAGER_COLUMNS : INVESTOR_COLUMNS;
-                          const next = { ...visibleColumns };
-                          columns.forEach(col => next[col.id] = true);
-                          setVisibleColumns(next);
-                        }}
-                        className="text-teal-600 dark:text-teal-400 hover:text-teal-700 font-bold transition-colors"
-                      >
-                        {isRTL ? 'تحديد الكل' : 'Select All'}
-                      </button>
-                      <button 
-                        onClick={() => {
-                          const columns = activeSubTab === 'subscribers' ? SUBSCRIBER_COLUMNS :
-                                         activeSubTab === 'suppliers' ? SUPPLIER_COLUMNS :
-                                         activeSubTab === 'managers' ? MANAGER_COLUMNS : INVESTOR_COLUMNS;
-                          const next = { ...visibleColumns };
-                          columns.forEach(col => next[col.id] = false);
-                          setVisibleColumns(next);
-                        }}
-                        className="text-rose-600 hover:text-rose-700 font-bold transition-colors"
-                      >
-                        {isRTL ? 'إلغاء الكل' : 'Clear All'}
-                      </button>
-                    </div>
-                  </div>
-                  
-                  <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
-                    {(activeSubTab === 'subscribers' ? SUBSCRIBER_COLUMNS :
-                      activeSubTab === 'suppliers' ? SUPPLIER_COLUMNS :
-                      activeSubTab === 'managers' ? MANAGER_COLUMNS : INVESTOR_COLUMNS).map(col => (
-                      <label key={col.id} className="flex items-center gap-2 text-xs font-semibold text-slate-600 dark:text-slate-400 cursor-pointer select-none">
-                        <input 
-                          type="checkbox" 
-                          checked={visibleColumns[col.id] || false} 
-                          onChange={(e) => setVisibleColumns({ ...visibleColumns, [col.id]: e.target.checked })} 
-                          className="rounded text-teal-500 focus:ring-teal-500 w-4 h-4 bg-white dark:bg-[#09090B] border-slate-300 dark:border-slate-700" 
-                        />
-                        <span className="truncate" title={col.label}>{col.label}</span>
-                      </label>
-                    ))}
-                  </div>
+      {/* Floating Advanced Search */}
+      {showFilters && createPortal(
+          <div className="fixed inset-0 z-[10050] flex items-center justify-center p-4 md:p-6">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowFilters(false)}
+              className="absolute inset-0 bg-slate-950/55 backdrop-blur-sm"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.96, y: 12 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96, y: 12 }}
+              onClick={(e) => e.stopPropagation()}
+              className="relative w-full max-w-[min(72rem,calc(100vw-2rem))] md:max-w-[min(72rem,calc(100vw-6rem))] max-h-[85vh] bg-white dark:bg-[#09090B] border border-slate-200 dark:border-slate-800 rounded-[2rem] shadow-2xl overflow-hidden"
+            >
+              <div className="p-5 md:p-6 border-b border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/40 flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+                <div>
+                  <h4 className="text-lg font-black text-slate-900 dark:text-white">
+                    {isRTL ? 'البحث المتقدم' : 'Advanced Search'}
+                  </h4>
+                  <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                    {isRTL ? 'نافذة فلترة مريحة حسب طبيعة هذا التبويب بدون التأثير على القائمة الرئيسية.' : 'Comfortable tab-aware filtering without affecting the main list layout.'}
+                  </p>
                 </div>
-              )}
-
-              {/* Toggles for other tabs - ONLY render if not subscribers, suppliers, managers, or investors */}
-              {activeSubTab !== 'subscribers' && activeSubTab !== 'suppliers' && activeSubTab !== 'managers' && activeSubTab !== 'shareholders' && (
-                <div className="flex flex-wrap gap-4">
-                  <div className="flex items-center gap-4">
-                    <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 cursor-pointer">
-                      <input type="checkbox" checked={showName} onChange={(e) => setShowName(e.target.checked)} className="rounded text-teal-500 focus:ring-teal-500" />
-                      {isRTL ? 'إظهار الاسم' : 'Show Name'}
-                    </label>
-                  </div>
-                  {activeSubTab === 'iptv' && (
-                    <div className="flex items-center gap-4">
-                      <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 cursor-pointer">
-                        <input type="checkbox" checked={showChannel} onChange={(e) => setShowChannel(e.target.checked)} className="rounded text-teal-500 focus:ring-teal-500" />
-                        {isRTL ? 'إظهار رقم القناة' : 'Show Channel Number'}
-                      </label>
-                    </div>
+                <div className="flex flex-wrap items-center gap-3">
+                  <span className="px-3 py-1.5 rounded-full bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-bold">
+                    {isRTL ? `${filteredItems.length} نتيجة` : `${filteredItems.length} results`}
+                  </span>
+                  {activeAdvancedFilterCount > 0 && (
+                    <span className="px-3 py-1.5 rounded-full bg-teal-500/10 text-teal-700 dark:text-teal-300 text-xs font-bold border border-teal-500/20">
+                      {isRTL ? `${activeAdvancedFilterCount} فلاتر نشطة` : `${activeAdvancedFilterCount} active filters`}
+                    </span>
                   )}
+                  <button
+                    onClick={resetAdvancedFilters}
+                    className="px-3 py-2 rounded-xl text-sm font-bold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-500/10 transition-colors"
+                  >
+                    {isRTL ? 'إعادة ضبط الفلاتر' : 'Reset Filters'}
+                  </button>
+                  <button
+                    onClick={() => setShowFilters(false)}
+                    className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-white dark:bg-[#111114] border border-slate-200 dark:border-slate-800 text-slate-500 hover:text-rose-500 transition-colors"
+                  >
+                    <X size={18} />
+                  </button>
                 </div>
-              )}
+              </div>
 
-            </div>
-          </motion.div>
+              <div className="max-h-[calc(85vh-5.5rem)] overflow-y-auto custom-scrollbar p-5 md:p-6 space-y-5">
+                {activeAdvancedFilterCount > 0 && activeSubTab !== 'groups' && (
+                  <div className="flex flex-wrap gap-2">
+                    {advancedFilterFields[activeSubTab].map((field) => {
+                      const value = activeAdvancedFilterValues[field.key];
+                      if (!value || value === 'all') return null;
+                      const label = field.options.find((option) => option.value === value)?.label || value;
+                      return (
+                        <button
+                          key={field.key}
+                          onClick={() => setAdvancedFilterValue(field.key, 'all')}
+                          className="inline-flex items-center gap-2 px-3 py-2 rounded-full bg-teal-500/10 text-teal-700 dark:text-teal-300 text-xs font-bold border border-teal-500/20"
+                        >
+                          <span>{field.label}: {label}</span>
+                          <X size={12} />
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {activeSubTab !== 'groups' && advancedFilterFields[activeSubTab].length > 0 && (
+                  <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/20 p-4 md:p-5">
+                    <div className="mb-4">
+                      <h5 className="text-sm font-black text-slate-800 dark:text-slate-200">
+                        {isRTL ? 'خيارات الفلترة' : 'Filter Options'}
+                      </h5>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                        {isRTL ? 'يمكنك اختيار خيار واحد أو عدة خيارات ثم إغلاق النافذة ومتابعة التصفح بشكل مريح.' : 'Choose one or more options, then close the window and continue browsing comfortably.'}
+                      </p>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                      {advancedFilterFields[activeSubTab].map((field) => (
+                        <div key={field.key} className="space-y-2">
+                          <label className="text-xs font-black text-slate-600 dark:text-slate-400">{field.label}</label>
+                          <select
+                            value={activeAdvancedFilterValues[field.key] || 'all'}
+                            onChange={(e) => setAdvancedFilterValue(field.key, e.target.value)}
+                            className="w-full bg-white dark:bg-[#09090B] border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                          >
+                            {field.options.map((option) => (
+                              <option key={`${field.key}-${option.value}`} value={option.value}>
+                                {option.label}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {(activeSubTab === 'subscribers' || activeSubTab === 'suppliers' || activeSubTab === 'managers' || activeSubTab === 'shareholders') && (
+                  <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/70 dark:bg-slate-950/30">
+                    <button
+                      onClick={() => setShowColumnControls((prev) => !prev)}
+                      className="w-full flex items-center justify-between gap-3 px-4 md:px-5 py-4 text-right"
+                    >
+                      <div>
+                        <h5 className="text-sm font-black text-slate-800 dark:text-slate-200">
+                          {isRTL ? 'الأعمدة المرئية' : 'Visible Columns'}
+                        </h5>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                          {isRTL ? 'افتح هذا القسم فقط إذا أردت تخصيص الجدول.' : 'Open this section only if you want to customize the table.'}
+                        </p>
+                      </div>
+                      <span className="text-xs font-bold text-teal-600 dark:text-teal-400">
+                        {showColumnControls ? (isRTL ? 'إخفاء' : 'Hide') : (isRTL ? 'إظهار' : 'Show')}
+                      </span>
+                    </button>
+
+                    <AnimatePresence initial={false}>
+                      {showColumnControls && (
+                        <motion.div
+                          initial={{ height: 0, opacity: 0 }}
+                          animate={{ height: 'auto', opacity: 1 }}
+                          exit={{ height: 0, opacity: 0 }}
+                          className="overflow-hidden"
+                        >
+                          <div className="px-4 md:px-5 pb-5 border-t border-slate-200 dark:border-slate-800 space-y-4">
+                            <div className="flex justify-end gap-3 text-xs pt-4">
+                              <button 
+                                onClick={() => {
+                                  const columns = activeSubTab === 'subscribers' ? SUBSCRIBER_COLUMNS :
+                                                 activeSubTab === 'suppliers' ? SUPPLIER_COLUMNS :
+                                                 activeSubTab === 'managers' ? MANAGER_COLUMNS : INVESTOR_COLUMNS;
+                                  const next = { ...visibleColumns };
+                                  columns.forEach(col => next[col.id] = true);
+                                  setVisibleColumns(next);
+                                }}
+                                className="text-teal-600 dark:text-teal-400 hover:text-teal-700 font-bold transition-colors"
+                              >
+                                {isRTL ? 'تحديد الكل' : 'Select All'}
+                              </button>
+                              <button 
+                                onClick={() => {
+                                  const columns = activeSubTab === 'subscribers' ? SUBSCRIBER_COLUMNS :
+                                                 activeSubTab === 'suppliers' ? SUPPLIER_COLUMNS :
+                                                 activeSubTab === 'managers' ? MANAGER_COLUMNS : INVESTOR_COLUMNS;
+                                  const next = { ...visibleColumns };
+                                  columns.forEach(col => next[col.id] = false);
+                                  setVisibleColumns(next);
+                                }}
+                                className="text-rose-600 hover:text-rose-700 font-bold transition-colors"
+                              >
+                                {isRTL ? 'إلغاء الكل' : 'Clear All'}
+                              </button>
+                            </div>
+
+                            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
+                              {(activeSubTab === 'subscribers' ? SUBSCRIBER_COLUMNS :
+                                activeSubTab === 'suppliers' ? SUPPLIER_COLUMNS :
+                                activeSubTab === 'managers' ? MANAGER_COLUMNS : INVESTOR_COLUMNS).map(col => (
+                                <label key={col.id} className="flex items-center gap-2 text-xs font-semibold text-slate-600 dark:text-slate-400 cursor-pointer select-none">
+                                  <input 
+                                    type="checkbox" 
+                                    checked={visibleColumns[col.id] || false} 
+                                    onChange={(e) => setVisibleColumns({ ...visibleColumns, [col.id]: e.target.checked })} 
+                                    className="rounded text-teal-500 focus:ring-teal-500 w-4 h-4 bg-white dark:bg-[#09090B] border-slate-300 dark:border-slate-700" 
+                                  />
+                                  <span className="truncate" title={col.label}>{col.label}</span>
+                                </label>
+                              ))}
+                            </div>
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                )}
+
+                {activeSubTab !== 'subscribers' && activeSubTab !== 'suppliers' && activeSubTab !== 'managers' && activeSubTab !== 'shareholders' && (
+                  <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/20 p-4 md:p-5">
+                    <h5 className="text-sm font-black text-slate-800 dark:text-slate-200 mb-4">
+                      {isRTL ? 'خيارات العرض' : 'Display Options'}
+                    </h5>
+                    <div className="flex flex-wrap gap-4">
+                      <div className="flex items-center gap-4">
+                        <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 cursor-pointer">
+                          <input type="checkbox" checked={showName} onChange={(e) => setShowName(e.target.checked)} className="rounded text-teal-500 focus:ring-teal-500" />
+                          {isRTL ? 'إظهار الاسم' : 'Show Name'}
+                        </label>
+                      </div>
+                      {activeSubTab === 'iptv' && (
+                        <div className="flex items-center gap-4">
+                          <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 cursor-pointer">
+                            <input type="checkbox" checked={showChannel} onChange={(e) => setShowChannel(e.target.checked)} className="rounded text-teal-500 focus:ring-teal-500" />
+                            {isRTL ? 'إظهار نوع الخدمة' : 'Show Service Type'}
+                          </label>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          </div>,
+          document.body
         )}
-      </AnimatePresence>
 
       {/* Sub-Tabs Navigation */}
       <div className="flex overflow-x-auto custom-scrollbar gap-2 p-1 bg-slate-100 dark:bg-[#18181B] rounded-2xl border border-slate-200 dark:border-slate-800 w-full shrink-0">
@@ -1596,7 +3142,7 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
       </div>
 
       {/* Main List Area */}
-      <div className="flex-1 glass-card overflow-hidden flex flex-col border border-slate-200/50 dark:border-slate-800/50">
+      <div className="flex-1 min-h-0 glass-card overflow-hidden flex flex-col border border-slate-200/50 dark:border-slate-800/50">
         <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center bg-slate-50/50 dark:bg-slate-900/50">
           <h3 className="font-bold text-slate-800 dark:text-slate-200">
             {activeSubTab === 'subscribers' && t.management.subscribers.title}
@@ -1613,15 +3159,26 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
            (activeSubTab === 'managers' && (hasPermission('manage_admins') || state.role === 'super_admin')) ? (
             <div className="flex items-center gap-2">
               {activeSubTab === 'subscribers' && (
-                <button
-                  onClick={handleDisconnectAll}
-                  disabled={isStatusLoading}
-                  className="flex items-center gap-2 px-4 py-2 bg-rose-500/10 text-rose-600 hover:bg-rose-600 hover:text-white border border-rose-500/20 rounded-xl transition-all font-bold text-sm"
-                  title={isRTL ? 'طرد جميع المشتركين المتصلين' : 'Disconnect all active subscribers'}
-                >
-                  <Power size={18} />
-                  <span>{isRTL ? 'طرد الجميع' : 'Disconnect All'}</span>
-                </button>
+                <>
+                  <button
+                    onClick={handleDisconnectAll}
+                    disabled={isStatusLoading || isBulkSyncingSubscribers}
+                    className="flex items-center gap-2 px-4 py-2 bg-rose-500/10 text-rose-600 hover:bg-rose-600 hover:text-white border border-rose-500/20 rounded-xl transition-all font-bold text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                    title={isRTL ? 'طرد جميع المشتركين المتصلين' : 'Disconnect all active subscribers'}
+                  >
+                    <Power size={18} />
+                    <span>{isRTL ? 'طرد الجميع' : 'Disconnect All'}</span>
+                  </button>
+                  <button
+                    onClick={handleSyncAllSubscribers}
+                    disabled={isBulkSyncingSubscribers || isStatusLoading}
+                    className="flex items-center gap-2 px-4 py-2 bg-indigo-500/10 text-indigo-600 hover:bg-indigo-600 hover:text-white border border-indigo-500/20 rounded-xl transition-all font-bold text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                    title={isRTL ? 'مزامنة جميع المشتركين مع المايكروتيك وفق الحالة والانتهاء' : 'Sync all subscribers to MikroTik according to status and expiry rules'}
+                  >
+                    {isBulkSyncingSubscribers ? <RefreshCw size={18} className="animate-spin" /> : <Zap size={18} />}
+                    <span>{isBulkSyncingSubscribers ? (isRTL ? 'جاري مزامنة الجميع...' : 'Syncing All...') : (isRTL ? 'مزامنة الجميع' : 'Sync All')}</span>
+                  </button>
+                </>
               )}
               <button 
                 onClick={handleAdd}
@@ -1728,8 +3285,455 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
             <SecurityGroupsTab state={state} setState={setState} />
           </div>
         ) : (
-          <div className="flex-1 overflow-auto custom-scrollbar">
-            {activeSubTab === 'subscribers' && (
+          <div className="flex-1 min-h-0 overflow-auto custom-scrollbar">
+            {useSubscriberWorkspace && (
+              <div className="p-4 md:p-6 space-y-6">
+                {subscriberWorkspaceMode === 'list' ? (
+                  <>
+                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+                      <button
+                        type="button"
+                        onClick={() => setSubscriberQuickFilter('all')}
+                        className={`rounded-2xl border p-4 text-start transition-all ${subscriberQuickFilter === 'all' ? 'border-teal-300 dark:border-teal-500/30 bg-teal-50/80 dark:bg-teal-500/10 ring-1 ring-teal-200/70 dark:ring-teal-500/20' : 'border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#101014]'}`}
+                      >
+                        <p className="text-[11px] font-black text-slate-500 uppercase tracking-widest">{isRTL ? 'إجمالي المشتركين' : 'Subscribers'}</p>
+                        <p className="mt-2 text-2xl font-black text-slate-900 dark:text-white">{formatNumber(subscriberSummary.count)}</p>
+                        <p className="mt-1 text-[10px] font-bold text-slate-400">{isRTL ? 'انقر لعرض الجميع' : 'Click to show all'}</p>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSubscriberQuickFilter('active')}
+                        className={`rounded-2xl border p-4 text-start transition-all ${subscriberQuickFilter === 'active' ? 'border-emerald-300 dark:border-emerald-500/30 bg-emerald-50/80 dark:bg-emerald-500/10 ring-1 ring-emerald-200/70 dark:ring-emerald-500/20' : 'border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#101014]'}`}
+                      >
+                        <p className="text-[11px] font-black text-slate-500 uppercase tracking-widest">{isRTL ? 'النشطون' : 'Active'}</p>
+                        <p className="mt-2 text-xl font-black text-emerald-600 dark:text-emerald-400">{formatNumber(subscriberSummary.activeCount)}</p>
+                        <p className="mt-1 text-[10px] font-bold text-slate-400">{isRTL ? 'انقر لعرض النشطين فقط' : 'Click to show active only'}</p>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSubscriberQuickFilter('online')}
+                        className={`rounded-2xl border p-4 text-start transition-all ${subscriberQuickFilter === 'online' ? 'border-blue-300 dark:border-blue-500/30 bg-blue-50/80 dark:bg-blue-500/10 ring-1 ring-blue-200/70 dark:ring-blue-500/20' : 'border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#101014]'}`}
+                      >
+                        <p className="text-[11px] font-black text-slate-500 uppercase tracking-widest">{isRTL ? 'المتصلون الآن' : 'Online Now'}</p>
+                        <p className="mt-2 text-xl font-black text-blue-600 dark:text-blue-400">{formatNumber(subscriberSummary.onlineCount)}</p>
+                        <p className="mt-1 text-[10px] font-bold text-slate-400">{isRTL ? 'انقر لعرض المتصلين الآن' : 'Click to show online only'}</p>
+                      </button>
+                      <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#101014] p-4">
+                        <p className="text-[11px] font-black text-slate-500 uppercase tracking-widest">{isRTL ? 'إجمالي الرصيد' : 'Total Balance'}</p>
+                        <p className="mt-2 text-xl font-black text-amber-600 dark:text-amber-400">{formatCurrency(subscriberSummary.totalBalance, state.currency, state.lang, 2)}</p>
+                      </div>
+                    </div>
+
+                    <div className="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#101014] overflow-hidden">
+                      <div className="p-4 md:p-5 border-b border-slate-200 dark:border-slate-800 flex flex-col xl:flex-row xl:items-center justify-between gap-4">
+                        <div>
+                          <h4 className="text-lg font-black text-slate-900 dark:text-white">
+                            {isRTL ? 'لوحة إدارة المشتركين' : 'Subscriber Operations Console'}
+                          </h4>
+                          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                            {isRTL ? 'واجهة تشغيل احترافية لإدارة المشتركين مع فرز سريع وصفحات وإجراءات مباشرة وواضحة.' : 'Professional subscriber operations workspace with quick filters, pagination, and clear direct actions.'}
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-3">
+                          <SystemClockBadge state={state} compact />
+                          <label className="text-xs font-bold text-slate-500 dark:text-slate-400">
+                            {isRTL ? 'إظهار' : 'Show'}
+                          </label>
+                          <select
+                            value={subscriberPageSize}
+                            onChange={(e) => {
+                              setSubscriberPageSize(Number(e.target.value));
+                              setSubscriberPage(1);
+                            }}
+                            className="bg-white dark:bg-[#09090B] border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-sm font-bold"
+                          >
+                            {[10, 20, 50, 100].map((size) => (
+                              <option key={size} value={size}>{size}</option>
+                            ))}
+                          </select>
+                          <span className="text-xs font-bold text-slate-500 dark:text-slate-400">
+                            {isRTL ? 'في الصفحة' : 'per page'}
+                          </span>
+                        </div>
+                      </div>
+
+                      {subscriberPagedItems.length === 0 ? (
+                        <div className="p-10 text-center">
+                          <Users size={32} className="mx-auto text-slate-300 mb-3" />
+                          <p className="text-sm font-bold text-slate-500 dark:text-slate-400">
+                            {isRTL ? 'لا يوجد مشتركون حاليًا. ابدأ بإضافة أول مشترك بشكل نظيف.' : 'No subscribers yet. Start by adding the first clean subscriber.'}
+                          </p>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="overflow-x-auto">
+                            <table dir={isRTL ? 'rtl' : 'ltr'} className={`w-full border-collapse ${isRTL ? 'text-right' : 'text-left'}`}>
+                              <thead className="bg-slate-50/80 dark:bg-slate-900/60 border-b border-slate-200 dark:border-slate-800">
+                                <tr>
+                                  <th className="px-4 py-4 text-xs font-black text-slate-500 uppercase">{isRTL ? 'المعرف' : 'ID'}</th>
+                                  <th className="px-4 py-4 text-xs font-black text-slate-500 uppercase">{isRTL ? 'الاسم الأول' : 'First Name'}</th>
+                                  <th className="px-4 py-4 text-xs font-black text-slate-500 uppercase">{isRTL ? 'اسم العائلة' : 'Last Name'}</th>
+                                  <th className="px-4 py-4 text-xs font-black text-slate-500 uppercase">{isRTL ? 'اسم المستخدم' : 'Username'}</th>
+                                  <th className="px-4 py-4 text-xs font-black text-slate-500 uppercase">{isRTL ? 'الهاتف' : 'Phone'}</th>
+                                  <th className="px-4 py-4 text-xs font-black text-slate-500 uppercase">{isRTL ? 'الباقة' : 'Plan'}</th>
+                                  <th className="px-4 py-4 text-xs font-black text-slate-500 uppercase">{isRTL ? 'المدير' : 'Manager'}</th>
+                                  <th className="px-4 py-4 text-xs font-black text-slate-500 uppercase">{isRTL ? 'الحالة' : 'Status'}</th>
+                                  <th className="px-4 py-4 text-xs font-black text-slate-500 uppercase">{isRTL ? 'الاتصال' : 'Connection'}</th>
+                                  <th className="px-4 py-4 text-xs font-black text-slate-500 uppercase">{isRTL ? 'الانتهاء' : 'Expiry'}</th>
+                                  <th className="px-4 py-4 text-xs font-black text-slate-500 uppercase">{isRTL ? 'الرصيد' : 'Balance'}</th>
+                                  <th className="px-4 py-4 text-xs font-black text-slate-500 uppercase"></th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                                {subscriberPagedItems.map((item, index, items) => (
+                                  <tr
+                                    key={item.id}
+                                    onDoubleClick={() => handleEdit(item)}
+                                    className="hover:bg-slate-50/50 dark:hover:bg-slate-800/20 transition-colors cursor-pointer"
+                                    title={isRTL ? 'انقر مرتين لتحرير بيانات المشترك' : 'Double click to edit subscriber'}
+                                  >
+                                    <td className="px-4 py-4 font-mono text-xs text-slate-500">{getSubscriberCode(item) || '-'}</td>
+                                    <td className="px-4 py-4 text-sm font-bold text-slate-900 dark:text-white">{getSubscriberFirstName(item) || '-'}</td>
+                                    <td className="px-4 py-4 text-sm font-bold text-slate-900 dark:text-white">{getSubscriberLastName(item) || '-'}</td>
+                                    <td className="px-4 py-4 text-xs font-mono text-slate-600 dark:text-slate-300">{getSubscriberUsername(item) || '-'}</td>
+                                    <td className="px-4 py-4 text-xs font-mono text-slate-600 dark:text-slate-300">{getSubscriberPhone(item) || '-'}</td>
+                                    <td className="px-4 py-4 text-xs text-slate-700 dark:text-slate-300">{getSubscriberPlan(item) || '-'}</td>
+                                    <td className="px-4 py-4 text-xs text-slate-700 dark:text-slate-300">{getSubscriberParent(item) || '-'}</td>
+                                    <td className="px-4 py-4">
+                                      <span className={`inline-flex px-2 py-1 rounded-lg text-[10px] font-black ${getSubscriberStatusClass(item)}`}>
+                                        {getSubscriberStatusLabel(item)}
+                                      </span>
+                                    </td>
+                                    <td className="px-4 py-4">
+                                      <span className={`inline-flex px-2 py-1 rounded-lg text-[10px] font-black ${isSubscriberOnline(item) ? 'bg-emerald-500/10 text-emerald-600' : 'bg-slate-200/70 dark:bg-slate-800 text-slate-500'}`}>
+                                        {isSubscriberOnline(item) ? (isRTL ? 'متصل' : 'Online') : (isRTL ? 'غير متصل' : 'Offline')}
+                                      </span>
+                                    </td>
+                                    <td className="px-4 py-4 text-xs font-mono text-slate-500">{getSubscriberExpiryValue(item) || '-'}</td>
+                                    <td className="px-4 py-4">
+                                      <span className={`inline-flex px-2 py-1 rounded-lg text-[10px] font-black ${getSubscriberBalanceClass(item)}`}>
+                                        {formatCurrency(getNumberValue(item.balance ?? item['الرصيد المتبقي له']), state.currency, state.lang, 2)}
+                                      </span>
+                                    </td>
+                                    <td className="px-4 py-4 text-right relative z-[30]">
+                                      <SmartActionMenu
+                                        item={item}
+                                        actions={getActions(item)}
+                                        isOpen={openActionMenuId === item.id}
+                                        onToggle={() => setOpenActionMenuId(openActionMenuId === item.id ? null : item.id)}
+                                        isRTL={isRTL}
+                                        isLastRows={items.length > 4 && index >= items.length - 2}
+                                      />
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+
+                          <div className="p-4 border-t border-slate-200 dark:border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                            <p className="text-xs font-bold text-slate-500 dark:text-slate-400">
+                              {isRTL
+                                ? `عرض ${(subscriberPage - 1) * subscriberPageSize + 1}-${Math.min(subscriberPage * subscriberPageSize, filteredItems.length)} من ${filteredItems.length}`
+                                : `Showing ${(subscriberPage - 1) * subscriberPageSize + 1}-${Math.min(subscriberPage * subscriberPageSize, filteredItems.length)} of ${filteredItems.length}`}
+                            </p>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <button type="button" onClick={() => setSubscriberPage(1)} disabled={subscriberPage === 1} className="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-bold disabled:opacity-40">{isRTL ? 'الأولى' : 'First'}</button>
+                              <button type="button" onClick={() => setSubscriberPage((page) => Math.max(1, page - 1))} disabled={subscriberPage === 1} className="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-bold disabled:opacity-40">{isRTL ? 'السابق' : 'Prev'}</button>
+                              <span className="px-3 py-2 text-xs font-black text-slate-700 dark:text-slate-200">
+                                {subscriberPage} / {subscriberTotalPages}
+                              </span>
+                              <button type="button" onClick={() => setSubscriberPage((page) => Math.min(subscriberTotalPages, page + 1))} disabled={subscriberPage === subscriberTotalPages} className="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-bold disabled:opacity-40">{isRTL ? 'التالي' : 'Next'}</button>
+                              <button type="button" onClick={() => setSubscriberPage(subscriberTotalPages)} disabled={subscriberPage === subscriberTotalPages} className="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-bold disabled:opacity-40">{isRTL ? 'الأخيرة' : 'Last'}</button>
+                            </div>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </>
+                ) : (
+                  <div className="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#101014] overflow-hidden">
+                    <div className="p-5 md:p-6 border-b border-slate-200 dark:border-slate-800 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                      <div>
+                        <h4 className="text-xl font-black text-slate-900 dark:text-white">
+                          {subscriberWorkspaceMode === 'add'
+                            ? (isRTL ? 'إضافة مشترك جديد' : 'Add New Subscriber')
+                            : (isRTL ? 'تفاصيل المشترك وتحريره' : 'Subscriber Details & Edit')}
+                        </h4>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                          {isRTL ? 'صفحة مستقلة منظمة بدل النافذة المنبثقة، مع ربط الحقول بالخدمات المرتبطة.' : 'Organized standalone page instead of a modal, with service-linked fields.'}
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-3">
+                        <SystemClockBadge state={state} compact />
+                        <button
+                          type="button"
+                          onClick={() => setIsSubscriberHelpOpen((open) => !open)}
+                          className="px-4 py-2.5 rounded-xl border border-teal-200 dark:border-teal-500/20 bg-teal-50/80 dark:bg-teal-500/10 text-sm font-bold text-teal-700 dark:text-teal-300"
+                        >
+                          {isSubscriberHelpOpen ? (isRTL ? 'إخفاء الدليل' : 'Hide Guide') : (isRTL ? 'دليل الحقول' : 'Field Guide')}
+                        </button>
+                        <button type="button" onClick={closeSubscriberWorkspace} className="px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 text-sm font-bold text-slate-600 dark:text-slate-300">
+                          {isRTL ? 'العودة إلى الجدول' : 'Back to Table'}
+                        </button>
+                      </div>
+                    </div>
+
+                    {subscriberFormState && (
+                      <div className="p-5 md:p-6 space-y-8">
+                        {isSubscriberHelpOpen && (
+                          <div className="rounded-3xl border border-teal-200/70 dark:border-teal-500/20 bg-teal-50/70 dark:bg-teal-500/5 p-5 space-y-4">
+                            <div className="flex items-center gap-3">
+                              <CircleHelp size={18} className="text-teal-600 dark:text-teal-400" />
+                              <div>
+                                <h5 className="text-sm font-black text-slate-900 dark:text-white">{isRTL ? 'دليل الحقول' : 'Field Guide'}</h5>
+                                <p className="text-xs text-slate-600 dark:text-slate-400">
+                                  {isRTL ? 'هذا الدليل يشرح وظيفة كل خانة حتى يكون استخدام النظام سهلاً لأي مدير أو موظف جديد.' : 'This guide explains each field so the system stays easy for any new manager or staff member.'}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+                              {subscriberHelpSections.map((section) => (
+                                <div key={section.title} className="rounded-2xl border border-white/70 dark:border-slate-800 bg-white/80 dark:bg-[#101014] p-4 space-y-3">
+                                  <h6 className="text-sm font-black text-slate-900 dark:text-white">{section.title}</h6>
+                                  <div className="space-y-3">
+                                    {section.items.map(([title, description]) => (
+                                      <div key={title}>
+                                        <p className="text-xs font-black text-slate-700 dark:text-slate-200">{title}</p>
+                                        <p className="mt-1 text-[11px] leading-5 text-slate-500 dark:text-slate-400">{description}</p>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                          <div className="space-y-4">
+                            <h5 className="text-sm font-black text-slate-800 dark:text-slate-200">{isRTL ? 'معلومات الخدمة' : 'Service Details'}</h5>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              <div className="space-y-2">
+                                <FieldHelpLabel label={isRTL ? 'الحالة' : 'Status'} helpText={subscriberFieldHelp.status} isRTL={isRTL} />
+                                <select value={String(subscriberFormState.status || 'active')} onChange={(e) => setSubscriberFormField('status', e.target.value)} className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm">
+                                  <option value="active">{t.management.subscribers.statuses.active}</option>
+                                  <option value="suspended">{t.management.subscribers.statuses.suspended}</option>
+                                  <option value="expired">{t.management.subscribers.statuses.expired}</option>
+                                </select>
+                              </div>
+                              <div className="space-y-2">
+                                <FieldHelpLabel label={isRTL ? 'نوع الاشتراك' : 'Subscription Type'} helpText={subscriberFieldHelp.subType} isRTL={isRTL} />
+                                <select value={String(subscriberFormState.subType || subscriberFormState['نوع الاشتراك'] || 'pppoe')} onChange={(e) => setSubscriberFormField('subType', e.target.value, { 'نوع الاشتراك': e.target.value })} className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm">
+                                  <option value="pppoe">PPPoE</option>
+                                  <option value="hotspot">Hotspot</option>
+                                  <option value="static">Static</option>
+                                </select>
+                              </div>
+                              <div className="space-y-2 md:col-span-2">
+                                <FieldHelpLabel label={isRTL ? 'الباقة' : 'Plan'} helpText={subscriberFieldHelp.plan} isRTL={isRTL} />
+                                <select
+                                  value={String(subscriberFormState.plan || subscriberFormState['سرعة الخط'] || '')}
+                                  onChange={(e) => {
+                                    const selected = networkProfiles.find((p: NetworkProfile) => p.name === e.target.value);
+                                    let subType = String(subscriberFormState.subType || subscriberFormState['نوع الاشتراك'] || 'pppoe');
+                                    if (selected && (selected.type === 'hotspot' || selected.type === 'both')) subType = 'hotspot';
+                                    if (selected && selected.type === 'pppoe') subType = 'pppoe';
+                                    setSubscriberFormField('plan', e.target.value, {
+                                      'سرعة الخط': e.target.value,
+                                      subType,
+                                      'نوع الاشتراك': subType,
+                                    });
+                                    applySubscriberPlanDefaults(selected || null);
+                                  }}
+                                  className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm"
+                                >
+                                  <option value="">{isRTL ? '-- اختر الباقة --' : '-- Select Plan --'}</option>
+                                  {networkProfiles.map((profile: NetworkProfile) => (
+                                    <option key={profile.id} value={profile.name}>
+                                      {profile.name}{profile.price ? ` — ${profile.price} ILS` : ''}
+                                    </option>
+                                  ))}
+                                </select>
+                                <div className="flex flex-wrap items-center justify-between gap-2">
+                                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                                    {isRTL ? 'السعر ووقت/تاريخ الانتهاء يُطبقان أوليًا من إعدادات الباقة، ثم يمكن تعديلهما يدويًا.' : 'Price and expiry date/time are applied from the package first, then can be adjusted manually.'}
+                                  </p>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const selected = networkProfiles.find((p: NetworkProfile) => p.name === String(subscriberFormState.plan || subscriberFormState['سرعة الخط'] || ''));
+                                      applySubscriberPlanDefaults(selected || null);
+                                    }}
+                                    disabled={!String(subscriberFormState.plan || subscriberFormState['سرعة الخط'] || '')}
+                                    className="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 text-[11px] font-black text-teal-600 dark:text-teal-400 disabled:opacity-40"
+                                  >
+                                    {isRTL ? 'تطبيق إعدادات الباقة' : 'Apply Package Defaults'}
+                                  </button>
+                                </div>
+                              </div>
+                              <div className="space-y-2 md:col-span-2">
+                                <FieldHelpLabel label={isRTL ? 'تابع إلى مدير' : 'Assigned Manager'} helpText={subscriberFieldHelp.parent} isRTL={isRTL} />
+                                <select value={String(subscriberFormState.parent || subscriberFormState['الوكيل المسؤل'] || '')} onChange={(e) => setSubscriberFormField('parent', e.target.value, { 'الوكيل المسؤل': e.target.value })} className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm">
+                                  <option value="">{isRTL ? '-- اختر المدير --' : '-- Select Manager --'}</option>
+                                  {subscriberManagerOptions.map((option) => (
+                                    <option key={option.value} value={option.value}>{option.label}</option>
+                                  ))}
+                                </select>
+                              </div>
+                              <div className="space-y-2">
+                                <FieldHelpLabel label={isRTL ? 'الراوتر / الموقع' : 'Router / Site'} helpText={subscriberFieldHelp.router} isRTL={isRTL} />
+                                <select
+                                  value={String(subscriberFormState.routerId || subscriberFormState.location || subscriberFormState.site || '')}
+                                  onChange={(e) => setSubscriberFormField('routerId', e.target.value, { location: e.target.value, site: e.target.value })}
+                                  className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm"
+                                >
+                                  <option value="">{isRTL ? '-- اختر الراوتر --' : '-- Select Router --'}</option>
+                                  {routersList.map((router: RouterRecord) => (
+                                    <option key={router.id} value={router.id}>
+                                      {router.name || router.host || router.id}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+                              <div className="space-y-2">
+                                <FieldHelpLabel label={isRTL ? 'المجموعة' : 'Group'} helpText={subscriberFieldHelp.group} isRTL={isRTL} />
+                                <select
+                                  value={String(subscriberFormState.group || subscriberFormState.groupName || subscriberFormState['اسم المجموعة'] || '')}
+                                  onChange={(e) => setSubscriberFormField('group', e.target.value, { groupName: e.target.value, 'اسم المجموعة': e.target.value })}
+                                  className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm"
+                                >
+                                  <option value="">{isRTL ? '-- اختر المجموعة --' : '-- Select Group --'}</option>
+                                  {subscriberGroupOptions.map((groupName) => (
+                                    <option key={groupName} value={groupName}>{groupName}</option>
+                                  ))}
+                                </select>
+                              </div>
+                              <div className="space-y-2">
+                                <FieldHelpLabel label={isRTL ? 'تاريخ الانتهاء' : 'Expiry Date'} helpText={subscriberFieldHelp.expiry} isRTL={isRTL} />
+                                <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                                  {isRTL ? 'الصيغة المقبولة: YYYY-MM-DD مثل 2026-08-03' : 'Accepted format: YYYY-MM-DD, for example 2026-08-03'}
+                                </p>
+                                <DateInput value={String(subscriberFormState.expiry || '')} onChange={(val) => setSubscriberFormField('expiry', val)} className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm" />
+                              </div>
+                              <div className="space-y-2">
+                                <FieldHelpLabel label={isRTL ? 'وقت الانتهاء' : 'Expiry Time'} helpText={subscriberFieldHelp.expiryTime} isRTL={isRTL} />
+                                <TimeSelectInput
+                                  value={String(subscriberFormState.expiry_time || subscriberFormState['وقت الانتهاء'] || '23:59:59')}
+                                  onChange={(nextValue) => setSubscriberFormField('expiry_time', nextValue, { 'وقت الانتهاء': nextValue })}
+                                  isRTL={isRTL}
+                                />
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="space-y-4">
+                            <h5 className="text-sm font-black text-slate-800 dark:text-slate-200">{isRTL ? 'بيانات الدخول والهوية' : 'Identity & Access'}</h5>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              <div className="space-y-2">
+                                <FieldHelpLabel label={isRTL ? 'الاسم الأول' : 'First Name'} helpText={subscriberFieldHelp.firstName} isRTL={isRTL} />
+                                <input type="text" value={String(subscriberFormState.firstname || subscriberFormState['الاسم الأول'] || '')} onChange={(e) => setSubscriberFormField('firstname', e.target.value, { 'الاسم الأول': e.target.value })} className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm" />
+                              </div>
+                              <div className="space-y-2">
+                                <FieldHelpLabel label={isRTL ? 'اسم العائلة' : 'Last Name'} helpText={subscriberFieldHelp.lastName} isRTL={isRTL} />
+                                <input type="text" value={String(subscriberFormState.lastname || subscriberFormState['اسم العائلة'] || '')} onChange={(e) => setSubscriberFormField('lastname', e.target.value, { 'اسم العائلة': e.target.value })} className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm" />
+                              </div>
+                              <div className="space-y-2">
+                                <FieldHelpLabel label={isRTL ? 'اسم المستخدم' : 'Username'} helpText={subscriberFieldHelp.username} isRTL={isRTL} />
+                                <input type="text" value={String(subscriberFormState.username || subscriberFormState['اسم المستخدم'] || '')} onChange={(e) => setSubscriberFormField('username', e.target.value, { 'اسم المستخدم': e.target.value, 'اسم الدخول': e.target.value })} className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm font-mono" />
+                              </div>
+                              <div className="space-y-2">
+                                <FieldHelpLabel label={isRTL ? 'كلمة المرور' : 'Password'} helpText={subscriberFieldHelp.password} isRTL={isRTL} />
+                                <input type="text" value={String(subscriberFormState.password || subscriberFormState['كلمة المرور'] || '')} onChange={(e) => setSubscriberFormField('password', e.target.value, { 'كلمة المرور': e.target.value })} className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm font-mono" />
+                              </div>
+                              <div className="space-y-2 md:col-span-2">
+                                <FieldHelpLabel label={isRTL ? 'اسم العرض على المايكروتيك' : 'MikroTik Display Name'} helpText={subscriberFieldHelp.mikrotikName} isRTL={isRTL} />
+                                <input type="text" value={String(subscriberFormState.name || subscriberFormState['اسم العرض على المايكروتيك'] || '')} onChange={(e) => setSubscriberFormField('name', e.target.value, { 'اسم العرض على المايكروتيك': e.target.value })} className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm" />
+                              </div>
+                              <div className="space-y-2">
+                                <FieldHelpLabel label={isRTL ? 'الهاتف' : 'Phone'} helpText={subscriberFieldHelp.phone} isRTL={isRTL} />
+                                <input type="text" inputMode="tel" lang="en" value={String(subscriberFormState.phone || subscriberFormState['رقم الموبايل'] || '')} onChange={(e) => setSubscriberFormField('phone', normalizeDigits(e.target.value), { 'رقم الموبايل': normalizeDigits(e.target.value) })} className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm font-mono" />
+                              </div>
+                              <div className="space-y-2">
+                                <FieldHelpLabel label={isRTL ? 'الرقم الوطني' : 'National ID'} helpText={subscriberFieldHelp.idNumber} isRTL={isRTL} />
+                                <input type="text" inputMode="numeric" lang="en" value={String(subscriberFormState.idNumber || subscriberFormState['رقم الهوية'] || '')} onChange={(e) => setSubscriberFormField('idNumber', normalizeDigits(e.target.value), { 'رقم الهوية': normalizeDigits(e.target.value) })} className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm font-mono" />
+                              </div>
+                              <div className="space-y-2">
+                                <FieldHelpLabel label={isRTL ? 'البريد الإلكتروني' : 'Email'} helpText={subscriberFieldHelp.email} isRTL={isRTL} />
+                                <input type="email" value={String(subscriberFormState.email || '')} onChange={(e) => setSubscriberFormField('email', e.target.value)} className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm" />
+                              </div>
+                              <div className="space-y-2">
+                                <FieldHelpLabel label={isRTL ? 'المدينة' : 'City'} helpText={subscriberFieldHelp.city} isRTL={isRTL} />
+                                <input type="text" value={String(subscriberFormState.city || subscriberFormState['المدينة'] || '')} onChange={(e) => setSubscriberFormField('city', e.target.value, { 'المدينة': e.target.value })} className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm" />
+                              </div>
+                              <div className="space-y-2">
+                                <FieldHelpLabel label={isRTL ? 'الحي / الموقع' : 'Area / Location'} helpText={subscriberFieldHelp.location} isRTL={isRTL} />
+                                <input type="text" value={String(subscriberFormState.location || '')} onChange={(e) => setSubscriberFormField('location', e.target.value)} className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm" />
+                              </div>
+                              <div className="space-y-2">
+                                <FieldHelpLabel label={isRTL ? 'العنوان' : 'Address'} helpText={subscriberFieldHelp.address} isRTL={isRTL} />
+                                <input type="text" value={String(subscriberFormState.address || subscriberFormState['عنوان المشترك'] || '')} onChange={(e) => setSubscriberFormField('address', e.target.value, { 'عنوان المشترك': e.target.value })} className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm" />
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="space-y-4">
+                          <h5 className="text-sm font-black text-slate-800 dark:text-slate-200">{isRTL ? 'التفاصيل المالية والشبكية' : 'Financial & Network Details'}</h5>
+                          <div className="rounded-2xl border border-blue-200/70 dark:border-blue-500/20 bg-blue-50/70 dark:bg-blue-500/5 p-4">
+                            <p className="text-xs font-black text-blue-700 dark:text-blue-300">
+                              {isRTL ? 'الرصيد والمديونية سيتم ربطهما بالنظام المالي. القيم هنا للعرض فقط وتبدأ من الصفر عند إنشاء المشترك.' : 'Balance and debt will be linked to the financial system. Values here are display-only and start from zero for a new subscriber.'}
+                            </p>
+                          </div>
+                          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+                            <div className="space-y-2">
+                              <FieldHelpLabel label={isRTL ? 'الرصيد' : 'Balance'} helpText={subscriberFieldHelp.balance} isRTL={isRTL} />
+                              <input type="text" inputMode="decimal" lang="en" readOnly value={String(subscriberFormState.balance || subscriberFormState['الرصيد المتبقي له'] || '0')} className="w-full bg-slate-100 dark:bg-[#111114] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm font-mono text-slate-500 dark:text-slate-400 cursor-not-allowed" />
+                            </div>
+                            <div className="space-y-2">
+                              <FieldHelpLabel label={isRTL ? 'المديونية' : 'Debt'} helpText={subscriberFieldHelp.debt} isRTL={isRTL} />
+                              <input type="text" inputMode="decimal" lang="en" readOnly value={String(subscriberFormState.debt || subscriberFormState['عليه دين'] || '0')} className="w-full bg-slate-100 dark:bg-[#111114] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm font-mono text-slate-500 dark:text-slate-400 cursor-not-allowed" />
+                            </div>
+                            <div className="space-y-2">
+                              <FieldHelpLabel label={isRTL ? 'قيمة الفاتورة' : 'Bill Value'} helpText={subscriberFieldHelp.bill} isRTL={isRTL} />
+                              <input type="text" inputMode="decimal" lang="en" value={String(subscriberFormState.bill || subscriberFormState['قيمة الفاتورة'] || '0')} onChange={(e) => setSubscriberFormField('bill', normalizeDigits(e.target.value), { 'قيمة الفاتورة': normalizeDigits(e.target.value) })} className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm font-mono" />
+                            </div>
+                            <div className="space-y-2">
+                              <FieldHelpLabel label={isRTL ? 'النقاط التشجيعية' : 'Reward Points'} helpText={subscriberFieldHelp.rewardPoints} isRTL={isRTL} />
+                              <input type="text" inputMode="numeric" lang="en" value={String(subscriberFormState.rewardPoints || subscriberFormState['النقاط التشجيعية'] || '0')} onChange={(e) => setSubscriberFormField('rewardPoints', normalizeDigits(e.target.value), { 'النقاط التشجيعية': normalizeDigits(e.target.value) })} className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm font-mono" />
+                            </div>
+                            <div className="space-y-2">
+                              <FieldHelpLabel label={isRTL ? 'IP اللايت بيم' : 'LiteBeam IP'} helpText={subscriberFieldHelp.litebeamIp} isRTL={isRTL} />
+                              <input type="text" value={String(subscriberFormState.ip || subscriberFormState.ip_litebeam || '')} onChange={(e) => setSubscriberFormField('ip', e.target.value, { ip_litebeam: e.target.value })} className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm font-mono" />
+                            </div>
+                            <div className="space-y-2">
+                              <FieldHelpLabel label={isRTL ? 'MAC اللايت بيم' : 'LiteBeam MAC'} helpText={subscriberFieldHelp.litebeamMac} isRTL={isRTL} />
+                              <input type="text" value={String(subscriberFormState.mac || subscriberFormState.mac_litebeam || '')} onChange={(e) => setSubscriberFormField('mac', e.target.value, { mac_litebeam: e.target.value })} className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm font-mono" />
+                            </div>
+                            <div className="space-y-2 xl:col-span-4">
+                              <FieldHelpLabel label={isRTL ? 'ملاحظات' : 'Notes'} helpText={subscriberFieldHelp.notes} isRTL={isRTL} />
+                              <textarea value={String(subscriberFormState.notes || subscriberFormState['ملاحظات اخرى'] || '')} onChange={(e) => setSubscriberFormField('notes', e.target.value, { 'ملاحظات اخرى': e.target.value })} rows={4} className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm resize-none" />
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex flex-wrap items-center justify-end gap-3 pt-2 border-t border-slate-200 dark:border-slate-800">
+                          <button type="button" onClick={closeSubscriberWorkspace} className="px-5 py-2.5 text-sm font-bold text-slate-600 dark:text-slate-400">
+                            {isRTL ? 'إلغاء' : 'Cancel'}
+                          </button>
+                          <button type="button" onClick={subscriberWorkspaceMode === 'add' ? handleSaveAdd : handleSave} className="px-8 py-2.5 bg-teal-500 hover:bg-teal-600 text-white rounded-xl text-sm font-bold shadow-lg shadow-teal-500/20 flex items-center gap-2">
+                            <Save size={18} />
+                            {subscriberWorkspaceMode === 'add' ? (isRTL ? 'حفظ المشترك' : 'Save Subscriber') : (isRTL ? 'حفظ التعديلات' : 'Save Changes')}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {activeSubTab === 'subscribers' && !useSubscriberWorkspace && (
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 p-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-900/30">
                 <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#101014] p-4">
                   <div className="flex items-center justify-between">
@@ -1775,7 +3779,7 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
                 <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#101014] p-4">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-[11px] font-black text-slate-500 uppercase tracking-widest">{isRTL ? 'إجمالي اشتراكات IPTV' : 'IPTV Subscribers'}</p>
+                      <p className="text-[11px] font-black text-slate-500 uppercase tracking-widest">{isRTL ? 'إجمالي الخدمات' : 'Digital Services'}</p>
                       <p className="mt-2 text-2xl font-black text-slate-900 dark:text-white">{formatNumber(iptvSummary.count)}</p>
                     </div>
                     <PieChart className="text-teal-500" size={24} />
@@ -1793,7 +3797,7 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
                 <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#101014] p-4">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-[11px] font-black text-slate-500 uppercase tracking-widest">{isRTL ? 'إيراد الاشتراكات' : 'Subscription Revenue'}</p>
+                      <p className="text-[11px] font-black text-slate-500 uppercase tracking-widest">{isRTL ? 'إجمالي سعر البيع' : 'Total Sell Value'}</p>
                       <p className="mt-2 text-xl font-black text-blue-600 dark:text-blue-400">{formatCurrency(iptvSummary.totalRevenue, state.currency, state.lang, 2)}</p>
                     </div>
                     <Coins className="text-blue-500" size={24} />
@@ -1802,10 +3806,10 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
                 <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#101014] p-4">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-[11px] font-black text-slate-500 uppercase tracking-widest">{isRTL ? 'الموقوفون' : 'Suspended'}</p>
-                      <p className="mt-2 text-xl font-black text-amber-600 dark:text-amber-400">{formatNumber(iptvSummary.suspendedCount)}</p>
+                      <p className="text-[11px] font-black text-slate-500 uppercase tracking-widest">{isRTL ? 'إجمالي التكلفة' : 'Total Cost'}</p>
+                      <p className="mt-2 text-xl font-black text-amber-600 dark:text-amber-400">{formatCurrency(iptvSummary.totalCost, state.currency, state.lang, 2)}</p>
                     </div>
-                    <WifiOff className="text-amber-500" size={24} />
+                    <CreditCard className="text-amber-500" size={24} />
                   </div>
                 </div>
               </div>
@@ -1933,10 +3937,15 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
                 </div>
               </div>
             )}
-            {activeSubTab === 'subscribers' && (
+            {activeSubTab === 'subscribers' && !useSubscriberWorkspace && (
               <div className="md:hidden p-4 space-y-3">
                 {filteredItems.map((item: DynamicItem, index: number, items: DynamicItem[]) => (
-                  <div key={item.id} className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#101014] p-4 space-y-4">
+                  <div
+                    key={item.id}
+                    onDoubleClick={() => handleEdit(item)}
+                    className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#101014] p-4 space-y-4 cursor-pointer"
+                    title={isRTL ? 'انقر مرتين لتحرير بيانات المشترك' : 'Double click to edit subscriber'}
+                  >
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex items-center gap-3 min-w-0">
                         <div className="w-10 h-10 rounded-full bg-teal-500/10 flex items-center justify-center text-teal-600 font-black text-sm shrink-0">
@@ -1944,19 +3953,19 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
                         </div>
                         <div className="min-w-0">
                           <p className="text-sm font-black text-slate-900 dark:text-white truncate">{getSubscriberDisplayName(item)}</p>
-                          <p className="text-[10px] text-slate-400 font-mono mt-1 truncate">{item.username || item.id || '-'}</p>
+                          <p className="text-[10px] text-slate-400 font-mono mt-1 truncate">{getSubscriberUsername(item) || getSubscriberCode(item) || '-'}</p>
                         </div>
                       </div>
                       <SmartActionMenu item={item} actions={getActions(item)} isOpen={openActionMenuId === item.id} onToggle={() => setOpenActionMenuId(openActionMenuId === item.id ? null : item.id)} isRTL={isRTL} isLastRows={items.length > 3 && index >= items.length - 1} />
                     </div>
                     <div className="grid grid-cols-2 gap-3">
-                      <div className="rounded-xl bg-emerald-500/5 border border-emerald-500/10 p-3">
+                      <div className={`rounded-xl p-3 ${getSubscriberStatusClass(item)}`}>
                         <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{isRTL ? 'الحالة' : 'Status'}</p>
-                        <p className="mt-2 text-xs font-black text-emerald-600 dark:text-emerald-400">{getSubscriberStatusLabel(item)}</p>
+                        <p className="mt-2 text-xs font-black">{getSubscriberStatusLabel(item)}</p>
                       </div>
-                      <div className="rounded-xl bg-blue-500/5 border border-blue-500/10 p-3">
+                      <div className={`rounded-xl p-3 ${getSubscriberBalanceClass(item)}`}>
                         <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{isRTL ? 'الرصيد' : 'Balance'}</p>
-                        <p className="mt-2 text-xs font-black text-blue-600 dark:text-blue-400">{formatCurrency(getNumberValue(item.balance ?? item['الرصيد المتبقي له']), state.currency, state.lang, 2)}</p>
+                        <p className="mt-2 text-xs font-black">{formatCurrency(getNumberValue(item.balance ?? item['الرصيد المتبقي له']), state.currency, state.lang, 2)}</p>
                       </div>
                       <div className="rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 p-3">
                         <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{isRTL ? 'الباقة' : 'Plan'}</p>
@@ -1982,14 +3991,18 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
                         </div>
                         <div className="min-w-0">
                           <p className="text-sm font-black text-slate-900 dark:text-white truncate">{getIptvName(item)}</p>
-                          <p className="text-[10px] text-slate-400 font-mono mt-1 truncate">{item.username || '-'}</p>
+                          <p className="text-[10px] text-slate-400 font-mono mt-1 truncate">{getEntityValue(item, 'host') || '-'}</p>
                         </div>
                       </div>
                       <SmartActionMenu item={item} actions={getActions(item)} isOpen={openActionMenuId === item.id} onToggle={() => setOpenActionMenuId(openActionMenuId === item.id ? null : item.id)} isRTL={isRTL} isLastRows={items.length > 3 && index >= items.length - 1} />
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                       <div className="rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 p-3">
-                        <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{isRTL ? 'المنصة' : 'Platform'}</p>
+                        <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{isRTL ? 'نوع الخدمة' : 'Service Type'}</p>
+                        <p className="mt-2 text-xs font-bold text-slate-700 dark:text-slate-300">{getIptvServiceTypeLabel(item)}</p>
+                      </div>
+                      <div className="rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 p-3">
+                        <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{isRTL ? 'المزود' : 'Provider'}</p>
                         <p className="mt-2 text-xs font-bold text-slate-700 dark:text-slate-300">{item.platform || '-'}</p>
                       </div>
                       <div className="rounded-xl bg-blue-500/5 border border-blue-500/10 p-3">
@@ -1997,8 +4010,8 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
                         <p className="mt-2 text-xs font-black text-blue-600 dark:text-blue-400">{formatCurrency(getNumberValue(item.price), state.currency, state.lang, 2)}</p>
                       </div>
                       <div className="rounded-xl bg-amber-500/5 border border-amber-500/10 p-3">
-                        <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{isRTL ? 'الانتهاء' : 'Expiry'}</p>
-                        <p className="mt-2 text-xs font-black text-amber-600 dark:text-amber-400">{item.expiry || '-'}</p>
+                        <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{isRTL ? 'دورة الفوترة' : 'Billing'}</p>
+                        <p className="mt-2 text-xs font-black text-amber-600 dark:text-amber-400">{getIptvBillingCycleLabel(item)}</p>
                       </div>
                       <div className="rounded-xl border p-3 bg-white/60 dark:bg-slate-900/30 border-slate-200 dark:border-slate-800">
                         <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{isRTL ? 'الحالة' : 'Status'}</p>
@@ -2148,344 +4161,32 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
                 ))}
               </div>
             )}
-            <table className={`${['subscribers', 'suppliers', 'shareholders', 'managers', 'iptv'].includes(activeSubTab) ? 'hidden md:table w-full' : 'w-full'} ${activeSubTab === 'suppliers' ? 'min-w-[780px] table-auto' : ''} text-left border-collapse`}>
+            {activeSubTab !== 'subscribers' && (
+            <table
+              dir={isRTL ? 'rtl' : 'ltr'}
+              className={`${['subscribers', 'suppliers', 'shareholders', 'managers', 'iptv'].includes(activeSubTab) ? 'hidden md:table w-full' : 'w-full'} ${activeSubTab === 'suppliers' ? 'min-w-[780px] table-auto' : ''} ${isRTL ? 'text-right' : 'text-left'} border-collapse`}
+            >
               <thead className="sticky top-0 bg-slate-50 dark:bg-[#09090B] z-[10]">
                 <tr className="border-b border-slate-200 dark:border-slate-800">
-                  {activeSubTab === 'subscribers' && (
-                    <>
-                      {SUBSCRIBER_COLUMNS.map(col => visibleColumns[col.id] && (
-                        <th key={col.id} className="px-4 py-4 text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest text-right">{col.label}</th>
-                      ))}
-                    </>
-                  )}
-                  {activeSubTab === 'suppliers' && (
-                    <>
-                      {SUPPLIER_COLUMNS.map(col => visibleColumns[col.id] && (
-                        <th key={col.id} className={`px-4 py-4 text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest text-right ${col.id === 'debt' ? 'hidden md:table-cell' : ''} ${col.id === 'paid' ? 'hidden lg:table-cell' : ''} ${col.id === 'notes' ? 'hidden xl:table-cell' : ''}`}>
-                          {col.label}
-                        </th>
-                      ))}
-                    </>
-                  )}
-                  {activeSubTab === 'shareholders' && (
-                    <>
-                      {INVESTOR_COLUMNS.map(col => visibleColumns[col.id] && (
-                        <th key={col.id} className={`px-4 py-4 text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest text-right ${['buyPrice', 'ownership'].includes(col.id) ? 'hidden md:table-cell' : ''} ${col.id === 'dividends' ? 'hidden lg:table-cell' : ''}`}>
-                          {col.label}
-                        </th>
-                      ))}
-                    </>
-                  )}
-                  {activeSubTab === 'managers' && (
-                    <>
-                      {MANAGER_COLUMNS.map(col => visibleColumns[col.id] && (
-                        <th key={col.id} className="px-4 py-4 text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest text-right">{col.label}</th>
-                      ))}
-                    </>
-                  )}
-                  {activeSubTab === 'iptv' && (
-                    <>
-                      {showName && <th className="px-4 py-4 text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest text-right">{t.management.iptv.table.name}</th>}
-                      {showChannel && <th className="hidden sm:table-cell px-4 py-4 text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest text-right">{isRTL ? 'القناة' : 'CH'}</th>}
-                      <th className="hidden md:table-cell px-4 py-4 text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest text-right">{t.management.iptv.table.phone}</th>
-                      <th className="px-4 py-4 text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest text-right">{isRTL ? 'المزود' : 'Provider'}</th>
-                      <th className="hidden lg:table-cell px-4 py-4 text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest text-right">{t.management.iptv.table.username}</th>
-                      <th className="px-4 py-4 text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest text-right">{isRTL ? 'الانتهاء' : 'Expiry'}</th>
-                      <th className="px-4 py-4 text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest text-right">{isRTL ? 'السعر' : 'Price'}</th>
-                      <th className="px-4 py-4 text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest text-right">{t.management.iptv.table.status}</th>
-                    </>
-                  )}
+                  {activeTableColumns.map((col) => (
+                    <th
+                      key={col.id}
+                      className={`px-4 py-4 text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest ${isRTL ? 'text-right' : 'text-left'} ${col.headerClassName || ''}`}
+                    >
+                      {col.label}
+                    </th>
+                  ))}
                   <th className="px-6 py-5 text-xs font-bold text-slate-500 uppercase tracking-wider"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                 {filteredItems.map((item: DynamicItem, index: number, items: DynamicItem[]) => (
                   <tr key={item.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors group">
-                    {activeSubTab === 'subscribers' && (
-                    <>
-                      {SUBSCRIBER_COLUMNS.map(col => {
-                        if (!visibleColumns[col.id]) return null;
-                        switch (col.id) {
-                          case 'id': return <td key={col.id} className="px-4 py-4 text-xs text-slate-500 dark:text-slate-400 font-mono">{item.id || item.username || '-'}</td>;
-                          case 'firstname': return <td key={col.id} className="px-4 py-4 text-sm font-bold text-slate-800 dark:text-slate-200 line-clamp-1">{item.firstname || item.name || '-'}</td>;
-                          case 'lastname': return <td key={col.id} className="px-4 py-4 text-sm font-bold text-slate-800 dark:text-slate-200 line-clamp-1">{item.lastname || ''}</td>;
-                          case 'username': return <td key={col.id} className="px-4 py-4 text-xs font-medium text-slate-600 dark:text-slate-400 truncate max-w-[100px]">{item.username || ''}</td>;
-                          case 'phone': return <td key={col.id} className="px-4 py-4 text-xs font-mono text-slate-600 dark:text-slate-400">{item.phone || item['رقم الموبايل'] || '-'}</td>;
-                          case 'idNumber': return <td key={col.id} className="px-4 py-4 text-xs text-slate-600 dark:text-slate-400 font-mono">{item.idNumber || item['رقم الهوية'] || '-'}</td>;
-                          case 'password': return <td key={col.id} className="px-4 py-4 text-xs text-slate-600 dark:text-slate-400 font-mono">{item.password || item['كلمة المرور'] || '-'}</td>;
-                          case 'status': return (
-                            <td key={col.id} className="px-4 py-4">
-                              <span className={`px-2 py-1 rounded-lg text-[10px] font-bold uppercase ${
-                                item.status === 'active' || item['حالة الحساب'] === 'مفعل' ? 'bg-emerald-100 dark:bg-emerald-500/10 text-emerald-600' : 'bg-rose-100 dark:bg-rose-500/10 text-rose-600'
-                              }`}>
-                                {t.management.subscribers.statuses[getStringValue(item.status)] || getStringValue(item['حالة الحساب']) || getStringValue(item.status)}
-                              </span>
-                            </td>
-                          );
-                          case 'plan': return <td key={col.id} className="px-4 py-4 text-xs font-medium text-slate-600 dark:text-slate-400 truncate max-w-[120px]">{item.plan || item['سرعة الخط'] || '-'}</td>;
-                          case 'balance': return <td key={col.id} className="px-4 py-4 text-sm font-black text-emerald-600 dark:text-emerald-400 whitespace-nowrap">{formatCurrency(getNumberValue(item.balance ?? item['الرصيد المتبقي له']), state.currency, state.lang)}</td>;
-                          case 'debt': return <td key={col.id} className="px-4 py-4 text-sm font-black text-rose-600 dark:text-rose-400 whitespace-nowrap">{formatCurrency(getNumberValue(item['عليه دين']), state.currency, state.lang)}</td>;
-                          case 'paid': return <td key={col.id} className="px-4 py-4 text-sm font-black text-teal-600 dark:text-teal-400 whitespace-nowrap">{formatCurrency(getNumberValue(item['قام بتسديد']), state.currency, state.lang)}</td>;
-                          case 'bill': return <td key={col.id} className="px-4 py-4 text-xs font-medium text-slate-600 dark:text-slate-400">{item['قيمة الفاتورة'] || '-'}</td>;
-                          case 'agent': return <td key={col.id} className="px-4 py-4 text-xs font-medium text-slate-700 dark:text-slate-300 line-clamp-1">{item.agent || item['الوكيل المسؤل'] || '-'}</td>;
-                          case 'subType': return <td key={col.id} className="px-4 py-4 text-xs text-slate-600 dark:text-slate-400 line-clamp-1">{item['نوع الاشتراك'] || '-'}</td>;
-                          case 'startDate': return <td key={col.id} className="px-4 py-4 text-[10px] text-slate-500 font-mono">{item['تاريخ بداية العقد مع الشركة'] || '-'}</td>;
-                          case 'expiry': return <td key={col.id} className="px-4 py-4 text-[10px] text-slate-500 font-mono">{item.expiry || item['تاريخ ناهية الاشتراك'] || '-'}</td>;
-                          case 'address': return <td key={col.id} className="px-4 py-4 text-xs text-slate-600 dark:text-slate-400 truncate max-w-[150px]">{item.address || item['عنوان المشترك'] || '-'}</td>;
-                          case 'city': return <td key={col.id} className="px-4 py-4 text-xs text-slate-600 dark:text-slate-400">{item.city || '-'}</td>;
-                          case 'email': return <td key={col.id} className="px-4 py-4 text-[10px] text-slate-500 truncate max-w-[120px]">{item.email || '-'}</td>;
-                          case 'ip_litebeam': return <td key={col.id} className="px-4 py-4 text-xs font-mono text-slate-600 dark:text-slate-400">{item.ip || item['ip_litebeam'] || '-'}</td>;
-                          case 'mac_litebeam': return <td key={col.id} className="px-4 py-4 text-xs font-mono text-slate-600 dark:text-slate-400">{item.mac || item['mac_litebeam'] || '-'}</td>;
-                          case 'live': return (
-                            <td key={col.id} className="px-4 py-4">
-                              <div className="flex items-center justify-center shrink-0">
-                                {onlineStatuses[item.username] === true ? (
-                                  <span 
-                                    className="flex items-center gap-1 text-emerald-500 font-black text-[9px] bg-emerald-500/10 px-2 py-1 rounded-full border border-emerald-500/20"
-                                  >
-                                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                                    ON
-                                  </span>
-                                ) : onlineStatuses[item.username] === false ? (
-                                  <span className="text-[9px] text-slate-400 font-bold opacity-60">OFF</span>
-                                ) : (
-                                  <Activity size={10} className="text-slate-300 animate-spin" />
-                                )}
-                              </div>
-                            </td>
-                          );
-                          case 'notes': return <td key={col.id} className="px-4 py-4 text-xs text-slate-500 dark:text-slate-500 truncate max-w-[100px]">{item.notes || item['ملاحظات اخرى'] || '-'}</td>;
-                          default: return null;
-                        }
-                      })}
-                    </>
-                  )}
-                  {activeSubTab === 'suppliers' && (
-                    <>
-                      {SUPPLIER_COLUMNS.map(col => {
-                        if (!visibleColumns[col.id]) return null;
-                        switch (col.id) {
-                          case 'code':
-                            return (
-                              <td key={col.id} className="px-4 py-4">
-                                <span className="inline-flex items-center rounded-xl bg-slate-100 dark:bg-slate-800 px-3 py-1.5 text-xs font-black text-slate-700 dark:text-slate-300 font-mono">
-                                  {getSupplierCode(item) || '-'}
-                                </span>
-                              </td>
-                            );
-                          case 'name':
-                            return (
-                              <td key={col.id} className="px-4 py-4">
-                                <div className="flex items-center gap-3">
-                                  <div className="w-9 h-9 rounded-full bg-blue-500/10 flex items-center justify-center text-blue-600 font-black text-sm shrink-0">
-                                    {(getSupplierName(item) || '?').charAt(0)}
-                                  </div>
-                                  <div className="min-w-0">
-                                    <p className="text-sm font-black text-slate-800 dark:text-slate-200 truncate">{getSupplierName(item) || '-'}</p>
-                                    <p className="text-[10px] text-slate-400 font-mono mt-1">{item.id}</p>
-                                  </div>
-                                </div>
-                              </td>
-                            );
-                          case 'debt':
-                            return (
-                              <td key={col.id} className="hidden md:table-cell px-4 py-4 text-sm font-black text-rose-600 dark:text-rose-400 whitespace-nowrap">
-                                {formatSupplierAmount(item['مدين'])}
-                              </td>
-                            );
-                          case 'paid':
-                            return (
-                              <td key={col.id} className="hidden lg:table-cell px-4 py-4 text-sm font-black text-emerald-600 dark:text-emerald-400 whitespace-nowrap">
-                                {formatSupplierAmount(item['مسدد'])}
-                              </td>
-                            );
-                          case 'balance': {
-                            const balanceValue = parseSupplierAmount(item['الرصيد']);
-                            const balanceClass = balanceValue < 0
-                              ? 'text-amber-600 dark:text-amber-400'
-                              : balanceValue > 0
-                                ? 'text-blue-600 dark:text-blue-400'
-                                : 'text-slate-500 dark:text-slate-400';
-                            return (
-                              <td key={col.id} className={`px-4 py-4 text-sm font-black whitespace-nowrap ${balanceClass}`}>
-                                {formatSupplierAmount(item['الرصيد'])}
-                              </td>
-                            );
-                          }
-                          case 'notes':
-                            return (
-                              <td key={col.id} className="hidden xl:table-cell px-4 py-4 text-xs text-slate-500 dark:text-slate-400 max-w-[240px] truncate">
-                                {getSupplierNotes(item) || '-'}
-                              </td>
-                            );
-                          default:
-                            return null;
-                        }
-                      })}
-                    </>
-                  )}
-                  {activeSubTab === 'shareholders' && (
-                    <>
-                      {INVESTOR_COLUMNS.map(col => {
-                        if (!visibleColumns[col.id]) return null;
-                        switch (col.id) {
-                          case 'name':
-                            return (
-                              <td key={col.id} className="px-4 py-4">
-                                <div className="flex items-center gap-3">
-                                  <div className="w-8 h-8 rounded-full bg-amber-500/10 flex items-center justify-center text-amber-600 font-bold text-xs shrink-0">
-                                    {getStringValue(item.name, '?').charAt(0)}
-                                  </div>
-                                  <p className="text-sm font-bold text-slate-800 dark:text-slate-200 line-clamp-1">{getStringValue(item.name, '-')}</p>
-                                </div>
-                              </td>
-                            );
-                          case 'shares':
-                            return (
-                              <td key={col.id} className="px-4 py-4">
-                                <div className="flex items-center gap-2">
-                                  <button 
-                                    onClick={() => {
-                                      const newShares = Math.max(0, getNumberValue(item.shares) - 10);
-                                      setShareholders(prev => prev.map(s => s.id === item.id ? { ...s, shares: newShares } : s));
-                                    }}
-                                    className="w-6 h-6 flex items-center justify-center bg-rose-500/10 text-rose-600 rounded hover:bg-rose-500/20 transition-colors text-xs"
-                                  >
-                                    -
-                                  </button>
-                                  <span className="text-xs font-bold text-slate-800 dark:text-slate-200 min-w-[50px] text-center">
-                                    {formatNumber(getNumberValue(item.shares))}
-                                  </span>
-                                  <button 
-                                    onClick={() => {
-                                      const newShares = getNumberValue(item.shares) + 10;
-                                      setShareholders(prev => prev.map(s => s.id === item.id ? { ...s, shares: newShares } : s));
-                                    }}
-                                    className="w-6 h-6 flex items-center justify-center bg-emerald-500/10 text-emerald-600 rounded hover:bg-emerald-500/20 transition-colors text-xs"
-                                  >
-                                    +
-                                  </button>
-                                </div>
-                              </td>
-                            );
-                          case 'buyPrice':
-                            return <td key={col.id} className="hidden md:table-cell px-4 py-4 text-xs font-black text-slate-600 dark:text-slate-400">{formatCurrency(getNumberValue(item.buyPrice), state.currency, state.lang)}</td>;
-                          case 'ownership':
-                            return <td key={col.id} className="hidden md:table-cell px-4 py-4 text-xs font-bold text-slate-600 dark:text-slate-400">{item.ownership || '0%'}</td>;
-                          case 'investment':
-                            return <td key={col.id} className="px-4 py-4 text-sm font-black text-slate-800 dark:text-slate-200">{formatCurrency(getNumberValue(item.investment), state.currency, state.lang)}</td>;
-                          case 'dividends':
-                            return <td key={col.id} className="hidden lg:table-cell px-4 py-4 text-sm font-bold text-emerald-600 dark:text-emerald-400">{formatCurrency(getNumberValue(item.dividends), state.currency, state.lang)}</td>;
-                          default:
-                            return <td key={col.id} className="px-4 py-4 text-xs text-slate-600 dark:text-slate-400">{item[col.id] || '-'}</td>;
-                        }
-                      })}
-                    </>
-                  )}
-                  {activeSubTab === 'managers' && (
-                    <>
-                      {MANAGER_COLUMNS.map(col => {
-                        if (!visibleColumns[col.id]) return null;
-                        switch (col.id) {
-                          case 'name':
-                            return (
-                              <td key={col.id} className="px-4 py-4">
-                                <div className="flex items-center gap-3">
-                                  <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs shrink-0 ${
-                                    (item.role === 'super_admin' || item['الصلاحية'] === 'Super Admin') ? 'bg-amber-500/10 text-amber-600' : 'bg-teal-500/10 text-teal-600'
-                                  }`}>
-                                    {getStringValue(item.name || item.username || item['اسم الدخول'], '?').charAt(0)}
-                                  </div>
-                                  <p className="text-sm font-bold text-slate-800 dark:text-slate-200 line-clamp-1">
-                                      {item.name || `${item['الاسم الاول'] || item.firstName || ''} ${item['الاسم الثاني'] || item.lastName || ''}`.trim() || item.username || item['اسم الدخول']}
-                                  </p>
-                                </div>
-                              </td>
-                            );
-                          case 'username':
-                            return <td key={col.id} className="px-4 py-4 text-xs text-slate-600 dark:text-slate-400 font-mono truncate max-w-[100px]">{item.username || item['اسم الدخول'] || '-'}</td>;
-                          case 'role':
-                            return (
-                              <td key={col.id} className="px-4 py-4">
-                                <span className={`inline-block px-2 py-1 rounded-lg text-[9px] font-black uppercase tracking-tighter truncate max-w-[120px] ${
-                                  (item.role === 'super_admin' || item['الصلاحية'] === 'Super Admin') ? 'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400' : 'bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400'
-                                }`}>
-                                  {item.role || item['الصلاحية'] || (isRTL ? 'موظف' : 'Staff')}
-                                </span>
-                              </td>
-                            );
-                          case 'balance':
-                            return (
-                              <td key={col.id} className="px-4 py-4 text-sm font-black text-slate-800 dark:text-slate-200 whitespace-nowrap">
-                                {formatCurrency(getNumberValue(item.balance ?? item['الرصيد']), state.currency, state.lang)}
-                              </td>
-                            );
-                          case 'maxTxLimit':
-                            return (
-                              <td key={col.id} className="px-4 py-4">
-                                {(item.maxTxLimit || item['الحد المالي']) ? (
-                                  <div className="flex flex-col">
-                                    <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                                      {formatCurrency(getNumberValue(item.maxTxLimit ?? item['الحد المالي']), state.currency, state.lang)}
-                                    </span>
-                                    <span className="text-[8px] text-emerald-500 uppercase font-black">Limit ON</span>
-                                  </div>
-                                ) : (
-                                  <span className="text-[10px] text-slate-400 italic">{isRTL ? 'بدون قيود' : 'No Limit'}</span>
-                                )}
-                              </td>
-                            );
-                          case 'status':
-                            return (
-                              <td key={col.id} className="px-4 py-4">
-                                <span className={`px-2 py-1 rounded-lg text-[10px] font-bold uppercase ${
-                                  (item.status === 'active' || item['الحالة'] === 'نشط' || !item.status) ? 'bg-emerald-100 dark:bg-emerald-500/10 text-emerald-600' : 'bg-rose-100 dark:bg-rose-500/10 text-rose-600'
-                                }`}>
-                                  {(item.status === 'active' || item['الحالة'] === 'نشط' || !item.status) ? (isRTL ? 'نشط' : 'Active') : (isRTL ? 'مجمد' : 'Disabled')}
-                                </span>
-                              </td>
-                            );
-                          default:
-                            return <td key={col.id} className="px-4 py-4 text-xs text-slate-600 dark:text-slate-400">{item[col.id] || item[col.key || ''] || '-'}</td>;
-                        }
-                      })}
-                    </>
-                  )}
-                  {activeSubTab === 'iptv' && (
-                    <>
-                      {showName && (
-                        <td className="px-4 py-4">
-                          <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-full bg-teal-500/10 flex items-center justify-center text-teal-600 font-bold text-xs shrink-0">
-                                    {getStringValue(item.name, '?').charAt(0)}
-                            </div>
-                                  <p className="text-sm font-bold text-slate-800 dark:text-slate-200 line-clamp-1">{getStringValue(item.name, '-')}</p>
-                          </div>
-                        </td>
-                      )}
-                      {showChannel && (
-                        <td className="hidden sm:table-cell px-4 py-4 text-xs font-bold text-slate-800 dark:text-slate-200">
-                          {item.channelNumber || '-'}
-                        </td>
-                      )}
-                      <td className="hidden md:table-cell px-4 py-4 text-xs font-mono text-slate-600 dark:text-slate-400">{item.phone}</td>
-                      <td className="px-4 py-4 text-xs font-medium text-slate-600 dark:text-slate-400">{item.platform}</td>
-                      <td className="hidden lg:table-cell px-4 py-4 text-xs font-mono text-slate-600 dark:text-slate-400">{item.username}</td>
-                      <td className="px-4 py-4 text-xs font-mono text-slate-500">{item.expiry}</td>
-                      <td className="px-4 py-4 text-sm font-black text-slate-800 dark:text-slate-200">
-                        {formatCurrency(getNumberValue(item.price), state.currency, state.lang)}
+                    {activeTableColumns.map((col) => (
+                      <td key={col.id} className={`px-4 py-4 align-middle ${col.cellClassName || ''}`}>
+                        {col.render(item)}
                       </td>
-                      <td className="px-4 py-4">
-                        <span className={`px-2 py-1 rounded-lg text-[10px] font-bold uppercase ${
-                          item.status === 'active' ? 'bg-emerald-100 dark:bg-emerald-500/10 text-emerald-600' : 
-                          item.status === 'suspended' ? 'bg-amber-100 dark:bg-amber-500/10 text-amber-600' :
-                          'bg-rose-100 dark:bg-rose-500/10 text-rose-600'
-                        }`}>
-                          {t.management.iptv.statuses[item.status] || item.status}
-                        </span>
-                      </td>
-                    </>
-                  )}
+                    ))}
                   <td className="px-6 py-6 text-right relative z-[30]">
                     <SmartActionMenu 
                       item={item}
@@ -2500,6 +4201,7 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
               ))}
             </tbody>
           </table>
+            )}
         </div>
       )}
       </div>
@@ -2610,13 +4312,13 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
 
       {/* ─── MikroTik Sync Modal ───────────────────────────────────────────────── */}
       <AnimatePresence>
-        {isSyncModalOpen && syncingSubscriber && (
+        {isSyncModalOpen && (syncModalMode === 'bulk' || syncingSubscriber) && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              onClick={() => { setIsSyncModalOpen(false); setSyncResult(null); }}
+              onClick={closeSyncModal}
               className="absolute inset-0 bg-slate-950/70 backdrop-blur-sm"
             />
             <motion.div
@@ -2633,15 +4335,19 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
                   </div>
                   <div>
                     <h3 className="text-lg font-bold text-slate-900 dark:text-white">
-                      {isRTL ? 'مزامنة مع جهاز MikroTik' : 'Sync to MikroTik'}
+                      {syncModalMode === 'bulk'
+                        ? (isRTL ? 'مزامنة جماعية مع أجهزة MikroTik' : 'Bulk Sync to MikroTik')
+                        : (isRTL ? 'مزامنة مع جهاز MikroTik' : 'Sync to MikroTik')}
                     </h3>
                     <p className="text-xs text-slate-500 mt-0.5">
-                      {syncingSubscriber.username || syncingSubscriber.name || syncingSubscriber.id}
+                      {syncModalMode === 'bulk'
+                        ? (isRTL ? `سيتم تطبيق المزامنة على ${getBulkSyncTargets().targets.length} مشترك صالح.` : `${getBulkSyncTargets().targets.length} valid subscribers will be processed.`)
+                        : (syncingSubscriber?.username || syncingSubscriber?.name || syncingSubscriber?.id)}
                     </p>
                   </div>
                 </div>
                 <button
-                  onClick={() => { setIsSyncModalOpen(false); setSyncResult(null); }}
+                  onClick={closeSyncModal}
                   className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all"
                 >
                   <X size={20} />
@@ -2651,30 +4357,43 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
               {/* Body */}
               <div className="p-6 space-y-5">
                 {/* Subscriber Info Card */}
-                <div className="p-4 rounded-2xl bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-xl bg-indigo-500/10 flex items-center justify-center text-indigo-600 dark:text-indigo-400 font-bold text-lg shrink-0">
-                    {(syncingSubscriber.firstname || syncingSubscriber.name || '?').charAt(0)}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-bold text-slate-900 dark:text-white truncate">
-                      {`${syncingSubscriber.firstname || ''} ${syncingSubscriber.lastname || ''}`.trim() || syncingSubscriber.name || '-'}
-                    </p>
-                    <div className="flex items-center gap-3 mt-1 flex-wrap">
-                      <span className="text-xs text-slate-500 font-mono">{syncingSubscriber.username || (isRTL ? 'لا يوجد اسم مستخدم' : 'No username')}</span>
-                      <span className={`text-xs font-bold px-2 py-0.5 rounded-lg ${
-                        syncingSubscriber.status === 'active' ? 'bg-emerald-100 dark:bg-emerald-500/10 text-emerald-600' :
-                        syncingSubscriber.status === 'suspended' ? 'bg-amber-100 dark:bg-amber-500/10 text-amber-600' :
-                        'bg-rose-100 dark:bg-rose-500/10 text-rose-600'
-                      }`}>
-                        {syncingSubscriber.status === 'active' ? (isRTL ? 'مفعل' : 'Active') :
-                         syncingSubscriber.status === 'suspended' ? (isRTL ? 'موقوف' : 'Suspended') : (isRTL ? 'منتهي' : 'Expired')}
-                      </span>
-                      {syncingSubscriber.plan && (
-                        <span className="text-xs bg-blue-100 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 px-2 py-0.5 rounded-lg font-medium">{syncingSubscriber.plan}</span>
-                      )}
+                {syncModalMode === 'single' && syncingSubscriber ? (
+                  <div className="p-4 rounded-2xl bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-xl bg-indigo-500/10 flex items-center justify-center text-indigo-600 dark:text-indigo-400 font-bold text-lg shrink-0">
+                      {(syncingSubscriber.firstname || syncingSubscriber.name || '?').charAt(0)}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-bold text-slate-900 dark:text-white truncate">
+                        {`${syncingSubscriber.firstname || ''} ${syncingSubscriber.lastname || ''}`.trim() || syncingSubscriber.name || '-'}
+                      </p>
+                      <div className="flex items-center gap-3 mt-1 flex-wrap">
+                        <span className="text-xs text-slate-500 font-mono">{syncingSubscriber.username || (isRTL ? 'لا يوجد اسم مستخدم' : 'No username')}</span>
+                        <span className={`text-xs font-bold px-2 py-0.5 rounded-lg ${getSubscriberStatusClass(syncingSubscriber)}`}>
+                          {getSubscriberStatusLabel(syncingSubscriber)}
+                        </span>
+                        {syncingSubscriber.plan && (
+                          <span className="text-xs bg-blue-100 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 px-2 py-0.5 rounded-lg font-medium">{syncingSubscriber.plan}</span>
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
+                ) : (
+                  <div className="p-4 rounded-2xl bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800">
+                    <div className="flex items-center justify-between gap-4 flex-wrap">
+                      <div>
+                        <p className="font-bold text-slate-900 dark:text-white">
+                          {isRTL ? 'مزامنة جماعية وفق قواعد النظام' : 'Bulk Sync Using System Rules'}
+                        </p>
+                        <p className="text-xs text-slate-500 mt-1">
+                          {isRTL ? 'سيتم تطبيق نفس قواعد الحالة والانتهاء على كل مشترك صالح للمزامنة.' : 'The same status and expiry rules will be applied to every valid subscriber.'}
+                        </p>
+                      </div>
+                      <span className="px-3 py-1.5 rounded-full bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 text-xs font-bold border border-indigo-500/20">
+                        {isRTL ? `${getBulkSyncTargets().targets.length} مشترك` : `${getBulkSyncTargets().targets.length} subscribers`}
+                      </span>
+                    </div>
+                  </div>
+                )}
 
                 {/* Router Selection */}
                 <div className="space-y-2">
@@ -2708,8 +4427,12 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
                 {/* Info box */}
                 <div className="p-3 rounded-xl bg-indigo-50 dark:bg-indigo-500/10 border border-indigo-200 dark:border-indigo-500/20 text-xs text-indigo-700 dark:text-indigo-300 leading-relaxed">
                   {isRTL
-                    ? 'ستقوم المزامنة بإنشاء أو تحديث سر PPPoE للمشترك في الجهاز المحدد، مع ضبط الحالة والباقة تلقائياً.'
-                    : 'Sync will create or update the subscriber\'s PPPoE secret on the selected device, automatically setting their status and plan.'}
+                    ? syncModalMode === 'bulk'
+                      ? 'ستطبق المزامنة الجماعية القواعد نفسها على الجميع: النشط يُفعّل، المعلق يُعطّل، المنتهي يُحذف، والمنتهي زمنياً يُعطّل ويُطرد من الاتصال.'
+                      : 'ستقوم المزامنة بإنشاء أو تحديث سر PPPoE للمشترك في الجهاز المحدد، ثم تطبق حالته الفعلية تلقائياً حسب الحالة والانتهاء.'
+                    : syncModalMode === 'bulk'
+                      ? 'Bulk sync applies the same rules to everyone: active gets enabled, suspended gets disabled, expired gets deleted, and time-expired subscribers are disabled and disconnected.'
+                      : 'Sync will create or update the subscriber secret on the selected device, then apply the actual access state automatically based on status and expiry.'}
                 </div>
 
                 {/* Sync Result */}
@@ -2791,7 +4514,7 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
 
       {/* Add Modal */}
       <AnimatePresence>
-        {isAddModalOpen && (
+        {isAddModalOpen && activeSubTab !== 'subscribers' && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
             <motion.div 
               initial={{ opacity: 0 }} 
@@ -2904,16 +4627,58 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
                 {activeSubTab === 'subscribers' && (
                   <div className="space-y-4">
                     <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                      <div className="space-y-2 col-span-full">
-                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{t.management.subscribers.table.name}</label>
-                        <input 
-                          type="text" 
-                          value={newItem.name || ''}
-                          onChange={(e) => setNewItem({ ...newItem, name: e.target.value })}
-                          className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all font-bold"
+                      <div className="space-y-2">
+                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{isRTL ? 'الاسم الأول' : 'First Name'}</label>
+                        <input
+                          type="text"
+                          value={newItem.firstname || newItem['الاسم الأول'] || ''}
+                          onChange={(e) => setNewItem({ ...newItem, firstname: e.target.value, 'الاسم الأول': e.target.value })}
+                          className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all"
                         />
                       </div>
-                      {SUBSCRIBER_COLUMNS.filter(col => !['id', 'firstname', 'lastname', 'name'].includes(col.id)).map((col) => {
+                      <div className="space-y-2">
+                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{isRTL ? 'اسم العائلة' : 'Last Name'}</label>
+                        <input
+                          type="text"
+                          value={newItem.lastname || newItem['اسم العائلة'] || ''}
+                          onChange={(e) => setNewItem({ ...newItem, lastname: e.target.value, 'اسم العائلة': e.target.value })}
+                          className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{isRTL ? 'اسم المستخدم' : 'Username'}</label>
+                        <input
+                          type="text"
+                          value={newItem.username || newItem['اسم المستخدم'] || ''}
+                          onChange={(e) => setNewItem({ ...newItem, username: e.target.value, 'اسم المستخدم': e.target.value, 'اسم الدخول': e.target.value })}
+                          className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all font-mono"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{isRTL ? 'كلمة المرور' : 'Password'}</label>
+                        <input
+                          type="text"
+                          value={newItem.password || newItem['كلمة المرور'] || ''}
+                          onChange={(e) => setNewItem({ ...newItem, password: e.target.value, 'كلمة المرور': e.target.value })}
+                          className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all font-mono"
+                        />
+                      </div>
+                      <div className="space-y-2 col-span-full">
+                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                          {isRTL ? 'اسم العرض على المايكروتيك' : 'MikroTik Display Name'}
+                        </label>
+                        <input 
+                          type="text" 
+                          value={newItem.name || newItem['اسم العرض على المايكروتيك'] || ''}
+                          onChange={(e) => setNewItem({ ...newItem, name: e.target.value, 'اسم العرض على المايكروتيك': e.target.value })}
+                          placeholder={isRTL ? 'اسم لاتيني يظهر كتسمية/تعليق داخل المايكروتيك' : 'Latin display/comment shown inside MikroTik'}
+                          className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all font-bold"
+                        />
+                        <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                          {isRTL ? 'هذا الحقل مخصص لاسم العرض أو التعليق في المايكروتيك، وليس اسم المشترك العربي.' : 'Used as the display/comment name in MikroTik, not the Arabic subscriber name.'}
+                        </p>
+                      </div>
+                      {SUBSCRIBER_COLUMNS.filter(col => !['id', 'firstname', 'lastname', 'name', 'username', 'password'].includes(col.id)).map((col) => {
                         let fieldType = 'text';
                         if (['balance', 'debt', 'paid', 'bill'].includes(col.id)) fieldType = 'number';
                         if (['startDate', 'expiry'].includes(col.id)) fieldType = 'date';
@@ -2967,6 +4732,12 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
                                   className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all"
                                 />
                               )
+                            ) : fieldType === 'date' ? (
+                            <DateInput
+                              value={String(newItem[col.id] || newItem[col.key || ''] || '')}
+                              onChange={(val) => setNewItem({ ...newItem, [col.id]: val, ...(col.key ? { [col.key]: val } : {}) })}
+                              className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all"
+                            />
                             ) : (
                             <input 
                               type={['balance', 'debt', 'paid', 'bill'].includes(col.id) ? "text" : fieldType} 
@@ -2992,52 +4763,83 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
 
                 {activeSubTab === 'iptv' && (
                   <div className="space-y-4">
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{t.management.iptv.table.name}</label>
+                      <input
+                        type="text"
+                        value={String(newItem.name || '')}
+                        onChange={(e) => setNewItem({ ...newItem, name: e.target.value })}
+                        placeholder={isRTL ? 'مثال: اشتراك IPTV بريميوم' : 'e.g. IPTV Premium Service'}
+                        className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all"
+                      />
+                    </div>
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
-                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{t.management.iptv.table.phone}</label>
-                        <input 
-                          type="text" 
-                          value={newItem.phone}
-                          onChange={(e) => setNewItem({ ...newItem, phone: e.target.value })}
-                          className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all font-mono"
-                        />
+                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{t.management.iptv.table.serviceType}</label>
+                        <select
+                          value={String(newItem.serviceType || 'iptv')}
+                          onChange={(e) => setNewItem({ ...newItem, serviceType: e.target.value })}
+                          className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all"
+                        >
+                          <option value="iptv">{t.management.iptv.serviceTypes.iptv}</option>
+                          <option value="vpn">{t.management.iptv.serviceTypes.vpn}</option>
+                          <option value="static_ip">{t.management.iptv.serviceTypes.static_ip}</option>
+                          <option value="cloud_storage">{t.management.iptv.serviceTypes.cloud_storage}</option>
+                          <option value="security">{t.management.iptv.serviceTypes.security}</option>
+                          <option value="other">{t.management.iptv.serviceTypes.other}</option>
+                        </select>
                       </div>
                       <div className="space-y-2">
-                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{isRTL ? 'رقم القناة' : 'Channel Number'}</label>
-                        <input 
-                          type="text" 
-                          value={newItem.channelNumber || ''}
-                          onChange={(e) => setNewItem({ ...newItem, channelNumber: e.target.value })}
+                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{t.management.iptv.table.billingCycle}</label>
+                        <select
+                          value={String(newItem.billingCycle || 'monthly')}
+                          onChange={(e) => setNewItem({ ...newItem, billingCycle: e.target.value })}
                           className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all"
-                        />
+                        >
+                          <option value="monthly">{t.management.iptv.billingCycles.monthly}</option>
+                          <option value="quarterly">{t.management.iptv.billingCycles.quarterly}</option>
+                          <option value="yearly">{t.management.iptv.billingCycles.yearly}</option>
+                          <option value="one_time">{t.management.iptv.billingCycles.one_time}</option>
+                        </select>
                       </div>
                     </div>
                     <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{t.management.iptv.table.provider}</label>
+                        <input 
+                          type="text" 
+                          value={String(newItem.platform || '')}
+                          onChange={(e) => setNewItem({ ...newItem, platform: e.target.value })}
+                          placeholder={isRTL ? 'اسم المزود أو المنصة' : 'Provider or platform name'}
+                          className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all"
+                        />
+                      </div>
                       <div className="space-y-2">
                         <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{t.management.iptv.table.host}</label>
                         <input 
                           type="text" 
-                          value={newItem.host}
+                          value={String(newItem.host || '')}
                           onChange={(e) => setNewItem({ ...newItem, host: e.target.value })}
-                          className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{t.management.iptv.table.username}</label>
-                        <input 
-                          type="text" 
-                          value={newItem.username}
-                          onChange={(e) => setNewItem({ ...newItem, username: e.target.value })}
+                          placeholder={isRTL ? 'الرابط أو المضيف' : 'Service endpoint / host'}
                           className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all"
                         />
                       </div>
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
+                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{t.management.iptv.table.username}</label>
+                        <input 
+                          type="text" 
+                          value={String(newItem.username || '')}
+                          onChange={(e) => setNewItem({ ...newItem, username: e.target.value })}
+                          className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all"
+                        />
+                      </div>
+                      <div className="space-y-2">
                         <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{t.management.iptv.table.password}</label>
                         <input 
                           type="text" 
-                          value={newItem.password}
+                          value={String(newItem.password || '')}
                           onChange={(e) => setNewItem({ ...newItem, password: e.target.value })}
                           className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all"
                         />
@@ -3046,10 +4848,9 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{t.management.iptv.table.expiry}</label>
-                        <input 
-                          type="date" 
-                          value={newItem.expiry}
-                          onChange={(e) => setNewItem({ ...newItem, expiry: e.target.value })}
+                        <DateInput
+                          value={String(newItem.expiry || '')}
+                          onChange={(val) => setNewItem({ ...newItem, expiry: val })}
                           className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all"
                         />
                       </div>
@@ -3067,16 +4868,29 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
                           className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all font-mono"
                         />
                       </div>
+                      <div className="space-y-2">
+                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{t.management.iptv.table.cost}</label>
+                        <input 
+                          type="text" 
+                          inputMode="decimal"
+                          lang="en"
+                          value={newItem.cost ?? 0}
+                          onChange={(e) => {
+                            const val = e.target.value.replace(/[^0-9.]/g, '');
+                            setNewItem({ ...newItem, cost: val });
+                          }}
+                          className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all font-mono"
+                        />
+                      </div>
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
-                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{t.management.iptv.table.provider}</label>
+                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{t.management.iptv.table.phone}</label>
                         <input 
                           type="text" 
-                          value={newItem.platform}
-                          onChange={(e) => setNewItem({ ...newItem, platform: e.target.value })}
-                          placeholder="e.g. Maven"
-                          className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all"
+                          value={String(newItem.phone || '')}
+                          onChange={(e) => setNewItem({ ...newItem, phone: e.target.value })}
+                          className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all font-mono"
                         />
                       </div>
                       <div className="space-y-2">
@@ -3099,7 +4913,7 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
                         onChange={(e) => setNewItem({ ...newItem, notes: e.target.value })}
                         rows={3}
                         className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all resize-none"
-                        placeholder={isRTL ? 'أضف ملاحظات حول هذا المشترك...' : 'Add notes about this subscriber...'}
+                        placeholder={isRTL ? 'أضف ملاحظات حول هذه الخدمة...' : 'Add notes about this service...'}
                       />
                     </div>
                   </div>
@@ -3296,7 +5110,7 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
 
       {/* Edit Modal */}
       <AnimatePresence>
-        {isEditModalOpen && (
+        {isEditModalOpen && activeSubTab !== 'subscribers' && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
             <motion.div 
               initial={{ opacity: 0 }} 
@@ -3322,7 +5136,7 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
               </div>
 
               <div className="p-8 space-y-6 overflow-y-auto custom-scrollbar flex-1">
-                {activeSubTab !== 'suppliers' && activeSubTab !== 'admins' && activeSubTab !== 'managers' && activeSubTab !== 'shareholders' && (
+                {activeSubTab !== 'subscribers' && activeSubTab !== 'suppliers' && activeSubTab !== 'admins' && activeSubTab !== 'managers' && activeSubTab !== 'shareholders' && (
                   <div className="space-y-2">
                     <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{t.management.subscribers.table.name}</label>
                     <input 
@@ -3469,7 +5283,58 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
                 {activeSubTab === 'subscribers' && (
                   <div className="space-y-4">
                     <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                      {SUBSCRIBER_COLUMNS.filter(col => col.id !== 'id').map((col) => {
+                      <div className="space-y-2">
+                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{isRTL ? 'الاسم الأول' : 'First Name'}</label>
+                        <input
+                          type="text"
+                          value={editingItem.firstname || editingItem['الاسم الأول'] || ''}
+                          onChange={(e) => setEditingItem({ ...editingItem, firstname: e.target.value, 'الاسم الأول': e.target.value })}
+                          className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{isRTL ? 'اسم العائلة' : 'Last Name'}</label>
+                        <input
+                          type="text"
+                          value={editingItem.lastname || editingItem['اسم العائلة'] || ''}
+                          onChange={(e) => setEditingItem({ ...editingItem, lastname: e.target.value, 'اسم العائلة': e.target.value })}
+                          className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{isRTL ? 'اسم المستخدم' : 'Username'}</label>
+                        <input
+                          type="text"
+                          value={editingItem.username || editingItem['اسم المستخدم'] || ''}
+                          onChange={(e) => setEditingItem({ ...editingItem, username: e.target.value, 'اسم المستخدم': e.target.value, 'اسم الدخول': e.target.value })}
+                          className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all font-mono"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{isRTL ? 'كلمة المرور' : 'Password'}</label>
+                        <input
+                          type="text"
+                          value={editingItem.password || editingItem['كلمة المرور'] || ''}
+                          onChange={(e) => setEditingItem({ ...editingItem, password: e.target.value, 'كلمة المرور': e.target.value })}
+                          className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all font-mono"
+                        />
+                      </div>
+                      <div className="space-y-2 col-span-full">
+                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                          {isRTL ? 'اسم العرض على المايكروتيك' : 'MikroTik Display Name'}
+                        </label>
+                        <input 
+                          type="text" 
+                          value={editingItem.name || editingItem['اسم العرض على المايكروتيك'] || ''}
+                          onChange={(e) => setEditingItem({ ...editingItem, name: e.target.value, 'اسم العرض على المايكروتيك': e.target.value })}
+                          placeholder={isRTL ? 'اسم لاتيني يظهر كتسمية/تعليق داخل المايكروتيك' : 'Latin display/comment shown inside MikroTik'}
+                          className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all font-bold"
+                        />
+                        <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                          {isRTL ? 'هذا الحقل يُرسل كاسم عرض/تعليق للمشترك داخل المايكروتيك.' : 'This field is sent as the subscriber display/comment inside MikroTik.'}
+                        </p>
+                      </div>
+                      {SUBSCRIBER_COLUMNS.filter(col => !['id', 'firstname', 'lastname', 'name', 'username', 'password'].includes(col.id)).map((col) => {
                         let fieldType = 'text';
                         if (['balance', 'debt', 'paid', 'bill'].includes(col.id)) fieldType = 'number';
                         if (['startDate', 'expiry'].includes(col.id)) fieldType = 'date';
@@ -3523,6 +5388,12 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
                                    className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all"
                                  />
                                )
+                            ) : fieldType === 'date' ? (
+                              <DateInput
+                                value={String(editingItem[col.id] || editingItem[col.key || ''] || '')}
+                                onChange={(val) => setEditingItem({ ...editingItem, [col.id]: val, ...(col.key ? { [col.key]: val } : {}) })}
+                                className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all"
+                              />
                             ) : (
                               <input 
                                 type={['balance', 'debt', 'paid', 'bill'].includes(col.id) ? "text" : fieldType} 
@@ -3548,7 +5419,127 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
 
                 {activeSubTab === 'iptv' && (
                   <div className="space-y-4">
-                    {/* ... IPTV fields ... */}
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{t.management.iptv.table.name}</label>
+                      <input
+                        type="text"
+                        value={String(editingItem.name || '')}
+                        onChange={(e) => setEditingItem({ ...editingItem, name: e.target.value })}
+                        className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all"
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{t.management.iptv.table.serviceType}</label>
+                        <select
+                          value={String(editingItem.serviceType || 'iptv')}
+                          onChange={(e) => setEditingItem({ ...editingItem, serviceType: e.target.value })}
+                          className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all"
+                        >
+                          <option value="iptv">{t.management.iptv.serviceTypes.iptv}</option>
+                          <option value="vpn">{t.management.iptv.serviceTypes.vpn}</option>
+                          <option value="static_ip">{t.management.iptv.serviceTypes.static_ip}</option>
+                          <option value="cloud_storage">{t.management.iptv.serviceTypes.cloud_storage}</option>
+                          <option value="security">{t.management.iptv.serviceTypes.security}</option>
+                          <option value="other">{t.management.iptv.serviceTypes.other}</option>
+                        </select>
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{t.management.iptv.table.billingCycle}</label>
+                        <select
+                          value={String(editingItem.billingCycle || 'monthly')}
+                          onChange={(e) => setEditingItem({ ...editingItem, billingCycle: e.target.value })}
+                          className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all"
+                        >
+                          <option value="monthly">{t.management.iptv.billingCycles.monthly}</option>
+                          <option value="quarterly">{t.management.iptv.billingCycles.quarterly}</option>
+                          <option value="yearly">{t.management.iptv.billingCycles.yearly}</option>
+                          <option value="one_time">{t.management.iptv.billingCycles.one_time}</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{t.management.iptv.table.provider}</label>
+                        <input 
+                          type="text" 
+                          value={String(editingItem.platform || '')}
+                          onChange={(e) => setEditingItem({ ...editingItem, platform: e.target.value })}
+                          className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{t.management.iptv.table.host}</label>
+                        <input 
+                          type="text" 
+                          value={String(editingItem.host || '')}
+                          onChange={(e) => setEditingItem({ ...editingItem, host: e.target.value })}
+                          className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all"
+                        />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{t.management.iptv.table.price}</label>
+                        <input 
+                          type="text" 
+                          inputMode="decimal"
+                          lang="en"
+                          value={editingItem.price ?? 0}
+                          onChange={(e) => {
+                            const val = e.target.value.replace(/[^0-9.]/g, '');
+                            setEditingItem({ ...editingItem, price: val });
+                          }}
+                          className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all font-mono"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{t.management.iptv.table.cost}</label>
+                        <input 
+                          type="text" 
+                          inputMode="decimal"
+                          lang="en"
+                          value={editingItem.cost ?? 0}
+                          onChange={(e) => {
+                            const val = e.target.value.replace(/[^0-9.]/g, '');
+                            setEditingItem({ ...editingItem, cost: val });
+                          }}
+                          className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all font-mono"
+                        />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{t.management.iptv.table.expiry}</label>
+                        <DateInput
+                          value={String(editingItem.expiry || '')}
+                          onChange={(val) => setEditingItem({ ...editingItem, expiry: val })}
+                          className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{t.management.iptv.table.status}</label>
+                        <select 
+                          value={String(editingItem.status || 'active')}
+                          onChange={(e) => setEditingItem({ ...editingItem, status: e.target.value })}
+                          className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all"
+                        >
+                          <option value="active">{t.management.iptv.statuses.active}</option>
+                          <option value="suspended">{t.management.iptv.statuses.suspended}</option>
+                          <option value="expired">{t.management.iptv.statuses.expired}</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{isRTL ? 'ملاحظات' : 'Notes'}</label>
+                      <textarea 
+                        value={String(editingItem.notes || '')}
+                        onChange={(e) => setEditingItem({ ...editingItem, notes: e.target.value })}
+                        rows={3}
+                        className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all resize-none"
+                        placeholder={isRTL ? 'أضف ملاحظات حول هذه الخدمة...' : 'Add notes about this service...'}
+                      />
+                    </div>
                   </div>
                 )}
 

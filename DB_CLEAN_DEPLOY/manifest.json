@@ -1,0 +1,19 @@
+﻿{
+    "generatedAt":  "2026-04-08 06:36:42",
+    "note":  "Clean customer-management database package (old data removed, no backups).",
+    "emptied":  [
+                    "Subscribers",
+                    "Financial/Suppliers",
+                    "Financial/Investors",
+                    "Financial/System_Managers",
+                    "System_IPTV/Subscribers",
+                    "Staff/Directors",
+                    "Staff/Deputies"
+                ],
+    "keptConfig":  [
+                       "CRM/profiles.json",
+                       "System/gateways_config.json",
+                       "System/message_data.json",
+                       "System/network_config.json"
+                   ]
+}

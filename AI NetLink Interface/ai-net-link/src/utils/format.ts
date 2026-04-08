@@ -61,3 +61,15 @@ export function formatDate(date: string | Date): string {
     day: 'numeric'
   });
 }
+
+/**
+ * Formats time to always use English (Western Arabic) numerals.
+ */
+export function formatTime(date: Date = new Date(), options?: Intl.DateTimeFormatOptions): string {
+  return date.toLocaleTimeString('en-US', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+    ...options,
+  });
+}

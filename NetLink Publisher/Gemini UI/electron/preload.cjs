@@ -8,6 +8,7 @@ contextBridge.exposeInMainWorld('netlinkPublisher', {
   selectSavedProject: (projectId) => ipcRenderer.invoke('publisher:select-saved-project', projectId),
   deleteSavedProject: (projectId) => ipcRenderer.invoke('publisher:delete-saved-project', projectId),
   refreshProject: (payload) => ipcRenderer.invoke('publisher:refresh-project', payload),
+  diagnoseGitHub: (payload) => ipcRenderer.invoke('publisher:diagnose-github', payload),
   loadVersion: (payload) => ipcRenderer.invoke('publisher:load-version', payload),
   saveVersionDraft: (payload) => ipcRenderer.invoke('publisher:save-version-draft', payload),
   publishRelease: (payload) => ipcRenderer.invoke('publisher:publish-release', payload),

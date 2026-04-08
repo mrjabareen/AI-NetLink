@@ -1,13 +1,14 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { motion } from 'motion/react';
-import { TrendingUp, Users, DollarSign, ArrowUpRight, ArrowDownRight, BarChart3, PieChart, Wallet, ShoppingCart, History, Info, ArrowLeft, Edit } from 'lucide-react';
-import { AppState } from '../types';
+import { TrendingUp, Users, DollarSign, ArrowUpRight, ArrowDownRight, BarChart3, PieChart, Wallet, ShoppingCart, History, Info, ArrowLeft, Edit, Search, Filter } from 'lucide-react';
+import { AppState, ShareholderRecord } from '../types';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { formatCurrency } from '../utils/currency';
 import { formatNumber, normalizeDigits, parseNumericInput, formatDate } from '../utils/format';
 import NumericInput from './NumericInput';
 import { dict } from '../dict';
 import { toastError, toastSuccess } from '../utils/notify';
+import { getSmartMatchScore } from '../utils/search';
 
 interface InvestorsTabProps {
   state: AppState;
@@ -77,6 +78,55 @@ const investorList = [
   },
 ];
 
+type ShareholderAdvancedFilters = {
+  status: string;
+  ownership: string;
+  shares: string;
+  dividends: string;
+  activity: string;
+  joinDate: string;
+};
+
+type AdvancedFilterOption = {
+  value: string;
+  label: string;
+};
+
+type AdvancedFilterField = {
+  key: keyof ShareholderAdvancedFilters;
+  label: string;
+  options: AdvancedFilterOption[];
+};
+
+const DEFAULT_SHAREHOLDER_FILTERS: ShareholderAdvancedFilters = {
+  status: 'all',
+  ownership: 'all',
+  shares: 'all',
+  dividends: 'all',
+  activity: 'all',
+  joinDate: 'all',
+};
+
+const parseOwnershipPercent = (value: string) => {
+  const match = String(value || '').match(/-?\d+(\.\d+)?/);
+  return match ? Number(match[0]) : 0;
+};
+
+const getDaysSinceDate = (value: string) => {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return Number.POSITIVE_INFINITY;
+  return Math.max(0, Math.floor((Date.now() - parsed.getTime()) / (1000 * 60 * 60 * 24)));
+};
+
+const getRelativeRangeBucket = (value: number, values: number[]) => {
+  const safeValues = values.filter((item) => Number.isFinite(item) && item > 0);
+  const max = safeValues.length > 0 ? Math.max(...safeValues) : 1;
+  const ratio = value / max;
+  if (ratio >= 0.67) return 'large';
+  if (ratio >= 0.34) return 'medium';
+  return 'small';
+};
+
 export default function InvestorsTab({ state, setState }: InvestorsTabProps) {
   const isRTL = state.lang === 'ar';
   const t = dict[state.lang];
@@ -89,6 +139,9 @@ export default function InvestorsTab({ state, setState }: InvestorsTabProps) {
   const [selectedShareholderId, setSelectedShareholderId] = useState<string | null>(null);
   const [isDistributing, setIsDistributing] = useState(false);
   const [dividendAmount, setDividendAmount] = useState<number>(0);
+  const [shareholderSearchTerm, setShareholderSearchTerm] = useState('');
+  const [showShareholderFilters, setShowShareholderFilters] = useState(false);
+  const [shareholderFilters, setShareholderFilters] = useState<ShareholderAdvancedFilters>(DEFAULT_SHAREHOLDER_FILTERS);
 
   const investorList = state.shareholders;
   const selectedShareholder = investorList.find(s => s.id === selectedShareholderId);
@@ -104,6 +157,160 @@ export default function InvestorsTab({ state, setState }: InvestorsTabProps) {
     currentValue: myShareholderRecord.shares * state.investorSettings.sharePrice,
     profitLoss: (myShareholderRecord.shares * state.investorSettings.sharePrice) - myShareholderRecord.investment,
     transactions: myShareholderRecord.transactions
+  };
+
+  const getShareholderStatus = (shareholder: ShareholderRecord) => {
+    const record = shareholder as ShareholderRecord & { status?: string };
+    return record.status || 'active';
+  };
+
+  const getShareholderStatusLabel = (status: string) => {
+    if (status === 'active') return isRTL ? 'نشط' : 'Active';
+    if (status === 'inactive') return isRTL ? 'غير نشط' : 'Inactive';
+    if (status === 'suspended') return isRTL ? 'موقوف' : 'Suspended';
+    return status;
+  };
+
+  const getShareholderOwnershipBucket = (shareholder: ShareholderRecord) => {
+    const ownershipPercent = parseOwnershipPercent(shareholder.ownership);
+    if (ownershipPercent >= 10) return 'major';
+    if (ownershipPercent >= 1) return 'medium';
+    return 'minor';
+  };
+
+  const getShareholderSharesBucket = (shareholder: ShareholderRecord) =>
+    getRelativeRangeBucket(shareholder.shares, investorList.map((item) => item.shares));
+
+  const getShareholderDividendsBucket = (shareholder: ShareholderRecord) => {
+    if (shareholder.dividends <= 0) return 'none';
+    const relativeBucket = getRelativeRangeBucket(shareholder.dividends, investorList.map((item) => item.dividends));
+    return relativeBucket === 'large' ? 'high' : 'regular';
+  };
+
+  const getShareholderActivityBucket = (shareholder: ShareholderRecord) =>
+    shareholder.transactions.length > 0 ? 'active_records' : 'no_records';
+
+  const getShareholderJoinBucket = (shareholder: ShareholderRecord) => {
+    const days = getDaysSinceDate(shareholder.joinDate);
+    if (days <= 180) return 'recent';
+    if (days <= 365) return 'year';
+    return 'older';
+  };
+
+  const shareholderFilterFields = useMemo<AdvancedFilterField[]>(() => {
+    const statusValues = Array.from(new Set(investorList.map((shareholder) => getShareholderStatus(shareholder))));
+
+    return [
+      {
+        key: 'status',
+        label: isRTL ? 'الحالة' : 'Status',
+        options: [
+          { value: 'all', label: isRTL ? 'كل الحالات' : 'All statuses' },
+          ...statusValues.map((status) => ({
+            value: status,
+            label: getShareholderStatusLabel(status),
+          })),
+        ],
+      },
+      {
+        key: 'ownership',
+        label: isRTL ? 'نسبة الملكية' : 'Ownership',
+        options: [
+          { value: 'all', label: isRTL ? 'كل النسب' : 'All ownership ranges' },
+          { value: 'major', label: isRTL ? 'ملكية كبيرة 10%+' : 'Major 10%+' },
+          { value: 'medium', label: isRTL ? 'ملكية متوسطة 1%+' : 'Medium 1%+' },
+          { value: 'minor', label: isRTL ? 'ملكية صغيرة أقل من 1%' : 'Minor below 1%' },
+        ],
+      },
+      {
+        key: 'shares',
+        label: isRTL ? 'حجم الأسهم' : 'Share Volume',
+        options: [
+          { value: 'all', label: isRTL ? 'كل الأحجام' : 'All share sizes' },
+          { value: 'large', label: isRTL ? 'عالي' : 'Large' },
+          { value: 'medium', label: isRTL ? 'متوسط' : 'Medium' },
+          { value: 'small', label: isRTL ? 'منخفض' : 'Small' },
+        ],
+      },
+      {
+        key: 'dividends',
+        label: isRTL ? 'الأرباح' : 'Dividends',
+        options: [
+          { value: 'all', label: isRTL ? 'كل الحالات' : 'All dividend states' },
+          { value: 'high', label: isRTL ? 'أرباح عالية' : 'High dividends' },
+          { value: 'regular', label: isRTL ? 'لديه أرباح' : 'Has dividends' },
+          { value: 'none', label: isRTL ? 'بدون أرباح' : 'No dividends' },
+        ],
+      },
+      {
+        key: 'activity',
+        label: isRTL ? 'النشاط' : 'Activity',
+        options: [
+          { value: 'all', label: isRTL ? 'كل السجلات' : 'All records' },
+          { value: 'active_records', label: isRTL ? 'لديه معاملات' : 'Has transactions' },
+          { value: 'no_records', label: isRTL ? 'بدون معاملات' : 'No transactions' },
+        ],
+      },
+      {
+        key: 'joinDate',
+        label: isRTL ? 'تاريخ الانضمام' : 'Join Date',
+        options: [
+          { value: 'all', label: isRTL ? 'كل الفترات' : 'All periods' },
+          { value: 'recent', label: isRTL ? 'آخر 6 أشهر' : 'Last 6 months' },
+          { value: 'year', label: isRTL ? 'خلال سنة' : 'Within 1 year' },
+          { value: 'older', label: isRTL ? 'أقدم من سنة' : 'Older than 1 year' },
+        ],
+      },
+    ];
+  }, [investorList, isRTL]);
+
+  const activeShareholderFilterCount = useMemo(
+    () => Object.values(shareholderFilters).filter((value) => value !== 'all').length,
+    [shareholderFilters],
+  );
+
+  const filteredShareholders = useMemo(() => {
+    return investorList
+      .map((shareholder) => {
+        const score = Math.max(
+          getSmartMatchScore(shareholderSearchTerm, shareholder.name),
+          getSmartMatchScore(shareholderSearchTerm, shareholder.email || ''),
+          getSmartMatchScore(shareholderSearchTerm, shareholder.id),
+          getSmartMatchScore(shareholderSearchTerm, shareholder.ownership),
+          getSmartMatchScore(shareholderSearchTerm, String(shareholder.shares)),
+        );
+
+        return { shareholder, score };
+      })
+      .filter(({ shareholder, score }) => {
+        if (shareholderSearchTerm && score <= 0) return false;
+        if (shareholderFilters.status !== 'all' && getShareholderStatus(shareholder) !== shareholderFilters.status) return false;
+        if (shareholderFilters.ownership !== 'all' && getShareholderOwnershipBucket(shareholder) !== shareholderFilters.ownership) return false;
+        if (shareholderFilters.shares !== 'all' && getShareholderSharesBucket(shareholder) !== shareholderFilters.shares) return false;
+        if (shareholderFilters.dividends !== 'all' && getShareholderDividendsBucket(shareholder) !== shareholderFilters.dividends) return false;
+        if (shareholderFilters.activity !== 'all' && getShareholderActivityBucket(shareholder) !== shareholderFilters.activity) return false;
+        if (shareholderFilters.joinDate !== 'all' && getShareholderJoinBucket(shareholder) !== shareholderFilters.joinDate) return false;
+        return true;
+      })
+      .sort((a, b) => {
+        if (shareholderSearchTerm) return b.score - a.score || a.shareholder.name.localeCompare(b.shareholder.name);
+        return b.shareholder.shares - a.shareholder.shares || a.shareholder.name.localeCompare(b.shareholder.name);
+      })
+      .map(({ shareholder }) => shareholder);
+  }, [investorList, shareholderFilters, shareholderSearchTerm]);
+
+  const activeShareholderFilterChips = useMemo(() => {
+    return shareholderFilterFields.flatMap((field) => {
+      const value = shareholderFilters[field.key];
+      if (!value || value === 'all') return [];
+      const option = field.options.find((item) => item.value === value);
+      return option ? [`${field.label}: ${option.label}`] : [];
+    });
+  }, [shareholderFilterFields, shareholderFilters]);
+
+  const resetShareholderSearch = () => {
+    setShareholderSearchTerm('');
+    setShareholderFilters(DEFAULT_SHAREHOLDER_FILTERS);
   };
 
   const handleTrade = () => {
@@ -416,7 +623,7 @@ export default function InvestorsTab({ state, setState }: InvestorsTabProps) {
               <h3 className="font-bold text-slate-800 dark:text-slate-200">{t.investor.transactions}</h3>
             </div>
             <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
+              <table dir={isRTL ? 'rtl' : 'ltr'} className={`w-full border-collapse ${isRTL ? 'text-right' : 'text-left'}`}>
                 <thead>
                   <tr className="bg-slate-50/50 dark:bg-slate-900/50">
                     <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider border-b border-slate-100 dark:border-slate-800">{isRTL ? 'التاريخ' : 'Date'}</th>
@@ -614,14 +821,109 @@ export default function InvestorsTab({ state, setState }: InvestorsTabProps) {
                 </div>
 
                 <div className="glass-card overflow-hidden">
-                  <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center">
-                    <h3 className="font-bold text-slate-800 dark:text-slate-200">{t.settings.investors.listTitle}</h3>
-                    <div className="text-xs font-bold text-slate-400 uppercase tracking-widest">
-                      {investorList.length} {isRTL ? 'مساهمين' : 'Shareholders'}
+                  <div className="p-6 border-b border-slate-100 dark:border-slate-800 space-y-4">
+                    <div className="flex flex-col lg:flex-row justify-between lg:items-center gap-3">
+                      <div>
+                        <h3 className="font-bold text-slate-800 dark:text-slate-200">{t.settings.investors.listTitle}</h3>
+                        <div className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">
+                          {filteredShareholders.length} / {investorList.length} {isRTL ? 'مساهمين' : 'Shareholders'}
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <button
+                          onClick={() => setShowShareholderFilters((prev) => !prev)}
+                          className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold transition-colors ${
+                            showShareholderFilters || activeShareholderFilterCount > 0
+                              ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/20'
+                              : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'
+                          }`}
+                        >
+                          <Filter size={16} />
+                          <span>{isRTL ? 'بحث متقدم' : 'Advanced Search'}</span>
+                          {activeShareholderFilterCount > 0 && (
+                            <span className="min-w-6 h-6 px-2 rounded-full bg-white/20 text-xs font-black flex items-center justify-center">
+                              {activeShareholderFilterCount}
+                            </span>
+                          )}
+                        </button>
+                        {(shareholderSearchTerm || activeShareholderFilterCount > 0) && (
+                          <button
+                            onClick={resetShareholderSearch}
+                            className="px-4 py-2.5 rounded-xl text-sm font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                          >
+                            {isRTL ? 'مسح البحث' : 'Clear'}
+                          </button>
+                        )}
+                      </div>
                     </div>
+
+                    <div className="flex flex-col lg:flex-row gap-3">
+                      <div className="relative w-full lg:max-w-md">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                        <input
+                          type="text"
+                          value={shareholderSearchTerm}
+                          onChange={(e) => setShareholderSearchTerm(e.target.value)}
+                          placeholder={isRTL ? 'بحث بالاسم أو البريد أو الكود أو نسبة الملكية...' : 'Search by name, email, code, or ownership...'}
+                          className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl pl-10 pr-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                        />
+                      </div>
+                    </div>
+
+                    {showShareholderFilters && (
+                      <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/40 p-4 space-y-4">
+                        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+                          <div>
+                            <h4 className="text-sm font-bold text-slate-900 dark:text-white">{isRTL ? 'فلترة المساهمين' : 'Shareholder Filters'}</h4>
+                            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                              {isRTL ? 'فلترة حسب الحالة والملكية وحجم الأسهم والأرباح والنشاط.' : 'Filter by status, ownership, share size, dividends, and activity.'}
+                            </p>
+                          </div>
+                          {activeShareholderFilterCount > 0 && (
+                            <button
+                              onClick={() => setShareholderFilters(DEFAULT_SHAREHOLDER_FILTERS)}
+                              className="px-3 py-2 rounded-lg text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 transition-colors"
+                            >
+                              {isRTL ? 'إعادة تعيين الفلاتر' : 'Reset Filters'}
+                            </button>
+                          )}
+                        </div>
+
+                        {activeShareholderFilterChips.length > 0 && (
+                          <div className="flex flex-wrap gap-2">
+                            {activeShareholderFilterChips.map((chip) => (
+                              <span key={chip} className="px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-300 text-xs font-bold">
+                                {chip}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+                          {shareholderFilterFields.map((field) => (
+                            <label key={field.key} className="space-y-2">
+                              <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                                {field.label}
+                              </span>
+                              <select
+                                value={shareholderFilters[field.key]}
+                                onChange={(e) => setShareholderFilters((prev) => ({ ...prev, [field.key]: e.target.value }))}
+                                className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                              >
+                                {field.options.map((option) => (
+                                  <option key={option.value} value={option.value}>
+                                    {option.label}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                   <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse">
+                    <table dir={isRTL ? 'rtl' : 'ltr'} className={`w-full border-collapse ${isRTL ? 'text-right' : 'text-left'}`}>
                       <thead>
                         <tr className="bg-slate-50/50 dark:bg-slate-900/50">
                           <th className="px-6 py-5 text-xs font-bold text-slate-500 uppercase tracking-wider border-b border-slate-100 dark:border-slate-800">{t.settings.investors.shareholder}</th>
@@ -635,7 +937,7 @@ export default function InvestorsTab({ state, setState }: InvestorsTabProps) {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                        {investorList.map((investor) => (
+                        {filteredShareholders.map((investor) => (
                           <tr key={investor.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-900/30 transition-colors cursor-pointer" onClick={() => setSelectedShareholderId(investor.id)}>
                             <td className="px-6 py-5">
                               <div className="flex items-center gap-4">
@@ -666,7 +968,7 @@ export default function InvestorsTab({ state, setState }: InvestorsTabProps) {
                             </td>
                             <td className="px-6 py-5">
                               <span className="px-3 py-1.5 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-xs font-bold uppercase rounded-lg">
-                                {isRTL ? 'نشط' : 'Active'}
+                                {getShareholderStatusLabel(getShareholderStatus(investor))}
                               </span>
                             </td>
                             {isAdmin && (
@@ -678,6 +980,13 @@ export default function InvestorsTab({ state, setState }: InvestorsTabProps) {
                             )}
                           </tr>
                         ))}
+                        {filteredShareholders.length === 0 && (
+                          <tr>
+                            <td colSpan={isAdmin ? 6 : 5} className="px-6 py-12 text-center text-sm text-slate-500 dark:text-slate-400">
+                              {isRTL ? 'لا توجد نتائج مطابقة لخيارات البحث الحالية.' : 'No shareholders match the current search and filters.'}
+                            </td>
+                          </tr>
+                        )}
                       </tbody>
                     </table>
                   </div>
@@ -744,7 +1053,7 @@ export default function InvestorsTab({ state, setState }: InvestorsTabProps) {
                         <h4 className="font-bold text-slate-800 dark:text-slate-200">{t.investor.transactions}</h4>
                       </div>
                       <div className="overflow-x-auto">
-                        <table className="w-full text-left border-collapse">
+                        <table dir={isRTL ? 'rtl' : 'ltr'} className={`w-full border-collapse ${isRTL ? 'text-right' : 'text-left'}`}>
                           <thead>
                             <tr className="bg-slate-50/50 dark:bg-slate-900/50">
                               <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider border-b border-slate-100 dark:border-slate-800">{t.settings.investors.date}</th>
@@ -860,7 +1169,7 @@ export default function InvestorsTab({ state, setState }: InvestorsTabProps) {
                 <h3 className="font-bold text-slate-800 dark:text-slate-200">{isRTL ? 'سجل توزيع الأرباح' : 'Dividend History'}</h3>
               </div>
               <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse">
+                <table dir={isRTL ? 'rtl' : 'ltr'} className={`w-full border-collapse ${isRTL ? 'text-right' : 'text-left'}`}>
                   <thead>
                     <tr className="bg-slate-50/50 dark:bg-slate-900/50">
                       <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider border-b border-slate-100 dark:border-slate-800">{isRTL ? 'التاريخ' : 'Date'}</th>

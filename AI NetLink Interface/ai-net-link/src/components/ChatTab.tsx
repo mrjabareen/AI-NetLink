@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Plus, Search, Cpu, Download, Trash2, Send, Copy, Edit2, Terminal, Paperclip, MoreVertical, PanelLeftClose, PanelLeft, Check, RotateCcw, Mic, FileText, Ticket, Wrench, Activity } from 'lucide-react';
 import { AppState } from '../types';
 import { dict } from '../dict';
+import { formatTime } from '../utils/format';
 
 interface ChatTabProps {
   state: AppState;
@@ -21,7 +22,7 @@ export default function ChatTab({ state }: ChatTabProps) {
   const isRTL = state.lang === 'ar';
   const [message, setMessage] = useState('');
   const [messages, setMessages] = useState<Message[]>([
-    { id: 1, sender: 'ai', text: t.chat.welcomeMsg, time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) }
+    { id: 1, sender: 'ai', text: t.chat.welcomeMsg, time: formatTime() }
   ]);
   const [isTyping, setIsTyping] = useState(false);
   const [isHistoryOpen, setIsHistoryOpen] = useState(true);
@@ -50,7 +51,7 @@ export default function ChatTab({ state }: ChatTabProps) {
       id: Date.now(), 
       sender: 'user' as const, 
       text: text,
-      time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
+      time: formatTime()
     }];
     setMessages(newMessages);
     setMessage('');
@@ -75,7 +76,7 @@ export default function ChatTab({ state }: ChatTabProps) {
         id: Date.now() + 1, 
         sender: 'ai' as const, 
         text: aiResponseText,
-        time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
+        time: formatTime(),
         actionCard: actionCard
       }]);
     }, 1500);
@@ -129,7 +130,7 @@ export default function ChatTab({ state }: ChatTabProps) {
                 <button className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-red-500 transition-opacity"><Trash2 size={14} /></button>
               </div>
               <p className="text-[11px] text-slate-500 dark:text-slate-500 font-mono">
-                {new Date().toLocaleDateString()} • {new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                {new Date().toLocaleDateString('en-US')} • {new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false })}
               </p>
             </div>
           ))}
@@ -180,7 +181,7 @@ export default function ChatTab({ state }: ChatTabProps) {
             <div className="h-6 w-px bg-slate-200 dark:bg-slate-800 mx-1 hidden sm:block"></div>
             <button className="p-2 text-slate-500 hover:text-blue-600 dark:text-slate-400 dark:hover:text-blue-400 hover:bg-slate-100 dark:hover:bg-[#18181B] rounded-xl transition-all cursor-pointer" title={state.lang === 'en' ? 'Shift Handoff Report' : 'تقرير تسليم المناوبة'}><FileText size={18} /></button>
             <button className="p-2 text-slate-500 hover:text-teal-600 dark:text-slate-400 dark:hover:text-teal-400 hover:bg-slate-100 dark:hover:bg-[#18181B] rounded-xl transition-all cursor-pointer" title={t.chat.export}><Download size={18} /></button>
-            <button onClick={() => setMessages([{ id: 1, sender: 'ai', text: t.chat.welcomeMsg, time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) }])} className="p-2 text-slate-500 hover:text-red-500 dark:text-slate-400 dark:hover:text-red-400 hover:bg-slate-100 dark:hover:bg-[#18181B] rounded-xl transition-all cursor-pointer" title={t.chat.clear}><Trash2 size={18} /></button>
+            <button onClick={() => setMessages([{ id: 1, sender: 'ai', text: t.chat.welcomeMsg, time: formatTime() }])} className="p-2 text-slate-500 hover:text-red-500 dark:text-slate-400 dark:hover:text-red-400 hover:bg-slate-100 dark:hover:bg-[#18181B] rounded-xl transition-all cursor-pointer" title={t.chat.clear}><Trash2 size={18} /></button>
             <button className="p-2 text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-[#18181B] rounded-xl transition-all cursor-pointer"><MoreVertical size={18} /></button>
           </div>
         </div>

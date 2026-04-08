@@ -120,7 +120,7 @@ export const dict = {
     },
     management: {
       title: "Operations & Administration Center",
-      subtitle: "Manage subscribers, IPTV, suppliers, investors, administrative staff, and security groups from one unified workspace.",
+      subtitle: "Manage subscribers, digital services, suppliers, investors, administrative staff, and security groups from one unified workspace.",
       tabs: {
         subscribers: "Subscribers",
         suppliers: "Suppliers",
@@ -128,7 +128,7 @@ export const dict = {
         directors: "Directors (New)",
         deputies: "Staff & Technicians",
         admins: "Administrators",
-        iptv: "IP TV"
+        iptv: "Digital Services"
       },
       subscribers: {
         title: "Internet Subscribers",
@@ -200,24 +200,42 @@ export const dict = {
         }
       },
       iptv: {
-        title: "IP TV Subscribers",
-        add: "Add IP TV Subscriber",
+        title: "Digital Services Catalog",
+        add: "Add Digital Service",
         table: {
-          name: "Name",
-          phone: "Phone",
-          host: "Host",
-          username: "Username",
-          password: "Password",
+          name: "Service Name",
+          phone: "Support Contact",
+          host: "Endpoint / Host",
+          username: "Service Code",
+          password: "Access Key",
+          serviceType: "Service Type",
+          billingCycle: "Billing Cycle",
           status: "Status",
-          expiry: "Expiry Date",
+          expiry: "Offer Expiry Date",
           price: "Price",
-          provider: "Platform/Provider"
+          cost: "Cost",
+          provider: "Provider / Platform"
         },
         statuses: {
           all: "All Statuses",
           active: "Active",
           suspended: "Suspended",
           expired: "Expired"
+        },
+        serviceTypes: {
+          all: "All Types",
+          iptv: "IPTV",
+          vpn: "VPN",
+          static_ip: "Static IP",
+          cloud_storage: "Cloud Storage",
+          security: "Security Service",
+          other: "Other"
+        },
+        billingCycles: {
+          monthly: "Monthly",
+          quarterly: "Quarterly",
+          yearly: "Yearly",
+          one_time: "One Time"
         }
       },
       edit: "Edit Details",
@@ -614,7 +632,7 @@ export const dict = {
     },
     management: {
       title: "مركز الإدارة والعمليات",
-      subtitle: "مساحة موحدة لإدارة المشتركين وIPTV والموردين والمستثمرين والطاقم الإداري والمجموعات الأمنية.",
+      subtitle: "مساحة موحدة لإدارة المشتركين والخدمات الرقمية والموردين والمستثمرين والطاقم الإداري والمجموعات الأمنية.",
       tabs: {
         subscribers: "المشتركون",
         suppliers: "الموردون",
@@ -622,7 +640,7 @@ export const dict = {
         directors: "المدراء (النظام الجديد)",
         deputies: "الموظفون والفنيون",
         admins: "المديرون (نظام SAS NET)",
-        iptv: "IP TV"
+        iptv: "الخدمات الرقمية"
       },
       subscribers: {
         title: "مشتركو الإنترنت",
@@ -694,24 +712,42 @@ export const dict = {
         }
       },
       iptv: {
-        title: "مشتركو IP TV",
-        add: "إضافة مشترك IP TV",
+        title: "كتالوج الخدمات الرقمية",
+        add: "إضافة خدمة رقمية",
         table: {
-          name: "الاسم",
-          phone: "رقم الهاتف",
-          host: "الـ Host",
-          username: "اسم المستخدم",
-          password: "كلمة المرور",
+          name: "اسم الخدمة",
+          phone: "جهة التواصل",
+          host: "الرابط / الـ Host",
+          username: "رمز الخدمة",
+          password: "مفتاح الوصول",
+          serviceType: "نوع الخدمة",
+          billingCycle: "دورة الفوترة",
           status: "الحالة",
-          expiry: "تاريخ انتهاء الاشتراك",
-          price: "سعر الاشتراك",
-          provider: "المنصة/المزود"
+          expiry: "تاريخ انتهاء العرض",
+          price: "سعر البيع",
+          cost: "التكلفة",
+          provider: "المزود / المنصة"
         },
         statuses: {
           all: "جميع الحالات",
           active: "نشط",
           suspended: "معلق",
           expired: "منتهي"
+        },
+        serviceTypes: {
+          all: "كل الأنواع",
+          iptv: "IPTV",
+          vpn: "VPN",
+          static_ip: "IP ثابت",
+          cloud_storage: "تخزين سحابي",
+          security: "خدمة أمنية",
+          other: "أخرى"
+        },
+        billingCycles: {
+          monthly: "شهري",
+          quarterly: "ربع سنوي",
+          yearly: "سنوي",
+          one_time: "مرة واحدة"
         }
       },
       edit: "تعديل البيانات",

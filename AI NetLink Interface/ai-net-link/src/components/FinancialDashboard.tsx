@@ -169,7 +169,7 @@ export default function FinancialDashboard({ state, setState }: FinancialDashboa
                 </button>
               </div>
               <div className="flex-1 overflow-y-auto custom-scrollbar">
-                <table className="w-full text-left border-collapse">
+                <table dir={isRTL ? 'rtl' : 'ltr'} className={`w-full border-collapse ${isRTL ? 'text-right' : 'text-left'}`}>
                   <thead className="sticky top-0 bg-slate-50 dark:bg-[#111114] z-10">
                     <tr className="text-[10px] uppercase tracking-widest text-slate-500 font-black border-b border-slate-200 dark:border-slate-800">
                       <th className="px-6 py-3">{t.financial.type}</th>
@@ -253,7 +253,7 @@ export default function FinancialDashboard({ state, setState }: FinancialDashboa
                 </h3>
               </div>
               <div className="flex-1 overflow-x-auto custom-scrollbar">
-                <table className="w-full text-left border-collapse min-w-[800px]">
+                <table dir={isRTL ? 'rtl' : 'ltr'} className={`w-full border-collapse min-w-[800px] ${isRTL ? 'text-right' : 'text-left'}`}>
                   <thead className="sticky top-0 bg-slate-50 dark:bg-[#111114] z-10">
                     <tr className="text-[10px] uppercase tracking-widest text-slate-500 font-black border-b border-slate-200 dark:border-slate-800">
                       <th className="px-6 py-4">{t.financial.date}</th>

@@ -27,6 +27,27 @@ declare global {
     githubVersion: string | null;
   }
 
+  interface PublisherGitHubDiagnosticCheck {
+    label: string;
+    ok: boolean;
+    detail: string;
+  }
+
+  interface PublisherGitHubDiagnostic {
+    repo: string;
+    remotePath: string;
+    reachable: boolean;
+    tokenProvided: boolean;
+    authValid: boolean;
+    tokenUser: string | null;
+    repoAccess: boolean;
+    versionFileReadable: boolean;
+    scopes: string[];
+    githubVersion: string | null;
+    branch: string;
+    checks: PublisherGitHubDiagnosticCheck[];
+  }
+
   interface Window {
     netlinkPublisher: {
       getInitialState: () => Promise<{ settings: PublisherSettings; project: PublisherProjectState | null; savedProjects: PublisherSavedProject[]; selectedProjectId: string }>;
@@ -36,6 +57,7 @@ declare global {
       selectSavedProject: (projectId: string) => Promise<{ settings: PublisherSettings; savedProjects: PublisherSavedProject[]; selectedProjectId: string }>;
       deleteSavedProject: (projectId: string) => Promise<{ settings: PublisherSettings; savedProjects: PublisherSavedProject[]; selectedProjectId: string }>;
       refreshProject: (payload: PublisherSettings) => Promise<PublisherProjectState>;
+      diagnoseGitHub: (payload: PublisherSettings) => Promise<PublisherGitHubDiagnostic>;
       loadVersion: (payload: PublisherSettings) => Promise<PublisherProjectState>;
       saveVersionDraft: (payload: PublisherSettings & { version: string; buildDate: string; changelog: string[] }) => Promise<PublisherProjectState>;
       publishRelease: (payload: PublisherSettings & { version: string; buildDate: string; changelog: string[] }) => Promise<PublisherProjectState>;

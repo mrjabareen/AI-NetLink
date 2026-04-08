@@ -61,6 +61,10 @@ app.whenReady().then(() => {
     return core.getProjectState(payload);
   });
 
+  ipcMain.handle('publisher:diagnose-github', async (_event, payload) => {
+    return core.diagnoseGitHub(payload);
+  });
+
   ipcMain.handle('publisher:load-version', async (_event, payload) => {
     return core.getProjectState(payload);
   });

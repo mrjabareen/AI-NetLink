@@ -638,7 +638,7 @@ export default function NetworkRadiusTab({ state, setState }: NetworkRadiusTabPr
                                </div>
                            ) : (
                                <div className="overflow-x-auto">
-                                   <table className="w-full text-left border-collapse">
+                                   <table dir={isRTL ? 'rtl' : 'ltr'} className={`w-full border-collapse ${isRTL ? 'text-right' : 'text-left'}`}>
                                        <thead>
                                            <tr className="border-b border-slate-200 dark:border-slate-800">
                                                <th className="p-4 text-xs font-bold text-slate-500 uppercase">{isRTL ? 'اسم الخدمة' : 'Name'}</th>

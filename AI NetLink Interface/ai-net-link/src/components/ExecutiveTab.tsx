@@ -5,6 +5,7 @@ import { AppState } from '../types';
 import { executiveChat } from '../api';
 import { toastError, toastInfo, toastSuccess } from '../utils/notify';
 import AppConfirmDialog from './AppConfirmDialog';
+import { formatTime } from '../utils/format';
 
 interface ExecutiveTabProps {
   state: AppState;
@@ -29,7 +30,7 @@ const createWelcomeMessage = (lang: 'ar' | 'en'): Message => ({
   text: lang === 'en'
     ? 'Welcome. I am your executive assistant. I can search internal data, inspect files, and use the web when you explicitly ask for it.'
     : 'مرحباً. أنا مساعدك التنفيذي. أستطيع البحث في البيانات الداخلية وفحص الملفات واستخدام الإنترنت عندما تطلب ذلك صراحة.',
-  time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+  time: formatTime(),
 });
 
 const sanitizeLoadedMessages = (items: any[]): Message[] => {
@@ -38,7 +39,7 @@ const sanitizeLoadedMessages = (items: any[]): Message[] => {
       id: Number(item?.id || Date.now() + index),
       sender: item?.sender === 'user' ? 'user' : 'ai',
       text: String(item?.text || ''),
-      time: String(item?.time || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })),
+      time: String(item?.time || formatTime()),
       sources: Array.isArray(item?.sources) ? item.sources : [],
       stats: null,
       isError: Boolean(item?.isError),
@@ -127,7 +128,7 @@ export default function ExecutiveTab({ state }: ExecutiveTabProps) {
       id: Date.now(), 
       sender: 'user', 
       text: effectiveText,
-      time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
+      time: formatTime()
     }];
     setMessages(newMessages);
     setMessage('');
@@ -141,7 +142,7 @@ export default function ExecutiveTab({ state }: ExecutiveTabProps) {
           text: state.lang === 'en'
             ? 'Hello, I am ready. Ask me for a specific task.'
             : 'مرحباً، أنا جاهز. اطلب مني مهمة محددة.',
-          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          time: formatTime(),
           sources: [],
           stats: null,
         },
@@ -158,7 +159,7 @@ export default function ExecutiveTab({ state }: ExecutiveTabProps) {
           text: state.lang === 'en'
             ? 'I am your executive AI assistant. I can search internal data, inspect files, and help with tasks you request.'
             : 'أنا مساعدك التنفيذي الذكي. أستطيع البحث في البيانات الداخلية وفحص الملفات والويب ومساعدتك في المهام التي تطلبها.',
-          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          time: formatTime(),
           sources: [],
           stats: null,
         },
@@ -176,7 +177,7 @@ export default function ExecutiveTab({ state }: ExecutiveTabProps) {
           text: state.lang === 'en'
             ? 'Understood. I will keep my replies short.'
             : 'تم. سأجعل ردودي قصيرة.',
-          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          time: formatTime(),
           sources: [],
           stats: null,
         },
@@ -193,7 +194,7 @@ export default function ExecutiveTab({ state }: ExecutiveTabProps) {
           text: state.lang === 'en'
             ? 'Understood. Tell me exactly what result you want, and I will answer more directly.'
             : 'فهمت. قل لي بالضبط ما النتيجة التي تريدها وسأجيب بشكل مباشر أكثر.',
-          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          time: formatTime(),
           sources: [],
           stats: null,
         },
@@ -228,7 +229,7 @@ export default function ExecutiveTab({ state }: ExecutiveTabProps) {
           id: Date.now() + 1,
           sender: 'ai',
           text: cleanedReply || (state.lang === 'en' ? 'No response returned.' : 'لم يصل رد من المحرك.'),
-          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          time: formatTime(),
           sources: shouldHideSources ? [] : (result.sources || []),
           stats: result.stats || null,
         },
@@ -240,7 +241,7 @@ export default function ExecutiveTab({ state }: ExecutiveTabProps) {
           id: Date.now() + 1,
           sender: 'ai',
           text: error?.message || (state.lang === 'en' ? 'Executive AI request failed.' : 'فشل طلب المساعد التنفيذي.'),
-          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          time: formatTime(),
           isError: true,
         },
       ]);

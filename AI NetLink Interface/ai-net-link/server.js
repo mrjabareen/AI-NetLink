@@ -1042,7 +1042,7 @@ app.get('/api/network/status-batch', async (req, res) => {
                         fullRawData.push({ router: router.name, type: 'ppp', data: pppActive });
                     }
                     pppActive.forEach(u => {
-                        const name = toStr(u.name || u.user || u['.id']);
+                        const name = toStr(u.name || u.user).trim();
                         if (name) onlineUsers.add(name.toLowerCase());
                     });
                 }
@@ -1505,12 +1505,27 @@ app.post('/api/network/profiles/:id/push', async (req, res) => {
 async function performMikrotikSyncInternal(subscriberData, target) {
     // Reverted: Use the 'username' (e.g., 99000110) as the primary secret identifier in MikroTik.
     const username = (subscriberData['اسم المستخدم'] || subscriberData.username || subscriberData['اسم الدخول'] || '').trim();
-    const comment = (subscriberData.name || '').trim(); // Use the English name as a comment for identification.
+    const comment = (subscriberData['اسم العرض على المايكروتيك'] || subscriberData.name || '').trim();
     const password = (subscriberData['كلمة المرور'] || subscriberData.password || '').trim();
     const profileName = (subscriberData['سرعة الخط'] || subscriberData.plan || subscriberData.profile_name || '');
     const statusAr = subscriberData['حالة الحساب'] || '';
-    const isDisabled = statusAr === 'موقوف' || statusAr === 'منتهي' ||
-                       subscriberData.status === 'suspended' || subscriberData.status === 'expired';
+    const normalizedStatus = String(subscriberData.status || statusAr || '').trim().toLowerCase();
+    const expiryValue = String(subscriberData.expiry || subscriberData.expiration || subscriberData['تاريخ انتهاء الاشتراك'] || subscriberData['تاريخ ناهية الاشتراك'] || subscriberData['تاريخ النهاية'] || '').trim();
+    const expiryTimeValue = String(subscriberData.expiry_time || subscriberData.expiryTime || subscriberData['وقت الانتهاء'] || subscriberData['وقت نهاية الاشتراك'] || '').trim();
+    let isExpiredByTime = false;
+    if (expiryValue) {
+        const expiryAt = new Date(expiryValue);
+        if (!Number.isNaN(expiryAt.getTime())) {
+            if (expiryTimeValue) {
+                const parts = expiryTimeValue.split(':').map((part) => parseInt(part, 10) || 0);
+                expiryAt.setHours(parts[0] || 23, parts[1] || 59, parts[2] || 59, 0);
+            } else {
+                expiryAt.setHours(23, 59, 59, 0);
+            }
+            isExpiredByTime = expiryAt.getTime() < Date.now();
+        }
+    }
+    const isDisabled = ['suspended', 'expired', 'موقوف', 'معلق', 'منتهي'].includes(normalizedStatus) || isExpiredByTime;
 
     let serviceType = 'pppoe';
     let resolvedProfile = profileName || null;
@@ -2149,21 +2164,38 @@ app.get('/api/subscribers', (req, res) => {
     const subscribers = files.map(file => {
       const content = fs.readFileSync(getSafePath(dirPath, file), 'utf-8');
       const s = JSON.parse(content);
+      const rawId = String(s.id || file.split('_')[0] || Math.floor(Math.random() * 1000));
+      const firstName = s.firstname || s.firstName || s['الاسم الأول'] || s['الاسم الاول'] || '';
+      const lastName = s.lastname || s.lastName || s['اسم العائلة'] || s['الاسم الثاني'] || '';
+      const username = s.username || s['اسم المستخدم'] || s['اسم الدخول'] || '';
+      const password = s.password || s['كلمة المرور'] || '';
+      const displayName = s['اسم العرض على المايكروتيك'] || s.name || s['الاسم الانجليزي'] || '';
+      const phone = s.phone || s['رقم الموبايل'] || s['الهاتف'] || 'N/A';
+      const city = s.city || s['المدينة'] || '';
+      const subType = s.subType || s['نوع الاشتراك'] || '';
       
+      const rawStatus = String(s.status || s['حالة الحساب'] || '').trim().toLowerCase();
       let statusKey = 'active';
-      if (s['حالة الحساب'] === 'موقوف') statusKey = 'suspended';
-      else if (s['حالة الحساب'] === 'منتهي') statusKey = 'expired';
+      if (['suspended', 'موقوف', 'معلق'].includes(rawStatus)) statusKey = 'suspended';
+      else if (['expired', 'منتهي'].includes(rawStatus)) statusKey = 'expired';
+      else if (['active', 'مفعل', 'نشط'].includes(rawStatus)) statusKey = 'active';
       
       return {
         ...s,
-        id: `SUB-${s.id || file.split('_')[0] || Math.floor(Math.random() * 1000)}`,
-        name: s.name || `${s.firstname || ''} ${s.lastname || ''}`.trim() || file.replace('.json', '').split('_')[1],
+        id: rawId,
+        firstname: firstName,
+        lastname: lastName,
+        username,
+        password,
+        name: displayName,
         plan: s['سرعة الخط'] || s.profile_name || 'Unknown',
+        subType,
         status: statusKey,
         expiry: s.expiry || s['تاريخ الانتهاء'] || (s.expiration || s['تاريخ ناهية الاشتراك']) || '2026-12-31',
         expiry_time: s.expiry_time || s['وقت الانتهاء'] || 'N/A',
         balance: parseFloat(s['الرصيد المتبقي له'] || s.balance) || 0,
-        phone: s.phone || s['رقم الموبايل'] || 'N/A',
+        phone,
+        city,
         mac: s['ماك الايت بيم'] || 'N/A',
         ip: s['ip-laitpem'] || 'N/A',
         agent: s['الوكيل المسؤل'] || 'N/A'
@@ -2195,9 +2227,10 @@ app.post('/api/subscribers', (req, res) => {
     
     const newId = maxId + 1;
     const body = req.body || {};
-    const fName = body.firstname || body['الاسم الأول'] || body.name || 'مجهول';
+    const fName = body.firstname || body['الاسم الأول'] || 'مجهول';
     const lName = body.lastname || body['اسم العائلة'] || '';
-    const fullName = `${fName} ${lName}`.trim().replace(/[\\/:*?"<>|]/g, '');
+    const fallbackName = body.name || body['اسم العرض على المايكروتيك'] || 'مجهول';
+    const fullName = (`${fName} ${lName}`.trim() || String(fallbackName)).replace(/[\\/:*?"<>|]/g, '');
     const fileName = `${newId}_${fullName}.json`;
     
     const s = { ...body, id: newId };
@@ -2245,10 +2278,11 @@ app.put('/api/subscribers/:id', (req, res) => {
     fs.writeFileSync(filePath, JSON.stringify(updatedContent, null, 2), 'utf-8');
     
     // File Renaming Logic if name changed
-    const newNameVal = updatedContent.name || updatedContent.firstname || '';
-    const newFName = updatedContent.firstname || '';
-    const newLName = updatedContent.lastname || '';
-    const newFullName = newNameVal ? newNameVal.replace(/[\\/:*?"<>|]/g, '') : (newFName || newLName ? `${newFName} ${newLName}`.trim().replace(/[\\/:*?"<>|]/g, '') : '');
+    const newNameVal = updatedContent['اسم العرض على المايكروتيك'] || updatedContent.name || '';
+    const newFName = updatedContent.firstname || updatedContent['الاسم الأول'] || '';
+    const newLName = updatedContent.lastname || updatedContent['اسم العائلة'] || '';
+    const personName = `${newFName} ${newLName}`.trim();
+    const newFullName = (personName || newNameVal).replace(/[\\/:*?"<>|]/g, '');
     
     if (newFullName) {
         const fileIdMatch = targetFile.match(/^(\d+)_/);
@@ -2907,20 +2941,29 @@ app.post('/api/email/send', async (req, res) => {
 // ==========================================
 // BACKGROUND SERVICE: Automated Expiry Monitor
 // ==========================================
+function parseLocalExpiryDateTime(subData) {
+    const expiryValue = String(subData.expiry || subData.expiration || subData['تاريخ انتهاء الاشتراك'] || subData['تاريخ ناهية الاشتراك'] || subData['تاريخ النهاية'] || '').trim();
+    if (!expiryValue) return null;
+
+    const dateParts = expiryValue.split(/[-/]/).map((part) => parseInt(part, 10) || 0);
+    if (dateParts.length < 3) return null;
+    const [year, month, day] = dateParts;
+    if (!year || !month || !day) return null;
+
+    const expiryTimeRaw = String(subData.expiry_time || subData.expiryTime || subData['وقت الانتهاء'] || subData['وقت نهاية الاشتراك'] || '').trim();
+    const timeParts = expiryTimeRaw.split(':').map((part) => parseInt(part, 10) || 0);
+    const hours = timeParts.length > 0 ? timeParts[0] : 23;
+    const minutes = timeParts.length > 1 ? timeParts[1] : 59;
+    const seconds = timeParts.length > 2 ? timeParts[2] : 59;
+
+    return new Date(year, month - 1, day, hours, minutes, seconds, 0);
+}
+
 async function checkSubscriberExpiries() {
     const subDir = getSafePath(DB_PATH, 'Subscribers');
     if (!fs.existsSync(subDir)) return;
 
-    // Use current time from the local system (ADDITIONAL_METADATA context)
-    // The server runs in JavaScript, so new Date() uses the system clock.
     const now = new Date();
-    const todayStr = `${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, '0')}-${now.getDate().toString().padStart(2, '0')}`;
-    // Generate a 12h format time string like "03:41 AM"
-    const currentHours = now.getHours();
-    const currentMinutes = now.getMinutes();
-    const ampm = currentHours >= 12 ? 'PM' : 'AM';
-    const h12 = currentHours % 12 || 12;
-    const currentTimeStr = `${h12.toString().padStart(2, '0')}:${currentMinutes.toString().padStart(2, '0')} ${ampm}`;
 
     try {
         const files = fs.readdirSync(subDir).filter(f => f.endsWith('.json'));
@@ -2934,25 +2977,12 @@ async function checkSubscriberExpiries() {
             const status = subData['حالة الحساب'] || subData.status || '';
             if (status !== 'active' && status !== 'نشط' && status !== 'مفعل') continue;
 
-            const expiryDate = subData.expiry || subData['تاريخ الانتهاء'];
-            const expiryTime = subData.expiry_time || subData['وقت الانتهاء'];
-
-            if (!expiryDate) continue;
-
-            let isExpired = false;
-            // Date comparison
-            if (expiryDate < todayStr) {
-                isExpired = true;
-            } else if (expiryDate === todayStr && expiryTime) {
-                // Time comparison (string based for "03:41 AM")
-                // This is safe because both follow HH:MM AM/PM
-                if (currentTimeStr >= expiryTime) {
-                    isExpired = true;
-                }
-            }
+            const expiryAt = parseLocalExpiryDateTime(subData);
+            if (!expiryAt) continue;
+            const isExpired = expiryAt.getTime() <= now.getTime();
 
             if (isExpired) {
-                console.log(`[ExpiryMonitor] Subscriber ${subData.username || subData.id} HAS EXPIRED at ${expiryDate} ${expiryTime}. Disabling...`);
+                console.log(`[ExpiryMonitor] Subscriber ${subData.username || subData.id} HAS EXPIRED at ${expiryAt.toISOString()}. Disabling...`);
                 
                 // 1. Update JSON
                 subData.status = 'expired';
@@ -3005,8 +3035,8 @@ async function checkSubscriberExpiries() {
     }
 }
 
-// Start background check every 60 seconds
-setInterval(checkSubscriberExpiries, 60000);
+// Start background check every 5 seconds
+setInterval(checkSubscriberExpiries, 5000);
 console.log(`[System] Background Expiry Monitoring Service is active.`);
 
 import { exec } from 'child_process';
