@@ -1,8 +1,9 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { LayoutDashboard, MessageSquare, Search, Settings, FolderClosed, Sun, Moon, Globe, Activity, Menu, X, Network, ShieldAlert, BarChart3, Briefcase, CreditCard, Package, Users, Map, PieChart, LayoutTemplate, TrendingUp, Truck, Calendar, Download } from 'lucide-react';
+import { LayoutDashboard, MessageSquare, Search, Settings, FolderClosed, Sun, Moon, Globe, Activity, Menu, X, Network, ShieldAlert, BarChart3, Briefcase, CreditCard, Package, Users, Map, PieChart, LayoutTemplate, TrendingUp, Truck, Calendar, Download, Server, Landmark, ShieldCheck } from 'lucide-react';
 import { AppState } from '../types';
 import { dict } from '../dict';
+import { getPathForTab } from '../navigation';
 
 interface HeaderProps {
   state: AppState;
@@ -11,6 +12,13 @@ interface HeaderProps {
 
 export default function Header({ state, setState }: HeaderProps) {
   const t = dict[state.lang];
+  const shouldHandleInAppNavigation = (event: React.MouseEvent<HTMLAnchorElement>) => (
+    event.button === 0 &&
+    !event.metaKey &&
+    !event.ctrlKey &&
+    !event.shiftKey &&
+    !event.altKey
+  );
 
   const navItems = [
     { id: 'dashboard', icon: LayoutDashboard, label: t.nav.dashboard },
@@ -28,7 +36,10 @@ export default function Header({ state, setState }: HeaderProps) {
     { id: 'analytics', icon: BarChart3, label: t.nav.analytics },
     { id: 'reports', icon: PieChart, label: t.nav.reports },
     { id: 'portal', icon: LayoutTemplate, label: t.nav.portal },
+    { id: 'management', icon: ShieldCheck, label: t.nav.management },
+    { id: 'network_radius', icon: Server, label: t.nav.network_radius },
     { id: 'search', icon: Search, label: t.nav.search },
+    { id: 'financial', icon: Landmark, label: t.nav.financial },
     { id: 'files', icon: FolderClosed, label: t.nav.files },
     { id: 'settings', icon: Settings, label: t.nav.settings },
   ] as const;
@@ -38,15 +49,30 @@ export default function Header({ state, setState }: HeaderProps) {
 
   return (
     <>
-      <div className="md:hidden fixed top-0 left-0 right-0 h-16 glass-panel z-30 flex items-center justify-between px-4 border-b border-slate-200/50 dark:border-slate-800/50">
-        <div className="flex items-center gap-3">
+      {state.impersonationSource && (
+        <div className="md:hidden fixed top-0 left-0 right-0 z-40 bg-amber-500 px-4 py-2 text-center text-xs font-black text-slate-950">
+          <button onClick={() => setState(prev => ({ ...prev, currentUser: prev.impersonationSource, impersonationSource: null, role: prev.impersonationSource?.role || 'super_admin', activeTab: 'dashboard' }))}>
+            {state.lang === 'ar' ? 'أنت داخل كحساب آخر. اضغط للعودة إلى السوبر أدمن.' : 'You are impersonating another account. Tap to return to Super Admin.'}
+          </button>
+        </div>
+      )}
+      <div className={`md:hidden fixed left-0 right-0 h-16 glass-panel z-30 flex items-center justify-between px-4 border-b border-slate-200/50 dark:border-slate-800/50 ${state.impersonationSource ? 'top-8' : 'top-0'}`}>
+        <a
+          href={getPathForTab('dashboard')}
+          onClick={(event) => {
+            if (!shouldHandleInAppNavigation(event)) return;
+            event.preventDefault();
+            setState(prev => ({ ...prev, activeTab: 'dashboard', activeSettingsCategory: 'profile', mobileMenuOpen: false }));
+          }}
+          className="flex items-center gap-3 text-start"
+        >
           <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-violet-600 flex items-center justify-center">
             <Activity className="text-white w-4 h-4" />
           </div>
           <h1 className="text-lg font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-violet-600 dark:from-blue-400 dark:to-violet-400">
             {t.title}
           </h1>
-        </div>
+        </a>
         <div className="flex items-center gap-2">
           {state.updateStatus.hasUpdate && (
             <button 
@@ -71,18 +97,23 @@ export default function Header({ state, setState }: HeaderProps) {
         {state.mobileMenuOpen && (
           <motion.div 
             initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}
-            className="md:hidden fixed inset-0 top-16 z-20 glass-panel flex flex-col p-4"
+            className={`md:hidden fixed inset-0 z-20 glass-panel flex flex-col p-4 ${state.impersonationSource ? 'top-24' : 'top-16'}`}
           >
             <nav className="flex-1 space-y-2 overflow-y-auto custom-scrollbar">
               {navItems.map((item) => (
-                <button
+                <a
                   key={item.id}
-                  onClick={() => setState(prev => ({ ...prev, activeTab: item.id as any, mobileMenuOpen: false }))}
+                  href={getPathForTab(item.id as any)}
+                  onClick={(event) => {
+                    if (!shouldHandleInAppNavigation(event)) return;
+                    event.preventDefault();
+                    setState(prev => ({ ...prev, activeTab: item.id as any, mobileMenuOpen: false }));
+                  }}
                   className={`w-full flex items-center gap-4 px-4 py-4 rounded-xl cursor-pointer ${state.activeTab === item.id ? 'bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 font-semibold' : 'text-slate-600 dark:text-slate-400'}`}
                 >
                   <item.icon className="w-5 h-5" />
                   <span>{item.label}</span>
-                </button>
+                </a>
               ))}
             </nav>
             <div className="flex justify-around p-4 border-t border-slate-200 dark:border-slate-800">

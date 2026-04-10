@@ -139,6 +139,7 @@ export interface NetworkProfile {
   id?: string;
   name?: string;
   price?: number | string;
+  billingCycleDay?: number | null;
   [key: string]: unknown;
 }
 
@@ -368,10 +369,12 @@ export interface AppState {
   theme: Theme;
   activeTab: Tab;
   activeSettingsCategory: SettingsCategoryId;
+  dashboardRefreshIntervalSec: number;
   sidebarOpen: boolean;
   mobileMenuOpen: boolean;
   role: Role;
   currentUser: User | null;
+  impersonationSource: User | null;
   isAuthenticated: boolean;
   currency: Currency;
   centralBalance: number; // The master pool owned by Super Admin

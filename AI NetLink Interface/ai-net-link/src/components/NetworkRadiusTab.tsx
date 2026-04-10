@@ -74,6 +74,7 @@ export default function NetworkRadiusTab({ state, setState }: NetworkRadiusTabPr
           addressList: '', 
           sharedUsers: 1,
           expiredProfileId: '',
+          billingCycleDay: null,
           
           limitByDuration: { enabled: true, value: 1, unit: 'months' },
           limitByTime: { enabled: false, value: 0, unit: 'minutes' },
@@ -99,7 +100,8 @@ export default function NetworkRadiusTab({ state, setState }: NetworkRadiusTabPr
           limitByDownload: profile.limitByDownload || { enabled: false, value: 0 },
           limitByUpload: profile.limitByUpload || { enabled: false, value: 0 },
           limitByTotalTraffic: profile.limitByTotalTraffic || { enabled: false, value: 0 },
-          expiredProfileId: profile.expiredProfileId || ''
+          expiredProfileId: profile.expiredProfileId || '',
+          billingCycleDay: typeof profile.billingCycleDay === 'number' ? profile.billingCycleDay : null
       });
       setIsEditingProfile(true);
   };
@@ -572,6 +574,30 @@ export default function NetworkRadiusTab({ state, setState }: NetworkRadiusTabPr
                                         <div className="flex gap-2">
                                             <button onClick={() => setProfileForm({...profileForm, fixedExpirationTimeEnabled: !profileForm.fixedExpirationTimeEnabled})} className={`p-2 rounded-xl border ${profileForm.fixedExpirationTimeEnabled ? 'bg-amber-50 border-amber-200 text-amber-600' : 'bg-slate-50 border-slate-200'}`}><Settings size={18}/></button>
                                             <input type="time" disabled={!profileForm.fixedExpirationTimeEnabled} value={profileForm.fixedExpirationTime} onChange={(e) => setProfileForm({...profileForm, fixedExpirationTime: e.target.value})} className="flex-1 bg-slate-50 dark:bg-slate-900 border border-slate-200 rounded-xl px-3 text-sm font-bold disabled:opacity-30" />
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label className="text-[10px] font-black text-slate-500 mb-1 block uppercase">
+                                            {isRTL ? 'بداية الشهر لهذه الباقة' : 'Billing Cycle Day'}
+                                            <InfoTooltip text={isRTL ? 'حدد اليوم الذي تعتبره بداية الشهر لهذه الباقة. مثال: 1 أو 5 أو 15 أو 20. إذا تُرك فارغاً فسيعتمد النظام المدة العادية من تاريخ التفعيل.' : 'Set the day that should be treated as the month start for this package. Example: 1, 5, 15, or 20. Leave empty to use the normal duration from activation date.'} />
+                                        </label>
+                                        <div className="flex gap-2">
+                                            <input
+                                                type="number"
+                                                min={1}
+                                                max={28}
+                                                value={profileForm.billingCycleDay ?? ''}
+                                                onChange={(e) => setProfileForm({...profileForm, billingCycleDay: e.target.value ? Math.max(1, Math.min(28, parseInt(e.target.value, 10) || 1)) : null})}
+                                                placeholder={isRTL ? 'اختياري' : 'Optional'}
+                                                className="flex-1 bg-slate-50 dark:bg-slate-900 border border-slate-200 rounded-xl px-3 py-2 text-sm font-bold"
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => setProfileForm({...profileForm, billingCycleDay: null})}
+                                                className="px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-xs font-black text-slate-500 hover:bg-slate-100"
+                                            >
+                                                {isRTL ? 'إلغاء' : 'Clear'}
+                                            </button>
                                         </div>
                                     </div>
                                     <div>

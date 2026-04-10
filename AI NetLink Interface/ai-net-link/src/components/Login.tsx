@@ -9,7 +9,7 @@ import { motion } from 'motion/react';
 import { LogIn, Mail, Lock, Shield, User, Briefcase, TrendingUp, Eye, EyeOff, CheckCircle2 } from 'lucide-react';
 import { AppState, Role, User as UserType } from '../types';
 import { dict } from '../dict';
-import { fetchManagers } from '../api';
+import { fetchManagersRaw, fetchSubscribers } from '../api';
 
 interface LoginProps {
   state: AppState;
@@ -17,8 +17,30 @@ interface LoginProps {
 }
 
 const SUPER_ADMIN: UserType = { id: '0', name: 'المدير العام (Super Admin)', email: 'mrjabarin@gmail.com', username: 'admin', role: 'super_admin', permissions: ['all'] };
+const REMEMBERED_USER_KEY = 'sas4_remembered_user';
+const SESSION_USER_KEY = 'sas4_session_user';
+const SHARED_SESSION_USER_KEY = 'sas4_shared_session_user';
+
+const buildSubscriberIdentity = (subscriber: any): UserType => {
+  const firstName = String(subscriber.firstName || subscriber.firstname || subscriber['الاسم الاول'] || '').trim();
+  const lastName = String(subscriber.lastName || subscriber.lastname || subscriber['اسم العائلة'] || subscriber['الاسم الثاني'] || '').trim();
+  const username = String(subscriber.username || subscriber['اسم الدخول'] || subscriber['اسم المستخدم'] || '').trim();
+  const phone = String(subscriber.phone || subscriber['الهاتف'] || '').trim();
+  const email = String(subscriber.email || subscriber['البريد الإلكتروني'] || subscriber['الايميل'] || `${username || 'subscriber'}@sasnet.local`).trim();
+  const fullName = `${firstName} ${lastName}`.trim() || String(subscriber.name || subscriber['الاسم'] || username || 'Subscriber').trim();
+
+  return {
+    id: String(subscriber.id || subscriber['رقم المشترك'] || username || email || phone || Date.now()),
+    name: fullName,
+    email,
+    username: username || phone || email,
+    role: 'user',
+    permissions: ['view_dashboard'],
+  };
+};
 
 export default function Login({ state, setState }: LoginProps) {
+  const [loginMode, setLoginMode] = useState<'subscriber' | 'staff'>('subscriber');
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -29,26 +51,76 @@ export default function Login({ state, setState }: LoginProps) {
   const t = dict[state.lang];
   const isRTL = state.lang === 'ar';
 
+  const persistSession = (user: UserType) => {
+    sessionStorage.setItem(SESSION_USER_KEY, JSON.stringify(user));
+    localStorage.setItem(SHARED_SESSION_USER_KEY, JSON.stringify(user));
+    if (rememberMe) {
+      localStorage.setItem(REMEMBERED_USER_KEY, JSON.stringify(user));
+    } else {
+      localStorage.removeItem(REMEMBERED_USER_KEY);
+    }
+  };
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     setError('');
 
     try {
-      // Fetch dynamic users from API once
-      const dbUsers = await fetchManagers().catch(() => []) || [];
+      if (loginMode === 'subscriber') {
+        const subscribers = await fetchSubscribers().catch(() => []) || [];
+        const matchedSubscriber = subscribers.find((subscriber: any) => {
+          const username = String(subscriber.username || subscriber['اسم الدخول'] || subscriber['اسم المستخدم'] || '').trim().toLowerCase();
+          const phone = String(subscriber.phone || subscriber['الهاتف'] || '').trim();
+          const email = String(subscriber.email || subscriber['البريد الإلكتروني'] || subscriber['الايميل'] || '').trim().toLowerCase();
+          const storedPassword = String(subscriber.password || subscriber.pass || subscriber['كلمة المرور'] || '').trim();
+          const normalizedIdentifier = identifier.trim().toLowerCase();
 
-      // Check for Super Admin (The User)
-      if ((identifier.toLowerCase() === 'mrjabarin@gmail.com' || identifier.toLowerCase() === 'admin') && password === 'Sniper.2591993') {
-        const user = SUPER_ADMIN;
-        if (rememberMe) {
-          localStorage.setItem('sas4_remembered_user', JSON.stringify(user));
+          return [username, phone, email].filter(Boolean).includes(normalizedIdentifier) && storedPassword === password;
+        });
+
+        if (!matchedSubscriber) {
+          setError(state.lang === 'ar' ? 'بيانات دخول المشترك غير صحيحة' : 'Invalid subscriber credentials');
+          return;
         }
+
+        const user = buildSubscriberIdentity(matchedSubscriber);
+        persistSession(user);
+
         setState(prev => ({
           ...prev,
           isAuthenticated: true,
           currentUser: user,
-          teamMembers: [user, ...dbUsers], // Super Admin + All DB Managers
+          impersonationSource: null,
+          role: user.role,
+          activeTab: 'dashboard'
+        }));
+        return;
+      }
+
+      // Fetch dynamic users from API once
+      const dbUsers = await fetchManagersRaw().catch(() => []) || [];
+
+      // Check for Super Admin (The User)
+      if ((identifier.toLowerCase() === 'mrjabarin@gmail.com' || identifier.toLowerCase() === 'admin') && password === 'Sniper.2591993') {
+        const user = SUPER_ADMIN;
+        persistSession(user);
+        setState(prev => ({
+          ...prev,
+          isAuthenticated: true,
+          currentUser: user,
+          impersonationSource: null,
+          teamMembers: [user, ...dbUsers.map((manager: any, index: number) => ({
+            id: String(manager.id || `SAS-${100 + index}`),
+            name: `${manager['الاسم الاول'] || ''} ${manager['الاسم الثاني'] || ''}`.trim() || manager['اسم الدخول'] || 'Unknown Manager',
+            email: manager.email || `${manager['اسم الدخول'] || 'user'}@netlink.ai`,
+            username: manager['اسم الدخول'] || manager.username || '',
+            password: manager.password || manager['كلمة المرور'] || '',
+            role: (manager['الصلاحية'] === 'Manager-A' || manager['الصلاحية'] === 'Manager') ? 'sas4_manager' : 'admin',
+            permissions: Array.isArray(manager.permissions) ? manager.permissions : [],
+            groupId: manager.groupId || '',
+            status: 'active',
+          }))],
           role: user.role,
           activeTab: 'dashboard'
         }));
@@ -56,17 +128,42 @@ export default function Login({ state, setState }: LoginProps) {
         return;
       }
 
-      const user = dbUsers.find((u: any) => (u.email === identifier || u.username === identifier) && password === 'password');
+      const matchedRawManager = dbUsers.find((manager: any) => {
+        const username = String(manager['اسم الدخول'] || manager.username || '').trim().toLowerCase();
+        const email = String(manager.email || `${manager['اسم الدخول'] || 'user'}@netlink.ai`).trim().toLowerCase();
+        const storedPassword = String(manager.password || manager['كلمة المرور'] || '').trim();
+        const normalizedIdentifier = identifier.trim().toLowerCase();
+        return [username, email].filter(Boolean).includes(normalizedIdentifier) && storedPassword === password;
+      });
       
-      if (user) {
-        if (rememberMe) {
-          localStorage.setItem('sas4_remembered_user', JSON.stringify(user));
-        }
+      if (matchedRawManager) {
+        const roleLabel = String(matchedRawManager['الصلاحية'] || matchedRawManager.role || '').trim();
+        const user: UserType = {
+          id: String(matchedRawManager.id || matchedRawManager['اسم الدخول'] || Date.now()),
+          name: `${matchedRawManager['الاسم الاول'] || ''} ${matchedRawManager['الاسم الثاني'] || ''}`.trim() || matchedRawManager['اسم الدخول'] || 'Manager',
+          email: matchedRawManager.email || `${matchedRawManager['اسم الدخول'] || 'user'}@netlink.ai`,
+          username: matchedRawManager['اسم الدخول'] || matchedRawManager.username || '',
+          role: ((roleLabel === 'Manager-A' || roleLabel === 'Manager') ? 'sas4_manager' : 'admin') as Role,
+          permissions: Array.isArray(matchedRawManager.permissions) ? matchedRawManager.permissions : [],
+          groupId: matchedRawManager.groupId || '',
+        };
+        persistSession(user);
         setState(prev => ({
           ...prev,
           isAuthenticated: true,
           currentUser: user,
-          teamMembers: [SUPER_ADMIN, ...dbUsers], // INJECT DB MANAGERS HERE + SUPER ADMIN
+          impersonationSource: null,
+          teamMembers: [SUPER_ADMIN, ...dbUsers.map((manager: any, index: number) => ({
+            id: String(manager.id || `SAS-${100 + index}`),
+            name: `${manager['الاسم الاول'] || ''} ${manager['الاسم الثاني'] || ''}`.trim() || manager['اسم الدخول'] || 'Unknown Manager',
+            email: manager.email || `${manager['اسم الدخول'] || 'user'}@netlink.ai`,
+            username: manager['اسم الدخول'] || manager.username || '',
+            password: manager.password || manager['كلمة المرور'] || '',
+            role: (manager['الصلاحية'] === 'Manager-A' || manager['الصلاحية'] === 'Manager') ? 'sas4_manager' : 'admin',
+            permissions: Array.isArray(manager.permissions) ? manager.permissions : [],
+            groupId: manager.groupId || '',
+            status: 'active',
+          }))],
           role: user.role,
           activeTab: user.role === 'shareholder' ? 'investors' : 'dashboard'
         }));
@@ -103,6 +200,25 @@ export default function Login({ state, setState }: LoginProps) {
               <p className="text-slate-500 dark:text-slate-400 mt-1">{t.auth.login}</p>
             </div>
 
+            <div className="mb-6 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/60 p-1">
+              <div className="grid grid-cols-2 gap-1">
+                <button
+                  type="button"
+                  onClick={() => setLoginMode('subscriber')}
+                  className={`rounded-xl px-4 py-3 text-sm font-bold transition-all ${loginMode === 'subscriber' ? 'bg-white text-blue-600 shadow-sm dark:bg-slate-900 dark:text-blue-400' : 'text-slate-500 dark:text-slate-400'}`}
+                >
+                  {isRTL ? 'المشتركون' : 'Subscribers'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLoginMode('staff')}
+                  className={`rounded-xl px-4 py-3 text-sm font-bold transition-all ${loginMode === 'staff' ? 'bg-white text-blue-600 shadow-sm dark:bg-slate-900 dark:text-blue-400' : 'text-slate-500 dark:text-slate-400'}`}
+                >
+                  {isRTL ? 'المدراء والوكلاء' : 'Admins & Agents'}
+                </button>
+              </div>
+            </div>
+
             <form onSubmit={handleLogin} className="space-y-6">
               {error && (
                 <motion.div 
@@ -116,14 +232,14 @@ export default function Login({ state, setState }: LoginProps) {
 
               <div className="space-y-2">
                 <label className="text-sm font-medium text-slate-700 dark:text-slate-300 flex items-center gap-2">
-                  <Mail className="w-4 h-4" /> {t.auth.emailOrUsername}
+                  <Mail className="w-4 h-4" /> {loginMode === 'subscriber' ? (isRTL ? 'اسم الدخول أو الهاتف أو البريد' : 'Username, phone, or email') : t.auth.emailOrUsername}
                 </label>
                 <input
                   type="text"
                   value={identifier}
                   onChange={(e) => setIdentifier(e.target.value)}
                   className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-                  placeholder={t.auth.emailOrUsername}
+                  placeholder={loginMode === 'subscriber' ? (isRTL ? 'أدخل اسم الدخول أو الهاتف أو البريد' : 'Enter username, phone, or email') : t.auth.emailOrUsername}
                   required
                 />
               </div>

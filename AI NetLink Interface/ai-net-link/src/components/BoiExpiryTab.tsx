@@ -14,7 +14,7 @@ import { formatCurrency } from '../utils/currency';
 import { formatTime } from '../utils/format';
 import { getSmartMatchScore } from '../utils/search';
 import { 
-  fetchSubscribers, extendSubscriber, activateSubscriber, 
+  fetchSubscribers, extendSubscriber, activateSubscriber, updateSubscriber,
   getMessageData, saveMessageData, BASE_URL, getMikrotikStatusBatch,
   disconnectSubscriber, deleteSecret, disableSecret, enableSecret, 
   syncSubscriberToMikrotik, fetchRoutersList
@@ -24,6 +24,7 @@ import AppConfirmDialog from './AppConfirmDialog';
 
 interface BoiExpiryTabProps {
   state: AppState;
+  setState: React.Dispatch<React.SetStateAction<AppState>>;
 }
 
 type IconComponent = React.ComponentType<{ size?: number; className?: string }>;
@@ -50,6 +51,8 @@ type SubscriberStatus = 'expired' | 'today' | '3days' | 'active';
 type StatCardColor = 'rose' | 'amber' | 'blue' | 'emerald';
 type MethodColor = 'emerald' | 'blue' | 'rose';
 
+const SEARCH_SETTINGS_TARGET_KEY = 'sas4_search_settings_target';
+
 interface SubscriberCardProps {
   sub: SubscriberRecord;
   isRTL: boolean;
@@ -62,7 +65,7 @@ interface SubscriberCardProps {
   state: AppState;
 }
 
-export default function BoiExpiryTab({ state }: BoiExpiryTabProps) {
+export default function BoiExpiryTab({ state, setState }: BoiExpiryTabProps) {
   const isRTL = state.lang === 'ar';
   
   // Data State
@@ -76,6 +79,14 @@ export default function BoiExpiryTab({ state }: BoiExpiryTabProps) {
   const [isMessageModalOpen, setIsMessageModalOpen] = useState(false);
   const [isRenewModalOpen, setIsRenewModalOpen] = useState(false);
   const [isBulkNotifying, setIsBulkNotifying] = useState(false);
+  const [isBulkNotifyModalOpen, setIsBulkNotifyModalOpen] = useState(false);
+  const [isBulkRenewConfirmOpen, setIsBulkRenewConfirmOpen] = useState(false);
+  const [isBulkRenewing, setIsBulkRenewing] = useState(false);
+  const [bulkRenewFilter, setBulkRenewFilter] = useState<'all' | 'expired' | 'today' | '3days' | 'active' | 'online' | 'activeOffline' | 'suspended' | 'demands' | 'debts'>('expired');
+  const [bulkRenewDays, setBulkRenewDays] = useState(30);
+  const [bulkNotifyFilter, setBulkNotifyFilter] = useState<'all' | 'expired' | 'today' | '3days' | 'active' | 'online' | 'activeOffline' | 'suspended' | 'demands' | 'debts'>('expired');
+  const [bulkNotifyMessage, setBulkNotifyMessage] = useState('');
+  const [terminateCandidate, setTerminateCandidate] = useState<SubscriberRecord | null>(null);
 
   // Status State
   const [onlineStatuses, setOnlineStatuses] = useState<Record<string, boolean>>({});
@@ -93,10 +104,27 @@ export default function BoiExpiryTab({ state }: BoiExpiryTabProps) {
   const [disconnectCandidate, setDisconnectCandidate] = useState<string | null>(null);
 
   // Sync Data
+  const fetchSubscribersWithRetry = async (attempts = 6, delayMs = 800) => {
+    let latest: SubscriberRecord[] = [];
+
+    for (let attempt = 1; attempt <= attempts; attempt += 1) {
+      const data = await fetchSubscribers();
+      latest = Array.isArray(data) ? data as SubscriberRecord[] : [];
+
+      if (latest.length > 0 || attempt === attempts) {
+        return latest;
+      }
+
+      await new Promise((resolve) => window.setTimeout(resolve, delayMs));
+    }
+
+    return latest;
+  };
+
   const loadData = async () => {
     setIsLoading(true);
     try {
-      const data = await fetchSubscribers();
+      const data = await fetchSubscribersWithRetry();
       // Deduplicate by ID to prevent React "duplicate key" crashes
       const unique = Array.from(new Map((data as SubscriberRecord[]).map((item) => [item.id, item])).values());
       setSubscribers(unique);
@@ -167,6 +195,19 @@ export default function BoiExpiryTab({ state }: BoiExpiryTabProps) {
     if (diffDays === 0) return 'today';
     if (diffDays <= 3) return '3days';
     return 'active';
+  };
+
+  const matchesSubscriberFilter = (subscriber: SubscriberRecord, filter: typeof activeFilter) => {
+    const status = getSubStatus(subscriber.expiry || subscriber['تاريخ الانتهاء'] || subscriber.expiration);
+    const username = subscriber.username || subscriber['اسم المستخدم'];
+
+    if (filter === 'all') return true;
+    if (filter === 'online') return Boolean(onlineStatuses[username]);
+    if (filter === 'activeOffline') return (status === 'active' || status === '3days' || status === 'today') && !onlineStatuses[username];
+    if (filter === 'suspended') return subscriber.status === 'suspended' || subscriber['حالة الحساب'] === 'موقوف';
+    if (filter === 'demands') return (parseFloat(String(subscriber['عليه دين'] || 0)) || 0) > 0;
+    if (filter === 'debts') return (parseFloat(String(subscriber['الرصيد المتبقي له'] || 0)) || 0) > 0;
+    return status === filter;
   };
 
   // Memoized Stats & Filtered List
@@ -253,17 +294,73 @@ export default function BoiExpiryTab({ state }: BoiExpiryTabProps) {
   };
 
   const handleLockAccount = async (username: string) => {
+    if (!username) return;
     try {
       await disableSecret(username);
+      setSubscribers((prev) => prev.map((sub) => (
+        String(sub.username || sub['اسم المستخدم'] || '').trim() === username
+          ? { ...sub, status: 'suspended', 'حالة الحساب': 'موقوف' }
+          : sub
+      )));
       setTimeout(() => pollStatus(false), 2000);
-    } catch (err) { console.error(err); }
+      toastSuccess(isRTL ? `تم تجميد الحساب ${username}.` : `${username} account suspended successfully.`, isRTL ? 'تم التجميد' : 'Account Suspended');
+    } catch (err) {
+      console.error(err);
+      toastError(isRTL ? 'فشل تجميد الحساب.' : 'Failed to suspend account.', isRTL ? 'فشل العملية' : 'Operation Failed');
+    }
   };
 
   const handleUnlockAccount = async (username: string) => {
+    if (!username) return;
     try {
       await enableSecret(username);
+      setSubscribers((prev) => prev.map((sub) => (
+        String(sub.username || sub['اسم المستخدم'] || '').trim() === username
+          ? { ...sub, status: 'active', 'حالة الحساب': 'مفعل' }
+          : sub
+      )));
       setTimeout(() => pollStatus(false), 2000);
-    } catch (err) { console.error(err); }
+      toastSuccess(isRTL ? `تم إعادة تفعيل الحساب ${username}.` : `${username} account reactivated successfully.`, isRTL ? 'تم التفعيل' : 'Account Reactivated');
+    } catch (err) {
+      console.error(err);
+      toastError(isRTL ? 'فشل إعادة تفعيل الحساب.' : 'Failed to reactivate account.', isRTL ? 'فشل العملية' : 'Operation Failed');
+    }
+  };
+
+  const handleTerminateSubscription = async (sub: SubscriberRecord) => {
+    const username = String(sub.username || sub['اسم المستخدم'] || '').trim();
+    const expiredDate = new Date(Date.now() - 86400000);
+    const expiryValue = `${expiredDate.getFullYear()}-${String(expiredDate.getMonth() + 1).padStart(2, '0')}-${String(expiredDate.getDate()).padStart(2, '0')}`;
+    try {
+      if (username) {
+        await disconnectSubscriber(username).catch(() => null);
+        await disableSecret(username).catch(() => null);
+      }
+
+      await updateSubscriber(String(sub.id), {
+        ...sub,
+        status: 'expired',
+        'حالة الحساب': 'منتهي',
+        expiry: expiryValue,
+        expiration: expiryValue,
+        'تاريخ الانتهاء': expiryValue,
+        'تاريخ انتهاء الاشتراك': expiryValue,
+        expiry_time: '00:00:00',
+        'وقت الانتهاء': '00:00:00',
+      });
+
+      await loadData();
+      toastSuccess(
+        isRTL ? `تم إنهاء اشتراك ${sub.name || username}.` : `Subscription for ${sub.name || username} has been terminated.`,
+        isRTL ? 'تم إنهاء الاشتراك' : 'Subscription Terminated'
+      );
+    } catch (error) {
+      console.error(error);
+      toastError(
+        isRTL ? 'فشل إنهاء الاشتراك.' : 'Failed to terminate subscription.',
+        isRTL ? 'فشل العملية' : 'Operation Failed'
+      );
+    }
   };
 
   const handleSyncToMikrotik = async (id: string) => {
@@ -274,6 +371,71 @@ export default function BoiExpiryTab({ state }: BoiExpiryTabProps) {
   };
 
   const [syncingSubscriber, setSyncingSubscriber] = useState<SubscriberRecord | null>(null);
+
+  const openSubscriberSettings = (sub: SubscriberRecord) => {
+    localStorage.setItem('sas4_active_subtab', 'subscribers');
+    localStorage.setItem(SEARCH_SETTINGS_TARGET_KEY, JSON.stringify({
+      type: 'subscribers',
+      targetSubTab: 'subscribers',
+      item: sub,
+    }));
+    setState(prev => ({ ...prev, activeTab: 'management' }));
+  };
+
+  const autoRenewTargets = useMemo(
+    () => subscribers.filter((sub) => matchesSubscriberFilter(sub, bulkRenewFilter)),
+    [subscribers, bulkRenewFilter, onlineStatuses]
+  );
+
+  const bulkNotifyTargets = useMemo(
+    () => subscribers.filter((sub) => matchesSubscriberFilter(sub, bulkNotifyFilter)),
+    [subscribers, bulkNotifyFilter, onlineStatuses]
+  );
+
+  const handleOpenBulkRenew = () => {
+    setBulkRenewFilter(activeFilter === 'all' ? 'expired' : activeFilter);
+    setIsBulkRenewConfirmOpen(true);
+  };
+
+  const confirmBulkRenew = async () => {
+    if (autoRenewTargets.length === 0) {
+      setIsBulkRenewConfirmOpen(false);
+      return;
+    }
+
+    setIsBulkRenewing(true);
+    try {
+      const results = await Promise.allSettled(
+        autoRenewTargets.map((sub) => extendSubscriber(String(sub.id), { unit: 'days', value: bulkRenewDays }, 'all'))
+      );
+
+      const successCount = results.filter((result) => result.status === 'fulfilled').length;
+      const failedCount = results.length - successCount;
+
+      await loadData();
+      setIsBulkRenewConfirmOpen(false);
+
+      if (failedCount === 0) {
+        toastSuccess(
+          isRTL ? `تم تجديد ${successCount} مشتركاً لمدة ${bulkRenewDays} يوماً.` : `Renewed ${successCount} subscribers for ${bulkRenewDays} days.`,
+          isRTL ? 'اكتمل التجديد' : 'Renewal Completed'
+        );
+      } else {
+        toastInfo(
+          isRTL ? `تم تجديد ${successCount} وفشل ${failedCount}.` : `Renewed ${successCount} and failed ${failedCount}.`,
+          isRTL ? 'نتيجة التجديد' : 'Renewal Result'
+        );
+      }
+    } catch (error) {
+      console.error(error);
+      toastError(
+        isRTL ? 'فشل تنفيذ التجديد التلقائي.' : 'Failed to execute bulk auto renew.',
+        isRTL ? 'فشل التجديد' : 'Renewal Failed'
+      );
+    } finally {
+      setIsBulkRenewing(false);
+    }
+  };
 
   const performSync = async () => {
     if (!syncingSubscriber) return;
@@ -291,7 +453,7 @@ export default function BoiExpiryTab({ state }: BoiExpiryTabProps) {
       id: 'edit',
       label: isRTL ? 'تعديل البيانات' : 'Edit Details',
       icon: Edit,
-      onClick: () => toastInfo(isRTL ? 'وظيفة التعديل ستتوفر قريبًا في هذا القسم.' : 'Edit function will be available in this section soon.', isRTL ? 'قريبًا' : 'Coming Soon'),
+      onClick: (s: SubscriberRecord) => openSubscriberSettings(s),
       tooltip: isRTL ? 'تعديل بيانات المشترك' : 'Modify subscriber CRM data'
     },
     {
@@ -332,15 +494,32 @@ export default function BoiExpiryTab({ state }: BoiExpiryTabProps) {
       variant: 'success',
       onClick: (s: SubscriberRecord) => handleUnlockAccount(s.username || ''),
       tooltip: isRTL ? 'إعادة تفعيل الدخول' : 'Restore router access'
+    },
+    {
+      id: 'terminate',
+      label: isRTL ? 'إنهاء الاشتراك' : 'Terminate Subscription',
+      icon: Trash,
+      variant: 'danger',
+      onClick: (s: SubscriberRecord) => setTerminateCandidate(s),
+      tooltip: isRTL ? 'طرد العميل وتعطيله وتحويله إلى منتهي الاشتراك' : 'Disconnect, suspend, and mark the subscriber as expired'
     }
   ];
 
   const handleBulkNotify = async () => {
+    if (!bulkNotifyMessage.trim()) {
+      toastInfo(isRTL ? 'اكتب نص الرسالة قبل الإرسال.' : 'Write the message before sending.', isRTL ? 'رسالة مطلوبة' : 'Message Required');
+      return;
+    }
+    if (bulkNotifyTargets.length === 0) {
+      toastInfo(isRTL ? 'لا يوجد مشتركون ضمن الفلتر المحدد.' : 'There are no subscribers in the selected filter.', isRTL ? 'لا توجد عناصر' : 'No Targets');
+      return;
+    }
     if (isBulkNotifying) return;
     setIsBulkNotifying(true);
     await new Promise(r => setTimeout(r, 2000));
     setIsBulkNotifying(false);
-    toastSuccess(isRTL ? 'تم إرسال التنبيهات لجميع المستحقين بنجاح.' : 'Notifications sent to all eligible subscribers successfully.', isRTL ? 'اكتمل الإرسال' : 'Notifications Sent');
+    setIsBulkNotifyModalOpen(false);
+    toastSuccess(isRTL ? `تم تجهيز التنبيه لـ ${bulkNotifyTargets.length} مشترك.` : `Prepared notifications for ${bulkNotifyTargets.length} subscribers.`, isRTL ? 'اكتمل الإرسال' : 'Notifications Sent');
   };
 
   // Close menus on click outside
@@ -356,7 +535,7 @@ export default function BoiExpiryTab({ state }: BoiExpiryTabProps) {
       initial={{ opacity: 0, y: 10 }} 
       animate={{ opacity: 1, y: 0 }} 
       exit={{ opacity: 0, y: -10 }} 
-      className="flex-1 flex flex-col min-h-0 space-y-6 pb-6 px-1 md:px-2"
+      className="flex-1 flex flex-col min-h-0 overflow-y-auto custom-scrollbar space-y-6 pb-6 px-1 md:px-2"
     >
       {/* Header Section */}
       <header className="shrink-0 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -371,24 +550,28 @@ export default function BoiExpiryTab({ state }: BoiExpiryTabProps) {
           </p>
         </div>
         
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button 
-            onClick={handleBulkNotify}
+            onClick={() => {
+              setBulkNotifyFilter(activeFilter === 'all' ? 'expired' : activeFilter);
+              setBulkNotifyMessage(isRTL ? 'نذكركم بضرورة مراجعة حالة الاشتراك واتخاذ الإجراء المناسب.' : 'Reminder to review your subscription status and take the required action.');
+              setIsBulkNotifyModalOpen(true);
+            }}
             disabled={isBulkNotifying}
             className="flex items-center gap-2 px-6 py-3 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 rounded-2xl font-black text-xs uppercase tracking-wider transition-all hover:bg-slate-200 dark:hover:bg-slate-700 active:scale-95 disabled:opacity-50"
           >
             {isBulkNotifying ? <Loader2 className="animate-spin" size={18} /> : <Bell size={18} />}
             {isRTL ? 'تبليغ الجميع' : 'Notify All'}
           </button>
-          <button className="flex items-center gap-2 px-6 py-3 bg-rose-600 hover:bg-rose-700 text-white rounded-2xl font-black text-xs uppercase tracking-wider transition-all shadow-xl shadow-rose-600/20 active:scale-95">
+          <button onClick={handleOpenBulkRenew} disabled={isBulkRenewing} className="flex items-center gap-2 px-6 py-3 bg-rose-600 hover:bg-rose-700 text-white rounded-2xl font-black text-xs uppercase tracking-wider transition-all shadow-xl shadow-rose-600/20 active:scale-95 disabled:opacity-50">
             <RefreshCw size={18} />
-            {isRTL ? 'تجديد تلقائي' : 'Auto Renew'}
+            {isBulkRenewing ? (isRTL ? 'جاري التجديد...' : 'Renewing...') : (isRTL ? 'تجديد تلقائي' : 'Auto Renew')}
           </button>
         </div>
       </header>
 
       {/* Stats Grid - Responsive Overhaul */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 xl:grid-cols-8 gap-3 md:gap-4 shrink-0 px-1">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-8 gap-3 md:gap-4 shrink-0 px-1">
         <StatCardV2 
           label={dict[state.lang].management.subscribers.stats.total} 
           value={subStats.total} 
@@ -480,7 +663,7 @@ export default function BoiExpiryTab({ state }: BoiExpiryTabProps) {
       </div>
 
       {/* Main Panel */}
-      <div className="flex-1 flex flex-col glass-panel rounded-[2.5rem] border border-slate-200/50 dark:border-slate-800/50 shadow-2xl overflow-hidden min-h-0 group/panel">
+      <div className="flex-1 flex flex-col glass-panel rounded-[2.5rem] border border-slate-200/50 dark:border-slate-800/50 shadow-2xl overflow-hidden min-h-[28rem] group/panel">
         <div className="p-6 border-b border-slate-200/50 dark:border-slate-800/50 flex flex-col sm:flex-row gap-4 justify-between items-center bg-slate-50/30 dark:bg-slate-900/30 backdrop-blur-md">
           <div className="relative w-full sm:w-96">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
@@ -585,6 +768,54 @@ export default function BoiExpiryTab({ state }: BoiExpiryTabProps) {
         isRTL={isRTL}
       />
 
+      <AppConfirmDialog
+        open={Boolean(terminateCandidate)}
+        onClose={() => setTerminateCandidate(null)}
+        onConfirm={() => {
+          if (!terminateCandidate) return;
+          void handleTerminateSubscription(terminateCandidate);
+          setTerminateCandidate(null);
+        }}
+        title={isRTL ? 'إنهاء الاشتراك' : 'Terminate Subscription'}
+        description={isRTL ? `سيتم إنهاء اشتراك ${terminateCandidate?.name || terminateCandidate?.username || ''} وطرده وتعطيله وتحويله إلى منتهي الاشتراك.` : `${terminateCandidate?.name || terminateCandidate?.username || ''} will be disconnected, suspended, and marked as expired.`}
+        confirmLabel={isRTL ? 'تأكيد الإنهاء' : 'Confirm Termination'}
+        cancelLabel={isRTL ? 'إلغاء' : 'Cancel'}
+        variant="danger"
+        isRTL={isRTL}
+      />
+
+      <AnimatePresence>
+        {isBulkNotifyModalOpen && (
+          <BulkNotifyModal
+            isRTL={isRTL}
+            targetFilter={bulkNotifyFilter}
+            onTargetFilterChange={setBulkNotifyFilter}
+            targetCount={bulkNotifyTargets.length}
+            message={bulkNotifyMessage}
+            onMessageChange={setBulkNotifyMessage}
+            onClose={() => setIsBulkNotifyModalOpen(false)}
+            onConfirm={handleBulkNotify}
+            busy={isBulkNotifying}
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {isBulkRenewConfirmOpen && (
+          <BulkRenewModal
+            isRTL={isRTL}
+            targetFilter={bulkRenewFilter}
+            onTargetFilterChange={setBulkRenewFilter}
+            targetCount={autoRenewTargets.length}
+            renewDays={bulkRenewDays}
+            onRenewDaysChange={setBulkRenewDays}
+            onClose={() => setIsBulkRenewConfirmOpen(false)}
+            onConfirm={confirmBulkRenew}
+            busy={isBulkRenewing}
+          />
+        )}
+      </AnimatePresence>
+
       {/* Messaging Modal */}
       <AnimatePresence>
         {isMessageModalOpen && selectedSub && (
@@ -592,6 +823,20 @@ export default function BoiExpiryTab({ state }: BoiExpiryTabProps) {
             sub={selectedSub} 
             isRTL={isRTL} 
             onClose={() => setIsMessageModalOpen(false)} 
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {isRenewModalOpen && selectedSub && (
+          <SimpleRenewModal
+            sub={selectedSub}
+            isRTL={isRTL}
+            onClose={() => setIsRenewModalOpen(false)}
+            onCompleted={async () => {
+              setIsRenewModalOpen(false);
+              await loadData();
+            }}
           />
         )}
       </AnimatePresence>
@@ -950,5 +1195,205 @@ function MethodButton({ active, icon: Icon, label, onClick, color }: {
       <Icon size={28} />
       <span className="text-[10px] font-black uppercase tracking-tighter">{label}</span>
     </button>
+  );
+}
+
+function SimpleRenewModal({ sub, isRTL, onClose, onCompleted }: {
+  sub: SubscriberRecord;
+  isRTL: boolean;
+  onClose: () => void;
+  onCompleted: () => Promise<void>;
+}) {
+  const [loadingAction, setLoadingAction] = useState<'extend30' | 'extend7' | 'activateToday' | 'activateMonth' | null>(null);
+
+  const runAction = async (action: 'extend30' | 'extend7' | 'activateToday' | 'activateMonth') => {
+    setLoadingAction(action);
+    try {
+      if (action === 'extend30') {
+        await extendSubscriber(String(sub.id), { unit: 'days', value: 30 }, 'all');
+        toastSuccess(isRTL ? 'تم تجديد الاشتراك لمدة 30 يوماً.' : 'Subscription renewed for 30 days.', isRTL ? 'تم التجديد' : 'Renewed');
+      } else if (action === 'extend7') {
+        await extendSubscriber(String(sub.id), { unit: 'days', value: 7 }, 'all');
+        toastSuccess(isRTL ? 'تم تمديد الاشتراك لمدة 7 أيام.' : 'Subscription extended for 7 days.', isRTL ? 'تم التمديد' : 'Extended');
+      } else if (action === 'activateToday') {
+        await activateSubscriber(String(sub.id), 'today', 'all');
+        toastSuccess(isRTL ? 'تم تفعيل الاشتراك ابتداءً من اليوم.' : 'Subscription activated starting today.', isRTL ? 'تم التفعيل' : 'Activated');
+      } else {
+        await activateSubscriber(String(sub.id), 'month_start', 'all');
+        toastSuccess(isRTL ? 'تمت إعادة التفعيل من بداية الشهر.' : 'Subscription reactivated from the start of the month.', isRTL ? 'تم التفعيل' : 'Activated');
+      }
+
+      await onCompleted();
+    } catch (error) {
+      console.error(error);
+      toastError(isRTL ? 'فشلت عملية التجديد أو التفعيل.' : 'Renew/activate action failed.', isRTL ? 'فشل العملية' : 'Action Failed');
+    } finally {
+      setLoadingAction(null);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[220] flex items-center justify-center p-4">
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-slate-950/70 backdrop-blur-md" onClick={onClose} />
+      <motion.div initial={{ scale: 0.92, opacity: 0, y: 20 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.92, opacity: 0, y: 20 }} className="relative z-10 w-full max-w-2xl rounded-[2rem] border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-800 dark:bg-[#18181B]">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <div className="inline-flex items-center gap-2 rounded-full bg-rose-500/10 px-3 py-1 text-xs font-black text-rose-500">
+              <Zap size={14} />
+              {isRTL ? 'تجديد / تفعيل المشترك' : 'Renew / Activate Subscriber'}
+            </div>
+            <h3 className="mt-4 text-2xl font-black text-slate-900 dark:text-white">{sub.name || sub.username || sub.id}</h3>
+            <p className="mt-2 text-sm font-medium text-slate-500 dark:text-slate-400">{isRTL ? 'اختر الإجراء المناسب مباشرة من هنا.' : 'Choose the appropriate renewal or activation action.'}</p>
+          </div>
+          <button onClick={onClose} className="rounded-xl p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200">
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="mt-6 grid grid-cols-1 gap-3 md:grid-cols-2">
+          <button disabled={loadingAction !== null} onClick={() => runAction('extend30')} className="rounded-2xl border border-rose-200 bg-rose-50 px-5 py-4 text-start transition-all hover:border-rose-400 hover:bg-rose-100 disabled:opacity-60 dark:border-rose-500/20 dark:bg-rose-500/10">
+            <div className="text-sm font-black text-rose-600 dark:text-rose-300">{isRTL ? 'تجديد 30 يوماً' : 'Renew 30 Days'}</div>
+            <div className="mt-1 text-xs font-medium text-slate-500 dark:text-slate-400">{isRTL ? 'تمديد مباشر لمدة شهر كامل.' : 'Direct extension for a full month.'}</div>
+          </button>
+          <button disabled={loadingAction !== null} onClick={() => runAction('extend7')} className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-start transition-all hover:border-amber-400 hover:bg-amber-100 disabled:opacity-60 dark:border-amber-500/20 dark:bg-amber-500/10">
+            <div className="text-sm font-black text-amber-600 dark:text-amber-300">{isRTL ? 'تمديد 7 أيام' : 'Extend 7 Days'}</div>
+            <div className="mt-1 text-xs font-medium text-slate-500 dark:text-slate-400">{isRTL ? 'خيار سريع للحالات القصيرة.' : 'Quick option for short grace periods.'}</div>
+          </button>
+          <button disabled={loadingAction !== null} onClick={() => runAction('activateToday')} className="rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-4 text-start transition-all hover:border-emerald-400 hover:bg-emerald-100 disabled:opacity-60 dark:border-emerald-500/20 dark:bg-emerald-500/10">
+            <div className="text-sm font-black text-emerald-600 dark:text-emerald-300">{isRTL ? 'تفعيل من اليوم' : 'Activate From Today'}</div>
+            <div className="mt-1 text-xs font-medium text-slate-500 dark:text-slate-400">{isRTL ? 'إعادة تفعيل الاشتراك من تاريخ اليوم.' : 'Reactivate starting from today.'}</div>
+          </button>
+          <button disabled={loadingAction !== null} onClick={() => runAction('activateMonth')} className="rounded-2xl border border-blue-200 bg-blue-50 px-5 py-4 text-start transition-all hover:border-blue-400 hover:bg-blue-100 disabled:opacity-60 dark:border-blue-500/20 dark:bg-blue-500/10">
+            <div className="text-sm font-black text-blue-600 dark:text-blue-300">{isRTL ? 'تفعيل من أول الشهر' : 'Activate From Month Start'}</div>
+            <div className="mt-1 text-xs font-medium text-slate-500 dark:text-slate-400">{isRTL ? 'إعادة ضبط التفعيل إلى بداية الشهر الحالي.' : 'Reset activation to the beginning of the current month.'}</div>
+          </button>
+        </div>
+
+        {loadingAction && (
+          <div className="mt-5 flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-600 dark:border-slate-800 dark:bg-slate-900/60 dark:text-slate-300">
+            <Loader2 className="animate-spin" size={16} />
+            {isRTL ? 'جاري تنفيذ العملية...' : 'Processing action...'}
+          </div>
+        )}
+      </motion.div>
+    </div>
+  );
+}
+
+function BulkRenewModal({
+  isRTL,
+  targetFilter,
+  onTargetFilterChange,
+  targetCount,
+  renewDays,
+  onRenewDaysChange,
+  onClose,
+  onConfirm,
+  busy,
+}: {
+  isRTL: boolean;
+  targetFilter: 'all' | 'expired' | 'today' | '3days' | 'active' | 'online' | 'activeOffline' | 'suspended' | 'demands' | 'debts';
+  onTargetFilterChange: (value: 'all' | 'expired' | 'today' | '3days' | 'active' | 'online' | 'activeOffline' | 'suspended' | 'demands' | 'debts') => void;
+  targetCount: number;
+  renewDays: number;
+  onRenewDaysChange: (value: number) => void;
+  onClose: () => void;
+  onConfirm: () => void;
+  busy: boolean;
+}) {
+  return (
+    <div className="fixed inset-0 z-[230] flex items-center justify-center p-4">
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-slate-950/70 backdrop-blur-sm" onClick={onClose} />
+      <motion.div initial={{ scale: 0.94, opacity: 0, y: 16 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.94, opacity: 0, y: 16 }} className="relative z-10 w-full max-w-xl rounded-[2rem] border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-800 dark:bg-[#18181B]">
+        <h3 className="text-xl font-black text-slate-900 dark:text-white">{isRTL ? 'إعداد التجديد التلقائي' : 'Bulk Auto Renew Setup'}</h3>
+        <div className="mt-5 space-y-4">
+          <div>
+            <label className="mb-2 block text-xs font-black uppercase tracking-wider text-slate-500">{isRTL ? 'الفئة المستهدفة' : 'Target Filter'}</label>
+            <select value={targetFilter} onChange={(e) => onTargetFilterChange(e.target.value as any)} className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold dark:border-slate-800 dark:bg-slate-900/50">
+              <option value="expired">{isRTL ? 'المنتهي اشتراكهم' : 'Expired'}</option>
+              <option value="today">{isRTL ? 'ينتهي اليوم' : 'Expires Today'}</option>
+              <option value="3days">{isRTL ? 'ينتهي خلال 3 أيام' : 'Expires In 3 Days'}</option>
+              <option value="active">{isRTL ? 'النشطون' : 'Active'}</option>
+              <option value="online">{isRTL ? 'المتصلون الآن' : 'Online Now'}</option>
+              <option value="activeOffline">{isRTL ? 'نشط لكن غير متصل' : 'Active Offline'}</option>
+              <option value="suspended">{isRTL ? 'الموقوفون' : 'Suspended'}</option>
+              <option value="demands">{isRTL ? 'عليهم مطالبات' : 'With Demands'}</option>
+              <option value="debts">{isRTL ? 'لهم أرصدة' : 'With Balances'}</option>
+              <option value="all">{isRTL ? 'الكل' : 'All'}</option>
+            </select>
+          </div>
+          <div>
+            <label className="mb-2 block text-xs font-black uppercase tracking-wider text-slate-500">{isRTL ? 'عدد الأيام' : 'Renew Days'}</label>
+            <input type="number" min={1} max={365} value={renewDays} onChange={(e) => onRenewDaysChange(Math.max(1, Number(e.target.value) || 30))} className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold dark:border-slate-800 dark:bg-slate-900/50" />
+          </div>
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm font-bold text-slate-600 dark:border-slate-800 dark:bg-slate-900/50 dark:text-slate-300">
+            {isRTL ? `سيتم استهداف ${targetCount} مشترك حالياً.` : `${targetCount} subscribers will be targeted currently.`}
+          </div>
+        </div>
+        <div className="mt-6 flex gap-3">
+          <button onClick={onClose} className="flex-1 rounded-2xl bg-slate-200 px-4 py-3 text-sm font-black text-slate-700 dark:bg-slate-800 dark:text-slate-200">{isRTL ? 'إلغاء' : 'Cancel'}</button>
+          <button onClick={onConfirm} disabled={busy} className="flex-1 rounded-2xl bg-rose-500 px-4 py-3 text-sm font-black text-white disabled:opacity-60">{busy ? (isRTL ? 'جاري التنفيذ...' : 'Running...') : (isRTL ? 'تنفيذ التجديد' : 'Start Renewing')}</button>
+        </div>
+      </motion.div>
+    </div>
+  );
+}
+
+function BulkNotifyModal({
+  isRTL,
+  targetFilter,
+  onTargetFilterChange,
+  targetCount,
+  message,
+  onMessageChange,
+  onClose,
+  onConfirm,
+  busy,
+}: {
+  isRTL: boolean;
+  targetFilter: 'all' | 'expired' | 'today' | '3days' | 'active' | 'online' | 'activeOffline' | 'suspended' | 'demands' | 'debts';
+  onTargetFilterChange: (value: 'all' | 'expired' | 'today' | '3days' | 'active' | 'online' | 'activeOffline' | 'suspended' | 'demands' | 'debts') => void;
+  targetCount: number;
+  message: string;
+  onMessageChange: (value: string) => void;
+  onClose: () => void;
+  onConfirm: () => void;
+  busy: boolean;
+}) {
+  return (
+    <div className="fixed inset-0 z-[230] flex items-center justify-center p-4">
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-slate-950/70 backdrop-blur-sm" onClick={onClose} />
+      <motion.div initial={{ scale: 0.94, opacity: 0, y: 16 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.94, opacity: 0, y: 16 }} className="relative z-10 w-full max-w-2xl rounded-[2rem] border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-800 dark:bg-[#18181B]">
+        <h3 className="text-xl font-black text-slate-900 dark:text-white">{isRTL ? 'إعداد تبليغ الجميع' : 'Bulk Notify Setup'}</h3>
+        <div className="mt-5 space-y-4">
+          <div>
+            <label className="mb-2 block text-xs font-black uppercase tracking-wider text-slate-500">{isRTL ? 'الفئة المستهدفة' : 'Target Filter'}</label>
+            <select value={targetFilter} onChange={(e) => onTargetFilterChange(e.target.value as any)} className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold dark:border-slate-800 dark:bg-slate-900/50">
+              <option value="expired">{isRTL ? 'المنتهي اشتراكهم' : 'Expired'}</option>
+              <option value="today">{isRTL ? 'ينتهي اليوم' : 'Expires Today'}</option>
+              <option value="3days">{isRTL ? 'ينتهي خلال 3 أيام' : 'Expires In 3 Days'}</option>
+              <option value="active">{isRTL ? 'النشطون' : 'Active'}</option>
+              <option value="online">{isRTL ? 'المتصلون الآن' : 'Online Now'}</option>
+              <option value="activeOffline">{isRTL ? 'نشط لكن غير متصل' : 'Active Offline'}</option>
+              <option value="suspended">{isRTL ? 'الموقوفون' : 'Suspended'}</option>
+              <option value="demands">{isRTL ? 'عليهم مطالبات' : 'With Demands'}</option>
+              <option value="debts">{isRTL ? 'لهم أرصدة' : 'With Balances'}</option>
+              <option value="all">{isRTL ? 'الكل' : 'All'}</option>
+            </select>
+          </div>
+          <div>
+            <label className="mb-2 block text-xs font-black uppercase tracking-wider text-slate-500">{isRTL ? 'نص الرسالة' : 'Message Text'}</label>
+            <textarea value={message} onChange={(e) => onMessageChange(e.target.value)} rows={5} className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium dark:border-slate-800 dark:bg-slate-900/50" />
+          </div>
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm font-bold text-slate-600 dark:border-slate-800 dark:bg-slate-900/50 dark:text-slate-300">
+            {isRTL ? `سيتم تجهيز الإرسال إلى ${targetCount} مشترك.` : `Delivery will be prepared for ${targetCount} subscribers.`}
+          </div>
+        </div>
+        <div className="mt-6 flex gap-3">
+          <button onClick={onClose} className="flex-1 rounded-2xl bg-slate-200 px-4 py-3 text-sm font-black text-slate-700 dark:bg-slate-800 dark:text-slate-200">{isRTL ? 'إلغاء' : 'Cancel'}</button>
+          <button onClick={onConfirm} disabled={busy} className="flex-1 rounded-2xl bg-slate-900 px-4 py-3 text-sm font-black text-white disabled:opacity-60 dark:bg-slate-100 dark:text-slate-900">{busy ? (isRTL ? 'جاري التجهيز...' : 'Preparing...') : (isRTL ? 'تنفيذ التبليغ' : 'Prepare Notifications')}</button>
+        </div>
+      </motion.div>
+    </div>
   );
 }

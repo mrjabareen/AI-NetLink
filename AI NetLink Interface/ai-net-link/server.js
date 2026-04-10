@@ -35,6 +35,12 @@ app.use((req, res, next) => {
 });
 
 app.use(express.json());
+app.use('/api', (_req, res, next) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  next();
+});
 
 // Path to the database files
 const DB_PATH = process.env.DB_PATH || path.resolve(__dirname, '../../NetLink Enterprise DB/[01_DATABASE]');
@@ -3215,7 +3221,7 @@ app.get('/api/subscribers', (req, res) => {
         subType,
         status: statusKey,
         expiry: s.expiry || s['تاريخ الانتهاء'] || (s.expiration || s['تاريخ ناهية الاشتراك']) || '2026-12-31',
-        expiry_time: s.expiry_time || s['وقت الانتهاء'] || 'N/A',
+        expiry_time: s.expiry_time || s['وقت الانتهاء'] || '23:59:59',
         balance: parseFloat(s['الرصيد المتبقي له'] || s.balance) || 0,
         phone,
         city,
@@ -3250,13 +3256,48 @@ app.post('/api/subscribers', (req, res) => {
     
     const newId = maxId + 1;
     const body = req.body || {};
-    const fName = body.firstname || body['الاسم الأول'] || 'مجهول';
-    const lName = body.lastname || body['اسم العائلة'] || '';
+    const fName = body.firstname || body.firstName || body['الاسم الأول'] || body['الاسم الاول'] || 'مجهول';
+    const lName = body.lastname || body.lastName || body['اسم العائلة'] || body['الاسم الثاني'] || '';
     const fallbackName = body.name || body['اسم العرض على المايكروتيك'] || 'مجهول';
-    const fullName = (`${fName} ${lName}`.trim() || String(fallbackName)).replace(/[\\/:*?"<>|]/g, '');
-    const fileName = `${newId}_${fullName}.json`;
+    const username = String(body.username || body['اسم المستخدم'] || body['اسم الدخول'] || '').trim();
+    const sanitizedFullName = (`${fName} ${lName}`.trim() || String(fallbackName)).replace(/[\\/:*?"<>|]/g, '').trim();
+    const safeFileLabel = sanitizedFullName || String(fallbackName || '').replace(/[\\/:*?"<>|]/g, '').trim() || username || `subscriber_${newId}`;
+    const fileName = `${newId}_${safeFileLabel}.json`;
+
+    const normalizedStatus = String(body.status || body['حالة الحساب'] || 'active').trim().toLowerCase();
+    const finalStatus = ['expired', 'منتهي'].includes(normalizedStatus)
+      ? 'expired'
+      : ['suspended', 'موقوف', 'معلق'].includes(normalizedStatus)
+        ? 'suspended'
+        : 'active';
+    const statusLabelAr = finalStatus === 'expired' ? 'منتهي' : finalStatus === 'suspended' ? 'معلق' : 'مفعل';
+    const expiryDate = String(body.expiry || body['تاريخ الانتهاء'] || '').trim() || new Date(Date.now() + (30 * 24 * 60 * 60 * 1000)).toISOString().split('T')[0];
+    const expiryTime = String(body.expiry_time || body['وقت الانتهاء'] || '').trim() || '23:59:59';
+    const password = String(body.password || body['كلمة المرور'] || '').trim();
     
-    const s = { ...body, id: newId };
+    const s = {
+      ...body,
+      id: newId,
+      firstname: fName,
+      firstName: fName,
+      'الاسم الأول': fName,
+      'الاسم الاول': fName,
+      lastname: lName,
+      lastName: lName,
+      'اسم العائلة': lName,
+      'الاسم الثاني': lName,
+      username,
+      'اسم المستخدم': username,
+      'اسم الدخول': username,
+      password,
+      'كلمة المرور': password,
+      status: finalStatus,
+      'حالة الحساب': statusLabelAr,
+      expiry: expiryDate,
+      'تاريخ الانتهاء': expiryDate,
+      expiry_time: expiryTime,
+      'وقت الانتهاء': expiryTime,
+    };
     
     fs.writeFileSync(getSafePath(dirPath, fileName), JSON.stringify(s, null, 2), 'utf-8');
     res.status(201).json({ data: { message: 'Created successfully', id: `SUB-${newId}` } });
@@ -3291,11 +3332,27 @@ app.put('/api/subscribers/:id', (req, res) => {
     const filePath = getSafePath(dirPath, targetFile);
     const existingContent = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
     const body = req.body || {};
+    const normalizedExpiry = String(body.expiry || body.expiration || body['تاريخ الانتهاء'] || body['تاريخ انتهاء الاشتراك'] || body['تاريخ ناهية الاشتراك'] || body['تاريخ النهاية'] || '').trim();
+    const normalizedExpiryTime = String(body.expiry_time || body.expiryTime || body['وقت الانتهاء'] || body['وقت نهاية الاشتراك'] || '').trim();
     
     const updatedContent = {
       ...existingContent,
       ...body,
-      id: existingContent.id || targetId 
+      id: existingContent.id || targetId,
+      ...(normalizedExpiry ? {
+        expiry: normalizedExpiry,
+        expiration: normalizedExpiry,
+        'تاريخ الانتهاء': normalizedExpiry,
+        'تاريخ انتهاء الاشتراك': normalizedExpiry,
+        'تاريخ ناهية الاشتراك': normalizedExpiry,
+        'تاريخ النهاية': normalizedExpiry,
+      } : {}),
+      ...(normalizedExpiryTime ? {
+        expiry_time: normalizedExpiryTime,
+        expiryTime: normalizedExpiryTime,
+        'وقت الانتهاء': normalizedExpiryTime,
+        'وقت نهاية الاشتراك': normalizedExpiryTime,
+      } : {}),
     };
     
     fs.writeFileSync(filePath, JSON.stringify(updatedContent, null, 2), 'utf-8');

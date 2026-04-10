@@ -146,6 +146,7 @@ export default function SecurityGroupsTab({ state, setState }: SecurityGroupsTab
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editGroupName, setEditGroupName] = useState('');
   const [editGroupDescription, setEditGroupDescription] = useState('');
+  const [selectedPermissionInfo, setSelectedPermissionInfo] = useState<{ label: string; description: string } | null>(null);
   
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -371,7 +372,7 @@ export default function SecurityGroupsTab({ state, setState }: SecurityGroupsTab
                               {filteredPerms.map((perm) => {
                                 const isActive = selectedGroup.permissions.includes(perm.id);
                                 return (
-                                  <div key={perm.id} onClick={() => togglePermission(perm.id)} className={`flex items-center justify-between p-3 rounded-xl border transition-all cursor-pointer ${isActive ? 'bg-teal-500/5 border-teal-500/30' : 'bg-transparent border-slate-200 dark:border-slate-800'}`}>
+                                  <div key={perm.id} onClick={() => togglePermission(perm.id)} className={`flex items-center justify-between gap-3 p-3 rounded-xl border transition-all cursor-pointer ${isActive ? 'bg-teal-500/5 border-teal-500/30' : 'bg-transparent border-slate-200 dark:border-slate-800'}`}>
                                     <div className="flex items-center gap-3 flex-1 min-w-0 pr-1">
                                       <div className={`shrink-0 transition-colors ${isActive ? 'text-teal-500' : 'text-slate-300'}`}>
                                         {isActive ? <Unlock size={18} /> : <Lock size={18} />}
@@ -386,6 +387,20 @@ export default function SecurityGroupsTab({ state, setState }: SecurityGroupsTab
                                       </div>
                                       {isActive && <CheckCircle2 className="text-teal-500 shrink-0" size={14} />}
                                     </div>
+                                    <button
+                                      type="button"
+                                      onClick={(event) => {
+                                        event.stopPropagation();
+                                        setSelectedPermissionInfo({
+                                          label: isRTL ? perm.labelAr : perm.labelEn,
+                                          description: isRTL ? perm.descriptionAr : perm.descriptionEn,
+                                        });
+                                      }}
+                                      className="shrink-0 inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 transition-colors hover:border-teal-300 hover:text-teal-500 dark:border-slate-700 dark:bg-[#111114]"
+                                      aria-label={isRTL ? `شرح صلاحية ${perm.labelAr}` : `Explain ${perm.labelEn}`}
+                                    >
+                                      <Info size={14} />
+                                    </button>
                                   </div>
                                 );
                               })}
@@ -530,6 +545,31 @@ export default function SecurityGroupsTab({ state, setState }: SecurityGroupsTab
                   نعم، احذف المجموعة
                 </button>
                 <button onClick={() => setIsDeleteModalOpen(false)} className="w-full py-4 bg-slate-100 dark:bg-slate-900 text-slate-500 font-bold rounded-2xl hover:bg-slate-200 transition-all">إلغاء</button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {selectedPermissionInfo && (
+          <div className="fixed inset-0 z-[140] flex items-center justify-center p-4">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setSelectedPermissionInfo(null)} className="absolute inset-0 bg-slate-950/70 backdrop-blur-sm" />
+            <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }} className="relative w-full max-w-lg rounded-[2rem] border border-slate-200 bg-white p-7 shadow-2xl dark:border-slate-800 dark:bg-[#09090B]">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <div className="inline-flex items-center gap-2 rounded-full bg-teal-500/10 px-3 py-1 text-xs font-black text-teal-600 dark:text-teal-400">
+                    <Info size={14} />
+                    {isRTL ? 'شرح الصلاحية' : 'Permission Help'}
+                  </div>
+                  <h3 className="mt-4 text-xl font-black text-slate-900 dark:text-white">{selectedPermissionInfo.label}</h3>
+                </div>
+                <button onClick={() => setSelectedPermissionInfo(null)} className="rounded-xl p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200">
+                  <Trash2 size={18} />
+                </button>
+              </div>
+              <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm font-medium leading-7 text-slate-700 dark:border-slate-800 dark:bg-slate-900/60 dark:text-slate-300">
+                {selectedPermissionInfo.description}
               </div>
             </motion.div>
           </div>

@@ -9,6 +9,8 @@ import { motion } from 'motion/react';
 import { LayoutDashboard, MessageSquare, Search, Settings, FolderClosed, Sun, Moon, Globe, Activity, ChevronRight, ChevronLeft, ChevronDown, Network, ShieldAlert, BarChart3, Briefcase, CreditCard, Package, Users, Map, PieChart, LayoutTemplate, TrendingUp, Truck, Calendar, Coins, ShieldCheck, LogOut, Server, Landmark } from 'lucide-react';
 import { AppState, Currency, Permission, SettingsCategoryId, Tab } from '../types';
 import { dict } from '../dict';
+import { hasPermission as canAccess } from '../permissions';
+import { getPathForTab } from '../navigation';
 
 interface SidebarProps {
   state: AppState;
@@ -39,8 +41,6 @@ export default function Sidebar({ state, setState }: SidebarProps) {
     insights: false,
     system: false,
   });
-  const [settingsMenuOpen, setSettingsMenuOpen] = useState(state.activeTab === 'settings');
-
   const handleMouseEnter = (e: React.MouseEvent, label: string) => {
     if (!state.sidebarOpen) {
       const rect = e.currentTarget.getBoundingClientRect();
@@ -74,8 +74,7 @@ export default function Sidebar({ state, setState }: SidebarProps) {
     { id: 'settings', icon: Settings, label: t.nav.settings, permission: 'edit_settings' },
   ];
 
-  const userPermissions = state.currentUser?.permissions || [];
-  const hasPermission = (perm: Permission) => state.role === 'super_admin' || userPermissions.includes('all') || userPermissions.includes(perm);
+  const hasPermission = (perm: Permission) => canAccess(state, perm);
 
   const navItems = allNavItems.filter(item => {
     // Investors portal is special for shareholders
@@ -107,7 +106,12 @@ export default function Sidebar({ state, setState }: SidebarProps) {
     {
       id: 'system',
       label: isRTL ? 'النظام والأدوات' : 'System & Tools',
-      items: ['files', 'security', 'settings'],
+      items: ['files', 'security'],
+    },
+    {
+      id: 'settings',
+      label: isRTL ? 'الإعدادات' : 'Settings',
+      items: ['settings'],
     },
   ].map(group => ({
     ...group,
@@ -134,15 +138,18 @@ export default function Sidebar({ state, setState }: SidebarProps) {
 
   useEffect(() => {
     if (state.activeTab === 'settings') {
-      setSettingsMenuOpen(true);
+      setExpandedGroups(prev => ({ ...prev, settings: true }));
     }
-  }, [state.activeTab]);
+  }, [state.activeTab, state.activeSettingsCategory]);
 
   const toggleTheme = () => setState(prev => ({ ...prev, theme: prev.theme === 'light' ? 'dark' : 'light' }));
   const toggleLang = () => setState(prev => ({ ...prev, lang: prev.lang === 'en' ? 'ar' : 'en' }));
+  const handleNavigateHome = () => setState(prev => ({ ...prev, activeTab: 'dashboard', activeSettingsCategory: 'profile' }));
   const handleLogout = () => {
     localStorage.removeItem('sas4_remembered_user');
-    setState(prev => ({ ...prev, isAuthenticated: false, currentUser: null, role: 'user', activeTab: 'dashboard' }));
+    localStorage.removeItem('sas4_shared_session_user');
+    sessionStorage.removeItem('sas4_session_user');
+    setState(prev => ({ ...prev, isAuthenticated: false, currentUser: null, impersonationSource: null, role: 'user', activeTab: 'dashboard', activeSettingsCategory: 'profile' }));
   };
   
   const cycleCurrency = () => {
@@ -152,14 +159,27 @@ export default function Sidebar({ state, setState }: SidebarProps) {
     setState(prev => ({ ...prev, currency: currencies[nextIndex] }));
   };
 
+  const shouldHandleInAppNavigation = (event: React.MouseEvent<HTMLAnchorElement>) => (
+    event.button === 0 &&
+    !event.metaKey &&
+    !event.ctrlKey &&
+    !event.shiftKey &&
+    !event.altKey
+  );
+
   const renderNavButton = (item: NavItem) => {
     const Icon = item.icon;
     const isActive = state.activeTab === item.id;
 
     return (
-      <button
+      <a
         key={item.id}
-        onClick={() => setState(prev => ({ ...prev, activeTab: item.id }))}
+        href={getPathForTab(item.id)}
+        onClick={(event) => {
+          if (!shouldHandleInAppNavigation(event)) return;
+          event.preventDefault();
+          setState(prev => ({ ...prev, activeTab: item.id }));
+        }}
         onMouseEnter={(e) => handleMouseEnter(e, item.label)}
         onMouseLeave={handleMouseLeave}
         className={`w-full flex items-center gap-4 px-3 py-3 rounded-xl transition-all duration-200 group relative overflow-hidden cursor-pointer text-sm
@@ -182,63 +202,30 @@ export default function Sidebar({ state, setState }: SidebarProps) {
             )}
           </div>
         )}
-      </button>
+      </a>
     );
   };
 
-  const renderSettingsButton = (item: NavItem) => {
-    const Icon = item.icon;
-    const isActive = state.activeTab === item.id;
+  const renderSettingsCategoryButton = (item: SettingsNavItem) => {
+    const isActive = state.activeTab === 'settings' && state.activeSettingsCategory === item.id;
 
     return (
-      <div key={item.id} className="space-y-1.5">
-        <button
-          onClick={() => {
-            setState(prev => ({ ...prev, activeTab: 'settings' }));
-            setSettingsMenuOpen(prev => !prev || state.activeTab !== 'settings');
-          }}
-          onMouseEnter={(e) => handleMouseEnter(e, item.label)}
-          onMouseLeave={handleMouseLeave}
-          className={`w-full flex items-center gap-4 px-3 py-3 rounded-xl transition-all duration-200 group relative overflow-hidden cursor-pointer text-sm
-            ${isActive
-              ? 'bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 font-semibold'
-              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/50 hover:text-slate-900 dark:hover:text-slate-200'
-            }`}
-        >
-          {isActive && (
-            <motion.div layoutId="activeNav" className="absolute inset-0 bg-blue-100/50 dark:bg-blue-500/10 border border-blue-200/50 dark:border-blue-500/20 rounded-xl z-0" />
-          )}
-          <Icon className={`w-6 h-6 shrink-0 z-10 ${isActive ? 'text-blue-600 dark:text-blue-400' : 'group-hover:text-blue-500'}`} strokeWidth={isActive ? 2.5 : 2} />
-          {state.sidebarOpen && (
-            <div className="flex-1 flex items-center justify-between z-10 min-w-0">
-              <span className="truncate text-sm leading-6">{item.label}</span>
-              <ChevronDown size={16} className={`shrink-0 transition-transform ${settingsMenuOpen ? 'rotate-180' : ''}`} />
-            </div>
-          )}
-        </button>
-
-        {state.sidebarOpen && settingsMenuOpen && (
-          <div className={`space-y-1 ${isRTL ? 'pr-4 border-r' : 'pl-4 border-l'} border-slate-200 dark:border-slate-800`}>
-            {settingsCategories.map((category) => {
-              const isCategoryActive = state.activeTab === 'settings' && state.activeSettingsCategory === category.id;
-
-              return (
-                <button
-                  key={category.id}
-                  onClick={() => setState(prev => ({ ...prev, activeTab: 'settings', activeSettingsCategory: category.id }))}
-                  className={`w-full flex items-center rounded-lg px-3 py-2.5 text-sm transition-colors ${
-                    isCategoryActive
-                      ? 'bg-teal-500/10 text-teal-600 dark:text-teal-400 font-bold'
-                      : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/50 hover:text-slate-800 dark:hover:text-slate-200'
-                  }`}
-                >
-                  <span className="truncate">{category.label}</span>
-                </button>
-              );
-            })}
-          </div>
-        )}
-      </div>
+      <a
+        key={item.id}
+        href={getPathForTab('settings', item.id)}
+        onClick={(event) => {
+          if (!shouldHandleInAppNavigation(event)) return;
+          event.preventDefault();
+          setState(prev => ({ ...prev, activeTab: 'settings', activeSettingsCategory: item.id }));
+        }}
+        className={`w-full flex items-center rounded-xl px-3 py-3 text-sm transition-colors ${
+          isActive
+            ? 'bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 font-semibold'
+            : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/50 hover:text-slate-900 dark:hover:text-slate-200'
+        }`}
+      >
+        <span className="truncate">{item.label}</span>
+      </a>
     );
   };
 
@@ -251,7 +238,15 @@ export default function Sidebar({ state, setState }: SidebarProps) {
         {state.sidebarOpen ? (isRTL ? <ChevronRight size={14} /> : <ChevronLeft size={14} />) : (isRTL ? <ChevronLeft size={14} /> : <ChevronRight size={14} />)}
       </button>
 
-      <div className="p-4 flex items-center gap-3 h-20">
+      <a
+        href={getPathForTab('dashboard')}
+        onClick={(event) => {
+          if (!shouldHandleInAppNavigation(event)) return;
+          event.preventDefault();
+          handleNavigateHome();
+        }}
+        className="p-4 flex items-center gap-3 h-20 text-start transition-opacity hover:opacity-90"
+      >
         <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-500 to-violet-600 flex items-center justify-center shrink-0 shadow-lg shadow-blue-500/20">
           <Activity className="text-white w-5 h-5" />
         </div>
@@ -265,27 +260,31 @@ export default function Sidebar({ state, setState }: SidebarProps) {
             </p>
           </motion.div>
         )}
-      </div>
+      </a>
 
       <nav className="flex-1 px-2 py-4 space-y-3 overflow-y-auto custom-scrollbar">
         {state.sidebarOpen ? (
-          navGroups.map((group) => (
-            <div key={group.id} className="space-y-2">
-              <button
-                onClick={() => setExpandedGroups(prev => ({ ...prev, [group.id]: !prev[group.id] }))}
-                className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl bg-slate-100/80 dark:bg-slate-800/50 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors"
-              >
-                <span className="text-sm font-bold">{group.label}</span>
-                <ChevronDown size={16} className={`transition-transform ${expandedGroups[group.id] ? 'rotate-180' : ''}`} />
-              </button>
+          navGroups.map((group) => {
+            return (
+              <div key={group.id} className="space-y-2">
+                <button
+                  onClick={() => setExpandedGroups(prev => ({ ...prev, [group.id]: !prev[group.id] }))}
+                  className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl bg-slate-100/80 dark:bg-slate-800/50 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors"
+                >
+                  <span className="text-sm font-bold">{group.label}</span>
+                  <ChevronDown size={16} className={`transition-transform ${expandedGroups[group.id] ? 'rotate-180' : ''}`} />
+                </button>
 
-              {expandedGroups[group.id] && (
-                <div className="space-y-1.5">
-                  {group.items.map((item) => item.id === 'settings' ? renderSettingsButton(item) : renderNavButton(item))}
-                </div>
-              )}
-            </div>
-          ))
+                {expandedGroups[group.id] && (
+                  <div className="space-y-1.5">
+                    {group.id === 'settings'
+                      ? settingsCategories.map((item) => renderSettingsCategoryButton(item))
+                      : group.items.map((item) => renderNavButton(item))}
+                  </div>
+                )}
+              </div>
+            );
+          })
         ) : (
           navItems.map((item) => renderNavButton(item))
         )}
@@ -322,21 +321,31 @@ export default function Sidebar({ state, setState }: SidebarProps) {
         </div>
         
         {state.sidebarOpen && (
-          <div className="flex items-center gap-3 px-3 py-3 rounded-xl bg-slate-100/50 dark:bg-slate-800/30 border border-slate-200/50 dark:border-slate-700/50">
-            <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-xs font-bold shrink-0">
-              {state.currentUser?.name.charAt(0)}
+          <div className="space-y-3 px-3 py-3 rounded-xl bg-slate-100/50 dark:bg-slate-800/30 border border-slate-200/50 dark:border-slate-700/50">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-xs font-bold shrink-0">
+                {state.currentUser?.name.charAt(0)}
+              </div>
+              <div className="flex flex-col min-w-0">
+                <span className="text-sm font-bold text-slate-900 dark:text-white truncate">{state.currentUser?.name}</span>
+                <span className="text-xs text-slate-500 dark:text-slate-400 truncate">{t.roles[state.role]}</span>
+              </div>
+              <button 
+                onClick={handleLogout}
+                className="ml-auto p-1.5 rounded-md hover:bg-red-500/10 text-slate-400 hover:text-red-500 transition-colors"
+                title={t.auth.logout}
+              >
+                <LogOut size={14} />
+              </button>
             </div>
-            <div className="flex flex-col min-w-0">
-              <span className="text-sm font-bold text-slate-900 dark:text-white truncate">{state.currentUser?.name}</span>
-              <span className="text-xs text-slate-500 dark:text-slate-400 truncate">{t.roles[state.role]}</span>
-            </div>
-            <button 
-              onClick={handleLogout}
-              className="ml-auto p-1.5 rounded-md hover:bg-red-500/10 text-slate-400 hover:text-red-500 transition-colors"
-              title={t.auth.logout}
-            >
-              <LogOut size={14} />
-            </button>
+            {state.impersonationSource && (
+              <button
+                onClick={() => setState(prev => ({ ...prev, currentUser: prev.impersonationSource, impersonationSource: null, role: prev.impersonationSource?.role || 'super_admin', activeTab: 'dashboard' }))}
+                className="w-full rounded-xl border border-amber-300/60 bg-amber-50 px-3 py-2 text-xs font-black text-amber-700 transition-colors hover:bg-amber-100 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300"
+              >
+                {isRTL ? 'العودة إلى حساب السوبر أدمن' : 'Return to Super Admin'}
+              </button>
+            )}
           </div>
         )}
       </div>

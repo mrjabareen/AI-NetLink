@@ -78,6 +78,8 @@ type SyncResultDetail = {
   [key: string]: unknown;
 };
 
+const SEARCH_SETTINGS_TARGET_KEY = 'sas4_search_settings_target';
+
 type AdvancedFilterOption = {
   value: string;
   label: string;
@@ -536,8 +538,15 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
     const now = new Date();
     const expiryDate = new Date(now);
     const { value, unit } = getProfileDurationConfig(profile);
+    const billingCycleDay = typeof profile.billingCycleDay === 'number'
+      ? Math.max(1, Math.min(28, Number(profile.billingCycleDay)))
+      : null;
 
-    if (unit === 'months') {
+    if (unit === 'months' && billingCycleDay) {
+      expiryDate.setMonth(expiryDate.getMonth() + value, 1);
+      const maxDay = new Date(expiryDate.getFullYear(), expiryDate.getMonth() + 1, 0).getDate();
+      expiryDate.setDate(Math.min(billingCycleDay, maxDay));
+    } else if (unit === 'months') {
       expiryDate.setMonth(expiryDate.getMonth() + value);
     } else if (unit === 'days') {
       expiryDate.setDate(expiryDate.getDate() + value);
@@ -582,6 +591,20 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
       source['اسم العرض على المايكروتيك'] ??
       source['الاسم الانجليزي']
     );
+    const expiryDate = getStringValue(
+      source.expiry ??
+      source.expiration ??
+      source['تاريخ الانتهاء'] ??
+      source['تاريخ انتهاء الاشتراك'] ??
+      source['تاريخ ناهية الاشتراك'] ??
+      source['تاريخ النهاية']
+    );
+    const expiryTime = toTimeWithSeconds(getStringValue(
+      source.expiry_time ??
+      source.expiryTime ??
+      source['وقت الانتهاء'] ??
+      source['وقت نهاية الاشتراك']
+    ));
 
     return {
       ...source,
@@ -598,6 +621,16 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
       'حالة الحساب': statusArabic,
       name: displayName,
       'اسم العرض على المايكروتيك': displayName,
+      expiry: expiryDate,
+      expiration: expiryDate,
+      'تاريخ الانتهاء': expiryDate,
+      'تاريخ انتهاء الاشتراك': expiryDate,
+      'تاريخ ناهية الاشتراك': expiryDate,
+      'تاريخ النهاية': expiryDate,
+      expiry_time: expiryTime,
+      expiryTime: expiryTime,
+      'وقت الانتهاء': expiryTime,
+      'وقت نهاية الاشتراك': expiryTime,
       balance: String(source.balance ?? source['الرصيد المتبقي له'] ?? '0'),
       'الرصيد المتبقي له': String(source.balance ?? source['الرصيد المتبقي له'] ?? '0'),
       debt: String(source.debt ?? source['عليه دين'] ?? '0'),
@@ -678,6 +711,7 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
   const [deleteSecretCandidate, setDeleteSecretCandidate] = useState<string | null>(null);
   const [bulkDisconnectConfirmOpen, setBulkDisconnectConfirmOpen] = useState(false);
   const [deleteCandidateId, setDeleteCandidateId] = useState<string | null>(null);
+  const [terminateCandidate, setTerminateCandidate] = useState<DynamicItem | null>(null);
   const [templateDraftName, setTemplateDraftName] = useState('');
   const [isTemplatePromptOpen, setIsTemplatePromptOpen] = useState(false);
 
@@ -846,6 +880,100 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
   const [managers, setManagers] = useState<DynamicItem[]>([]);
   const [iptvSubscribers, setIptvSubscribers] = useState<DynamicItem[]>([]);
   const [onlineStatuses, setOnlineStatuses] = useState<Record<string, boolean>>({});
+
+  const openItemInEditor = React.useCallback((item: DynamicItem, targetSubTab: ManagementSubTab) => {
+    let editObj = { ...item };
+
+    if (targetSubTab === 'managers') {
+      editObj = {
+        ...editObj,
+        firstName: String(item.firstName || item['الاسم الاول'] || ''),
+        lastName: String(item.lastName || item['الاسم الثاني'] || ''),
+        username: String(item.username || item['اسم الدخول'] || '')
+      };
+    } else if (targetSubTab === 'subscribers') {
+      editObj = buildSubscriberPayload({
+        ...editObj,
+        firstname: String(item.firstname || item.firstName || item['الاسم الأول'] || ''),
+        lastname: String(item.lastname || item.lastName || item['اسم العائلة'] || ''),
+        username: String(item.username || item['اسم المستخدم'] || item['اسم الدخول'] || ''),
+        password: String(item.password || item['كلمة المرور'] || ''),
+        name: String(item.name || item['اسم العرض على المايكروتيك'] || item['الاسم الانجليزي'] || '')
+      });
+    } else if (targetSubTab === 'suppliers') {
+      editObj = {
+        ...editObj,
+        'كود': item['كود'] || '',
+        'اسم المورد': item['اسم المورد'] || item.name || '',
+        'مدين': item['مدين'] || '0.00',
+        'مسدد': item['مسدد'] || '0.00',
+        'الرصيد': item['الرصيد'] || '-',
+        'ملاحظات': item['ملاحظات'] || item.note || ''
+      };
+    } else if (targetSubTab === 'shareholders') {
+      editObj = {
+        ...editObj,
+        name: item.name || item['اسم المستثمر'] || '',
+        shares: item.shares || item['رصيد الأسهم'] || 0,
+        buyPrice: item.buyPrice || item.sharePrice || item['سعر السهم الواحد'] || 0,
+        investment: item.investment || item['سعر الأسهم'] || 0,
+        ownership: item.ownership || '0%',
+        dividends: item.dividends || item['صافي الربح'] || 0
+      };
+    }
+
+    setEditingItem(editObj);
+
+    if (targetSubTab === 'subscribers') {
+      loadNetworkProfiles();
+      setEntityWorkspaceMode('list');
+      setSubscriberWorkspaceMode('edit');
+      return;
+    }
+
+    if (targetSubTab === 'suppliers' || targetSubTab === 'shareholders' || targetSubTab === 'managers' || targetSubTab === 'iptv') {
+      setSubscriberWorkspaceMode('list');
+      setEntityWorkspaceMode('edit');
+      return;
+    }
+
+    setIsEditModalOpen(true);
+  }, []);
+
+  const applyPendingSearchTarget = React.useCallback((targetSubTab: ManagementSubTab, sourceList: DynamicItem[]) => {
+    const rawPending = localStorage.getItem(SEARCH_SETTINGS_TARGET_KEY);
+    if (!rawPending) return;
+
+    try {
+      const pending = JSON.parse(rawPending) as { targetSubTab?: ManagementSubTab; item?: DynamicItem };
+      if (!pending?.item || pending.targetSubTab !== targetSubTab) return;
+
+      const targetItem = pending.item;
+      const normalizedName = String(targetItem.name || targetItem['اسم المستثمر'] || targetItem['اسم المورد'] || '').trim().toLowerCase();
+      const normalizedUsername = String(targetItem.username || targetItem['اسم الدخول'] || targetItem['اسم المستخدم'] || '').trim().toLowerCase();
+      const normalizedEmail = String(targetItem.email || '').trim().toLowerCase();
+
+      const matchedItem = sourceList.find((candidate) => {
+        const candidateId = String(candidate.id || '').trim();
+        const candidateName = String(candidate.name || candidate['اسم المستثمر'] || candidate['اسم المورد'] || '').trim().toLowerCase();
+        const candidateUsername = String(candidate.username || candidate['اسم الدخول'] || candidate['اسم المستخدم'] || '').trim().toLowerCase();
+        const candidateEmail = String(candidate.email || '').trim().toLowerCase();
+
+        return (
+          (candidateId && candidateId === String(targetItem.id || '').trim()) ||
+          (normalizedName && candidateName === normalizedName) ||
+          (normalizedUsername && candidateUsername === normalizedUsername) ||
+          (normalizedEmail && candidateEmail === normalizedEmail)
+        );
+      });
+
+      openItemInEditor(matchedItem || targetItem, targetSubTab);
+      localStorage.removeItem(SEARCH_SETTINGS_TARGET_KEY);
+    } catch (error) {
+      console.error('Failed to apply pending search target', error);
+      localStorage.removeItem(SEARCH_SETTINGS_TARGET_KEY);
+    }
+  }, [openItemInEditor]);
 
   const activeTableColumns = useMemo<TableColumnDef[]>(() => {
     if (activeSubTab === 'subscribers') {
@@ -1737,6 +1865,73 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
   const [templates, setTemplates] = useState<MessageTemplate[]>([]);
   const [selectedTemplate, setSelectedTemplate] = useState('');
 
+  const fetchSubscribersWithRetry = async (attempts = 6, delayMs = 800) => {
+    let latestData: DynamicItem[] = [];
+
+    for (let attempt = 1; attempt <= attempts; attempt += 1) {
+      const data = await fetchSubscribers();
+      latestData = Array.isArray(data) ? data : [];
+
+      if (latestData.length > 0 || attempt === attempts) {
+        return latestData;
+      }
+
+      await new Promise((resolve) => window.setTimeout(resolve, delayMs));
+    }
+
+    return latestData;
+  };
+
+  const handleImpersonate = (item: DynamicItem, targetType: 'subscriber' | 'manager') => {
+    if (state.role !== 'super_admin' || !state.currentUser) return;
+
+    const username = String(item.username || item['اسم الدخول'] || item['اسم المستخدم'] || '').trim();
+    const email = String(item.email || item['البريد الإلكتروني'] || `${username || 'user'}@sasnet.local`).trim();
+    const firstName = String(item.firstName || item.firstname || item['الاسم الاول'] || '').trim();
+    const lastName = String(item.lastName || item.lastname || item['الاسم الثاني'] || item['اسم العائلة'] || '').trim();
+    const displayName = `${firstName} ${lastName}`.trim() || String(item.name || username || 'User').trim();
+
+    if (targetType === 'subscriber') {
+      setState(prev => ({
+        ...prev,
+        impersonationSource: prev.impersonationSource || prev.currentUser,
+        currentUser: {
+          id: String(item.id || username || Date.now()),
+          name: displayName,
+          email,
+          username: username || email,
+          role: 'user',
+          permissions: ['view_dashboard'],
+        },
+        role: 'user',
+        activeTab: 'dashboard',
+      }));
+      toastSuccess(isRTL ? `تم الدخول كالمشترك ${displayName}` : `Now impersonating subscriber ${displayName}`);
+      return;
+    }
+
+    const roleLabel = String(item.role || item['الصلاحية'] || '').trim();
+    const role = roleLabel === 'Manager-A' || roleLabel === 'Manager' ? 'sas4_manager' : String(item.role || 'admin');
+    const matchedGroup = state.securityGroups.find((group) => group.id === item.groupId || group.name === item.groupId || group.name === roleLabel);
+
+    setState(prev => ({
+      ...prev,
+      impersonationSource: prev.impersonationSource || prev.currentUser,
+      currentUser: {
+        id: String(item.id || username || Date.now()),
+        name: displayName,
+        email,
+        username: username || email,
+        role: role as any,
+        permissions: Array.isArray(item.permissions) && item.permissions.length > 0 ? item.permissions as Permission[] : (matchedGroup?.permissions || ['view_dashboard']),
+        groupId: matchedGroup?.id || String(item.groupId || ''),
+      },
+      role: role as any,
+      activeTab: 'dashboard',
+    }));
+    toastSuccess(isRTL ? `تم الدخول كمدير ${displayName}` : `Now impersonating manager ${displayName}`);
+  };
+
   const getActions = (item: DynamicItem): MenuAction[] => {
     const actions: MenuAction[] = [];
     
@@ -1748,7 +1943,29 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
       (activeSubTab === 'shareholders' && hasPermission('manage_shareholders')) ||
       (activeSubTab === 'managers' && hasPermission('manage_admins'));
 
-    if (!canManageTabs) return [];
+    if (!canManageTabs && state.role !== 'super_admin') return [];
+
+    if (state.role === 'super_admin' && activeSubTab === 'subscribers') {
+      actions.push({
+        id: 'impersonate-subscriber',
+        label: isRTL ? 'الدخول كالمشترك' : 'Login as Subscriber',
+        icon: LogOut,
+        variant: 'success',
+        onClick: (target) => handleImpersonate(target, 'subscriber'),
+        tooltip: isRTL ? 'الدخول إلى حساب هذا المشترك مباشرة دون كلمة مرور' : 'Open this subscriber account directly without the password.'
+      });
+    }
+
+    if (state.role === 'super_admin' && activeSubTab === 'managers') {
+      actions.push({
+        id: 'impersonate-manager',
+        label: isRTL ? 'الدخول كمدير' : 'Login as Manager',
+        icon: UserCog,
+        variant: 'success',
+        onClick: (target) => handleImpersonate(target, 'manager'),
+        tooltip: isRTL ? 'الدخول إلى حساب هذا المدير مباشرة دون كلمة مرور' : 'Open this manager account directly without the password.'
+      });
+    }
 
     // Common Actions
     actions.push({
@@ -1821,6 +2038,14 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
           variant: 'success',
           onClick: (item) => handleEnableSecret(item.username),
           tooltip: isRTL ? 'إعادة تفعيل الحساب في المايكروتيك' : 'Restore access credentials on the router.'
+        },
+        {
+          id: 'terminate',
+          label: isRTL ? 'إنهاء الاشتراك' : 'Terminate Subscription',
+          icon: ShieldOff,
+          variant: 'danger',
+          onClick: (item) => setTerminateCandidate(item),
+          tooltip: isRTL ? 'طرد العميل وتعطيله وتحويله إلى منتهي الاشتراك داخل النظام' : 'Disconnect, suspend, and mark the subscriber as expired inside the system.'
         },
         {
           id: 'delete-secret',
@@ -1897,22 +2122,40 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
       setApiError(null);
       try {
         if (activeSubTab === 'subscribers') {
-          const subs = await fetchSubscribers();
-          if (subs && subs.length > 0) {
-            setSubscribers(subs);
+          const subs = await fetchSubscribersWithRetry();
+          setSubscribers(subs);
+          applyPendingSearchTarget('subscribers', subs);
+          if (subs.length > 0) {
             void reconcileSubscribersMikrotikAccess(subs);
+            setApiError(null);
+          } else {
+            window.setTimeout(async () => {
+              try {
+                const fallbackSubs = await fetchSubscribersWithRetry(4, 1200);
+                if (fallbackSubs.length > 0) {
+                  setSubscribers(fallbackSubs);
+                  setApiError(null);
+                } else {
+                  setApiError('القائمة فارغة أو يبدو أن الخادم لم يعثر على بيانات.');
+                }
+              } catch (_error) {
+                setApiError('القائمة فارغة أو يبدو أن الخادم لم يعثر على بيانات.');
+              }
+            }, 700);
           }
-          else setApiError('القائمة فارغة أو يبدو أن الخادم لم يعثر على بيانات.');
         } else if (activeSubTab === 'suppliers') {
           const data = await fetchSuppliers();
           setSuppliers(data || []);
+          applyPendingSearchTarget('suppliers', data || []);
         } else if (activeSubTab === 'shareholders') {
           const data = await fetchInvestors();
           setShareholders(data || []);
+          applyPendingSearchTarget('shareholders', data || []);
         } else if (activeSubTab === 'managers') {
           const adminsRaw = await fetchManagersRaw();
           const safeAdmins = adminsRaw || [];
           setManagers(safeAdmins);
+          applyPendingSearchTarget('managers', safeAdmins);
         } else if (activeSubTab === 'iptv') {
           const data = await iptvApi.fetch();
           setIptvSubscribers(data || []);
@@ -1925,7 +2168,7 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
       }
     };
     loadData();
-  }, [activeSubTab]);
+  }, [activeSubTab, applyPendingSearchTarget]);
 
   // ─── AUTOMATIC ONLINE STATUS POLLING ─────────────────────────────────────────
   const pollStatus = async (manual = false) => {
@@ -2055,6 +2298,39 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
     finally { setIsStatusLoading(false);    }
   };
 
+  const handleTerminateSubscriber = async (item: DynamicItem) => {
+    const username = getSubscriberUsername(item).trim();
+    const expiredAt = new Date(Date.now() - 86400000);
+    const expiryValue = formatIsoDate(expiredAt);
+    try {
+      if (username) {
+        await disconnectSubscriber(username).catch(() => null);
+        await disableSecret(username).catch(() => null);
+      }
+
+      const payload = buildSubscriberPayload({
+        ...item,
+        status: 'expired',
+        expiry: expiryValue,
+        expiry_time: '00:00:00',
+      });
+
+      await updateSubscriber(String(item.id), payload);
+      const data = await fetchSubscribersWithRetry();
+      setSubscribers(data);
+      toastSuccess(
+        isRTL ? `تم إنهاء اشتراك ${item.name || username}.` : `Subscription for ${item.name || username} terminated successfully.`,
+        isRTL ? 'تم إنهاء الاشتراك' : 'Subscription Terminated'
+      );
+    } catch (error) {
+      console.error(error);
+      toastError(
+        isRTL ? 'فشل إنهاء الاشتراك.' : 'Failed to terminate subscription.',
+        isRTL ? 'فشل العملية' : 'Operation Failed'
+      );
+    }
+  };
+
   const handleActivateSubscriber = async () => {
     if (!subToActivate) return;
     
@@ -2112,7 +2388,9 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
           isRTL ? 'تم التفعيل' : 'Activation Completed'
         );
         setIsActivateModalOpen(false);
-        window.location.reload(); 
+        const refreshedSubscribers = await fetchSubscribersWithRetry();
+        setSubscribers(refreshedSubscribers);
+        setTimeout(() => pollStatus(false), 1200);
       }
     } catch (e: unknown) {
       const message = e instanceof Error ? e.message : (isRTL ? 'فشل التفعيل' : 'Activation failed');
@@ -2382,57 +2660,7 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
   };
 
   const handleEdit = (item: DynamicItem) => {
-    let editObj = { ...item };
-    
-    if (activeSubTab === 'managers') {
-      editObj = {
-        ...editObj,
-        firstName: String(item.firstName || item['الاسم الاول'] || ''),
-        lastName: String(item.lastName || item['الاسم الثاني'] || ''),
-        username: String(item.username || item['اسم الدخول'] || '')
-      };
-    } else if (activeSubTab === 'subscribers') {
-      editObj = buildSubscriberPayload({
-        ...editObj,
-        firstname: String(item.firstname || item.firstName || item['الاسم الأول'] || ''),
-        lastname: String(item.lastname || item.lastName || item['اسم العائلة'] || ''),
-        username: String(item.username || item['اسم المستخدم'] || item['اسم الدخول'] || ''),
-        password: String(item.password || item['كلمة المرور'] || ''),
-        name: String(item.name || item['اسم العرض على المايكروتيك'] || item['الاسم الانجليزي'] || '')
-      });
-    } else if (activeSubTab === 'suppliers') {
-      editObj = {
-        ...editObj,
-        'كود': item['كود'] || '',
-        'اسم المورد': item['اسم المورد'] || '',
-        'مدين': item['مدين'] || '0.00',
-        'مسدد': item['مسدد'] || '0.00',
-        'الرصيد': item['الرصيد'] || '-',
-        'ملاحظات': item['ملاحظات'] || ''
-      };
-    } else if (activeSubTab === 'shareholders') {
-      editObj = {
-        ...editObj,
-        name: item.name || '',
-        shares: item.shares || 0,
-        buyPrice: item.buyPrice || item.sharePrice || 0,
-        investment: item.investment || 0,
-        ownership: item.ownership || '0%',
-        dividends: item.dividends || 0
-      };
-    }
-    
-    setEditingItem(editObj);
-    if (activeSubTab === 'subscribers') {
-      loadNetworkProfiles();
-      setSubscriberWorkspaceMode('edit');
-      return;
-    }
-    if (useEntityWorkspace) {
-      setEntityWorkspaceMode('edit');
-      return;
-    }
-    setIsEditModalOpen(true);
+    openItemInEditor(item, activeSubTab);
   };
 
   const handleAdd = () => {
@@ -2510,9 +2738,16 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
       try {
         setIsLoading(true);
         const payload = buildSubscriberPayload(newItem);
-        await addSubscriber(payload);
+        const response = await addSubscriber(payload);
+        const createdId = String(response?.data?.id || '').trim();
+        const optimisticId = createdId.replace(/^SUB-/i, '') || createdId || String(Date.now());
+        const optimisticSubscriber = { ...payload, id: optimisticId };
+        setSubscribers((prev) => {
+          const next = prev.filter((item) => String(item.id) !== String(optimisticId) && getSubscriberUsername(item) !== getSubscriberUsername(optimisticSubscriber));
+          return [optimisticSubscriber, ...next];
+        });
         try {
-          await applySubscriberStatusToMikrotik(String(payload.id || ''), payload);
+          await applySubscriberStatusToMikrotik(createdId || String(payload.id || ''), payload);
         } catch (mikrotikError) {
           console.error('Subscriber MikroTik status apply failed after add', mikrotikError);
           toastInfo(
@@ -2520,8 +2755,10 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
             isRTL ? 'تنبيه مزامنة' : 'Sync Notice'
           );
         }
-        const data = await fetchSubscribers();
-        setSubscribers(data);
+        const data = await fetchSubscribersWithRetry();
+        if (data.length > 0) {
+          setSubscribers(data);
+        }
       } catch (err) {
         setApiError(isRTL ? 'فشل إضافة المشترك' : 'Failed to add subscriber');
       } finally {
@@ -2591,7 +2828,7 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
         try {
           setIsLoading(true);
           await deleteSubscriber(id);
-          const data = await fetchSubscribers();
+          const data = await fetchSubscribersWithRetry();
           setSubscribers(data);
         } catch (err) {
           setApiError(isRTL ? 'فشل حذف المشترك' : 'Failed to delete subscriber');
@@ -2700,7 +2937,7 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
             isRTL ? 'تنبيه مزامنة' : 'Sync Notice'
           );
         }
-        const data = await fetchSubscribers();
+        const data = await fetchSubscribersWithRetry();
         setSubscribers(data);
       } catch (err) {
         setApiError(isRTL ? 'فشل تعديل المشترك' : 'Failed to replace subscriber');
@@ -3316,6 +3553,14 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
             <div className="flex items-center gap-2">
               {activeSubTab === 'subscribers' && (
                 <>
+                  <button
+                    onClick={() => setState(prev => ({ ...prev, activeTab: 'boi_expiry' }))}
+                    className="flex items-center gap-2 px-4 py-2 bg-amber-500/10 text-amber-600 hover:bg-amber-600 hover:text-white border border-amber-500/20 rounded-xl transition-all font-bold text-sm"
+                    title={isRTL ? 'الانتقال السريع إلى مركز التحكم الذكي في الاشتراكات' : 'Quick access to the smart subscription control center'}
+                  >
+                    <Activity size={18} />
+                    <span>{isRTL ? 'مركز التحكم الذكي' : 'Smart Control'}</span>
+                  </button>
                   <button
                     onClick={handleDisconnectAll}
                     disabled={isStatusLoading || isBulkSyncingSubscribers}
@@ -6510,6 +6755,22 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
           title={isRTL ? 'حذف من الراوتر فقط' : 'Delete from Router Only'}
           description={isRTL ? `سيتم حذف بيانات ${deleteSecretCandidate || ''} من المايكروتيك فقط مع الإبقاء عليه داخل النظام.` : `${deleteSecretCandidate || ''} will be removed from MikroTik only and kept in the CRM.`}
           confirmLabel={isRTL ? 'تأكيد الحذف' : 'Confirm Delete'}
+          cancelLabel={isRTL ? 'إلغاء' : 'Cancel'}
+          variant="danger"
+          isRTL={isRTL}
+        />
+
+        <AppConfirmDialog
+          open={Boolean(terminateCandidate)}
+          onClose={() => setTerminateCandidate(null)}
+          onConfirm={() => {
+            if (!terminateCandidate) return;
+            void handleTerminateSubscriber(terminateCandidate);
+            setTerminateCandidate(null);
+          }}
+          title={isRTL ? 'إنهاء الاشتراك' : 'Terminate Subscription'}
+          description={isRTL ? `سيتم إنهاء اشتراك ${terminateCandidate?.name || terminateCandidate?.username || ''} وطرده وتعطيله وتحويله إلى منتهي الاشتراك.` : `${terminateCandidate?.name || terminateCandidate?.username || ''} will be disconnected, suspended, and marked as expired.`}
+          confirmLabel={isRTL ? 'تأكيد الإنهاء' : 'Confirm Termination'}
           cancelLabel={isRTL ? 'إلغاء' : 'Cancel'}
           variant="danger"
           isRTL={isRTL}

@@ -275,12 +275,12 @@ export default function DashboardTab({ state, setState }: DashboardTabProps) {
     };
 
     loadDashboardData();
-    const interval = setInterval(loadDashboardData, 60000);
+    const interval = setInterval(loadDashboardData, state.dashboardRefreshIntervalSec * 1000);
     return () => {
       mounted = false;
       clearInterval(interval);
     };
-  }, [isRTL]);
+  }, [isRTL, state.dashboardRefreshIntervalSec]);
 
   const onlineUserSet = useMemo(
     () => new Set((networkStatus?.onlineUsers || []).map(user => normalizeText(user).toLowerCase())),
@@ -318,6 +318,20 @@ export default function DashboardTab({ state, setState }: DashboardTabProps) {
       };
     })
   ), [subscribers, onlineUserSet, isRTL]);
+
+  const isSubscriberRole = state.role === 'user';
+  const personalSubscriber = useMemo(() => {
+    const currentUsername = String(state.currentUser?.username || '').trim().toLowerCase();
+    const currentEmail = String(state.currentUser?.email || '').trim().toLowerCase();
+
+    const matchIndex = subscribers.findIndex((subscriber) => {
+      const username = String(subscriber.username || subscriber['اسم الدخول'] || subscriber['اسم المستخدم'] || '').trim().toLowerCase();
+      const email = String(subscriber.email || subscriber['البريد الإلكتروني'] || subscriber['الايميل'] || '').trim().toLowerCase();
+      return Boolean(currentUsername && currentUsername === username) || Boolean(currentEmail && currentEmail === email);
+    });
+
+    return matchIndex >= 0 ? normalizedSubscribers[matchIndex] : null;
+  }, [normalizedSubscribers, state.currentUser?.email, state.currentUser?.username, subscribers]);
 
   const payableDebt = useMemo(() => suppliers.reduce((sum, supplier) => sum + normalizeNumber(supplier['عليه دين']), 0), [suppliers]);
   const receivableDebt = useMemo(() => normalizedSubscribers.reduce((sum, sub) => sum + sub.debt, 0), [normalizedSubscribers]);
@@ -433,6 +447,62 @@ export default function DashboardTab({ state, setState }: DashboardTabProps) {
     { id: 'investors', label: labels.investors, icon: TrendingUp },
     { id: 'operations', label: labels.operations, icon: Server },
   ];
+
+  if (isSubscriberRole) {
+    return (
+      <motion.div key="dashboard" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="flex-1 min-h-0 overflow-y-auto custom-scrollbar pb-6 pr-2 space-y-6">
+        <header className="rounded-[2rem] border border-slate-200/70 bg-gradient-to-br from-slate-900 via-blue-950 to-violet-950 p-6 text-white shadow-2xl shadow-slate-950/20">
+          <div className="flex flex-col gap-3">
+            <div className="inline-flex w-fit items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs font-black uppercase tracking-[0.24em] text-white/80">
+              <Users size={14} />
+              {isRTL ? 'حساب المشترك' : 'Subscriber Account'}
+            </div>
+            <h2 className="text-3xl font-black">{state.currentUser?.name || (isRTL ? 'بياناتي' : 'My Account')}</h2>
+            <p className="max-w-3xl text-sm leading-7 text-blue-100/80">
+              {isRTL ? 'تعرض هذه الصفحة معلومات اشتراكك الشخصية فقط، ولا تسمح بالوصول إلى لوحات الإدارة أو بيانات بقية المشتركين.' : 'This page shows only your personal subscription information and does not expose administrative dashboards or other subscribers data.'}
+            </p>
+          </div>
+        </header>
+
+        <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-4">
+          <MetricCard title={isRTL ? 'الاسم الحقيقي' : 'Full Name'} value={personalSubscriber?.name || state.currentUser?.name || '-'} subtitle={isRTL ? 'الاسم المسجل في النظام' : 'Registered name'} icon={Users} accent="bg-gradient-to-r from-blue-500 to-cyan-500" />
+          <MetricCard title={isRTL ? 'اسم الدخول' : 'Username'} value={personalSubscriber?.username || state.currentUser?.username || '-'} subtitle={isRTL ? 'المستخدم المرتبط بالخدمة' : 'Service login username'} icon={ShieldCheck} accent="bg-gradient-to-r from-emerald-500 to-teal-500" />
+          <MetricCard title={isRTL ? 'الباقة الحالية' : 'Current Plan'} value={personalSubscriber?.plan || (isRTL ? 'غير محددة' : 'Unassigned')} subtitle={isRTL ? 'الباقة أو البروفايل الفعلي' : 'Assigned package or profile'} icon={Sparkles} accent="bg-gradient-to-r from-violet-500 to-indigo-500" />
+          <MetricCard title={isRTL ? 'حالة الاشتراك' : 'Subscription Status'} value={personalSubscriber?.statusText || (isRTL ? 'غير معروفة' : 'Unknown')} subtitle={personalSubscriber?.isOnline ? (isRTL ? 'المشترك متصل الآن' : 'Connected now') : (isRTL ? 'لا توجد جلسة نشطة حالياً' : 'No active session currently')} icon={personalSubscriber?.isOnline ? Wifi : WifiOff} accent="bg-gradient-to-r from-amber-500 to-orange-500" />
+        </div>
+
+        <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
+          <SectionCard title={isRTL ? 'تفاصيل الاشتراك' : 'Subscription Details'} subtitle={isRTL ? 'ملخص مباشر لبيانات حسابك الحالية.' : 'Direct summary of your current account details.'}>
+            <div className="space-y-3">
+              <div className="rounded-2xl border border-slate-200/80 bg-slate-50/80 px-4 py-4 dark:border-slate-800 dark:bg-slate-900/50">
+                <div className="text-xs font-black uppercase tracking-wider text-slate-500">{isRTL ? 'تاريخ الانتهاء' : 'Expiry Date'}</div>
+                <div className="mt-2 text-lg font-black text-slate-900 dark:text-white">{personalSubscriber?.expiryText || (isRTL ? 'غير متوفر' : 'Not available')}</div>
+              </div>
+              <div className="rounded-2xl border border-slate-200/80 bg-slate-50/80 px-4 py-4 dark:border-slate-800 dark:bg-slate-900/50">
+                <div className="text-xs font-black uppercase tracking-wider text-slate-500">{isRTL ? 'المديونية الحالية' : 'Current Debt'}</div>
+                <div className="mt-2 text-lg font-black text-slate-900 dark:text-white">{formatCurrency(personalSubscriber?.debt || 0, state.currency, state.lang)}</div>
+              </div>
+              <div className="rounded-2xl border border-slate-200/80 bg-slate-50/80 px-4 py-4 dark:border-slate-800 dark:bg-slate-900/50">
+                <div className="text-xs font-black uppercase tracking-wider text-slate-500">{isRTL ? 'الاتصال الحالي' : 'Live Connection'}</div>
+                <div className={`mt-2 text-lg font-black ${personalSubscriber?.isOnline ? 'text-emerald-500' : 'text-slate-900 dark:text-white'}`}>{personalSubscriber?.isOnline ? (isRTL ? 'متصل الآن' : 'Online now') : (isRTL ? 'غير متصل' : 'Offline')}</div>
+              </div>
+            </div>
+          </SectionCard>
+
+          <SectionCard title={isRTL ? 'ملاحظات' : 'Notes'} subtitle={isRTL ? 'رسائل وتنبيهات مرتبطة بحسابك.' : 'Account-specific notes and reminders.'}>
+            <div className="space-y-3 text-sm font-bold leading-7 text-slate-600 dark:text-slate-300">
+              <div className="rounded-2xl border border-slate-200/80 bg-slate-50/80 px-4 py-4 dark:border-slate-800 dark:bg-slate-900/50">
+                {isRTL ? 'في حال عدم ظهور بياناتك بشكل صحيح، تأكد أن اسم الدخول المستخدم في تسجيل الدخول يطابق اسم دخول المشترك المحفوظ في النظام.' : 'If your data does not appear correctly, verify that your login username matches the subscriber username stored in the system.'}
+              </div>
+              <div className="rounded-2xl border border-slate-200/80 bg-slate-50/80 px-4 py-4 dark:border-slate-800 dark:bg-slate-900/50">
+                {isRTL ? 'سيتم لاحقاً ربط هذه الصفحة بصفحة التجديد الخاصة بالاشتراك المنتهي ضمن المراحل القادمة.' : 'This page will later connect to the dedicated renewal experience for expired subscriptions in the next phases.'}
+              </div>
+            </div>
+          </SectionCard>
+        </div>
+      </motion.div>
+    );
+  }
 
   return (
     <motion.div key="dashboard" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="flex-1 min-h-0 overflow-y-auto custom-scrollbar pb-6 pr-2 space-y-6">

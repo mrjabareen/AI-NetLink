@@ -101,14 +101,17 @@ export default function CrmTab({ state }: CrmTabProps) {
     try {
       const data = await fetchSubscribers();
       const mapped: CustomerRecord[] = (data || []).map((item: Record<string, unknown>) => {
-        const name = item.firstname || item.name || 'Unknown';
+        const firstName = String(item.firstName || item.firstname || item['الاسم الاول'] || '').trim();
+        const lastName = String(item.lastName || item.lastname || item['اسم العائلة'] || item['الاسم الثاني'] || '').trim();
+        const username = String(item.username || item['اسم الدخول'] || item['اسم المستخدم'] || '').trim();
+        const name = `${firstName} ${lastName}`.trim() || String(item.name || username || 'Unknown');
         const phone = item.phone || item['رقم الموبايل'] || '';
         const statusRaw = item.status || item['حالة الحساب'] || 'unknown';
         const isActive = statusRaw === 'active' || statusRaw === 'مفعل';
         
         return {
           ...item,
-          id: item.id || item.username || `CUST-${Math.random().toString(36).substr(2, 6)}`,
+          id: item.id || username || `CUST-${Math.random().toString(36).substr(2, 6)}`,
           name,
           type: item['نوع الاشتراك'] || item.subType || 'Customer',
           status: isActive ? 'active' : 'inactive',
@@ -457,7 +460,7 @@ export default function CrmTab({ state }: CrmTabProps) {
                       <div className="flex items-center justify-between">
                         <h4 className="text-lg font-bold text-slate-900 dark:text-white truncate">{customer.name}</h4>
                       </div>
-                      <p className="text-sm text-slate-500 dark:text-slate-400 truncate mt-1 font-medium">{customer.phone} • {customer.type}</p>
+                      <p className="text-sm text-slate-500 dark:text-slate-400 truncate mt-1 font-medium">{customer.username || customer.phone} • {customer.type}</p>
                     </div>
                   </button>
                 );
@@ -504,6 +507,7 @@ export default function CrmTab({ state }: CrmTabProps) {
                       </span>
                     </div>
                     <div className="flex items-center flex-wrap gap-4 lg:gap-6 mt-4 text-base lg:text-lg text-slate-600 dark:text-slate-400 font-medium">
+                      <span className="flex items-center gap-2 bg-white flex-1 min-w-[200px] dark:bg-slate-900 px-4 py-2 rounded-xl shadow-sm border border-slate-100 dark:border-slate-800"><ShieldCheck className="w-5 h-5 text-emerald-500 shrink-0" /> <span className="truncate">{selectedCustomer.username || '-'}</span></span>
                       <span className="flex items-center gap-2 bg-white flex-1 min-w-[200px] dark:bg-slate-900 px-4 py-2 rounded-xl shadow-sm border border-slate-100 dark:border-slate-800"><Phone className="w-5 h-5 text-blue-500 shrink-0" /> <span className="truncate">{selectedCustomer.phone || '-'}</span></span>
                       <span className="flex items-center gap-2 bg-white flex-1 min-w-[200px] dark:bg-slate-900 px-4 py-2 rounded-xl shadow-sm border border-slate-100 dark:border-slate-800"><MapPin className="w-5 h-5 text-rose-500 shrink-0" /> <span className="truncate">{selectedCustomer.location}</span></span>
                     </div>

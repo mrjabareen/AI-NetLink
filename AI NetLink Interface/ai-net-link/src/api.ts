@@ -8,6 +8,7 @@ import type { BackupDatasetId, BackupExportFormat, BackupRestoreMode, BackupRest
 
 const getDefaultBaseUrl = () => {
   if (typeof window === 'undefined') return 'http://localhost:3001/api';
+  if (import.meta.env.DEV) return '/api';
   const { protocol, hostname } = window.location;
   const isLocalHost = hostname === 'localhost' || hostname === '127.0.0.1';
   const isIpAddress = /^\d{1,3}(\.\d{1,3}){3}$/.test(hostname);
@@ -22,9 +23,22 @@ const getDefaultBaseUrl = () => {
 const ENV_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '').trim();
 export const BASE_URL = (ENV_BASE_URL || getDefaultBaseUrl()).replace(/\/$/, '');
 
+const buildApiUrl = (path: string, bustCache = false) => {
+  const url = new URL(`${BASE_URL}${path.startsWith('/') ? path : `/${path}`}`, window.location.origin);
+  if (bustCache) {
+    url.searchParams.set('_t', Date.now().toString());
+  }
+  return url.toString();
+};
+
+const apiFetch = (path: string, init?: RequestInit, bustCache = false) => fetch(buildApiUrl(path, bustCache), {
+  cache: 'no-store',
+  ...init,
+});
+
 export const getMessageData = async () => {
   try {
-    const res = await fetch(`${BASE_URL}/messages/data`);
+    const res = await apiFetch('/messages/data', undefined, true);
     const data = await res.json();
     return data.data;
   } catch (e) { return { templates: [], groups: [] }; }
@@ -43,7 +57,7 @@ export const saveMessageData = async (data: any) => {
 
 export const getGatewaysConfig = async () => {
   try {
-    const res = await fetch(`${BASE_URL}/gateways`);
+    const res = await apiFetch('/gateways', undefined, true);
     const data = await res.json();
     return data.data;
   } catch (e) { return null; }
@@ -62,7 +76,7 @@ export const saveGatewaysConfig = async (config: any) => {
 
 export const getWhatsappStatus = async () => {
   try {
-    const res = await fetch(`${BASE_URL}/whatsapp/status`);
+    const res = await apiFetch('/whatsapp/status', undefined, true);
     return await res.json();
   } catch (e) { return null; }
 };
@@ -76,7 +90,7 @@ export const restartWhatsappEngine = async () => {
 
 export const fetchManagers = async () => {
   try {
-    const res = await fetch(`${BASE_URL}/managers`);
+    const res = await apiFetch('/managers', undefined, true);
     if (!res.ok) throw new Error('Failed to fetch managers');
     const data = await res.json();
     return data.data; // array of users based on our backend mapping
@@ -88,7 +102,7 @@ export const fetchManagers = async () => {
 
 export const fetchSubscribers = async () => {
   try {
-    const res = await fetch(`${BASE_URL}/subscribers`);
+    const res = await apiFetch('/subscribers', undefined, true);
     if (!res.ok) throw new Error('Failed to fetch subscribers');
     const data = await res.json();
     return data.data; // returns array from sas4_subscribers.json
@@ -158,7 +172,7 @@ export const deleteSubscriber = async (id: string) => {
 
 export const fetchSuppliers = async () => {
   try {
-    const res = await fetch(`${BASE_URL}/suppliers`);
+    const res = await apiFetch('/suppliers', undefined, true);
     if (!res.ok) throw new Error('Failed to fetch suppliers');
     const data = await res.json();
     return data.data;
@@ -213,7 +227,7 @@ export const deleteSupplier = async (id: string) => {
 
 export const fetchInvestors = async () => {
   try {
-    const res = await fetch(`${BASE_URL}/investors`);
+    const res = await apiFetch('/investors', undefined, true);
     if (!res.ok) throw new Error('Failed to fetch investors');
     const data = await res.json();
     return data.data; // returns shareholders wrapper
@@ -225,7 +239,7 @@ export const fetchInvestors = async () => {
 
 export const fetchManagersRaw = async () => {
   try {
-    const res = await fetch(`${BASE_URL}/managers/raw`);
+    const res = await apiFetch('/managers/raw', undefined, true);
     if (!res.ok) throw new Error('Failed to fetch managers');
     const data = await res.json();
     return data.data;

@@ -11,6 +11,7 @@ import { AppState, BackupDatasetId, BackupExportFormat, BackupHistoryItem, Backu
 import { dict } from '../dict';
 import { formatNumber, normalizeDigits, parseNumericInput } from '../utils/format';
 import { getGatewaysConfig, saveGatewaysConfig, getWhatsappStatus, restartWhatsappEngine, getNetworkConfig, saveNetworkConfig, testMikrotikConnection, BASE_URL, checkSystemUpdate, startSystemUpdate, testAiProvider, exportBackupDataset, getBackupOverview, previewRestoreArchive, restoreSystemBackup, runSystemBackup, saveBackupConfig, testGoogleDriveBackupConnection, toggleBackupHistoryProtection, deleteLocalBackupHistoryItem } from '../api';
+import { hasPermission as canAccess } from '../permissions';
 import { showAppToast, toastError, toastInfo, toastSuccess } from '../utils/notify';
 import NumericInput from './NumericInput';
 import DateInput from './DateInput';
@@ -33,8 +34,7 @@ export default function SettingsTab({ state, setState }: SettingsTabProps) {
   const t = dict[state.lang];
   const isRTL = state.lang === 'ar';
   
-  const userPermissions = state.currentUser?.permissions || [];
-  const hasPermission = (perm: Permission) => state.role === 'super_admin' || userPermissions.includes('all') || userPermissions.includes(perm);
+  const hasPermission = (perm: Permission) => canAccess(state, perm);
 
   const [pin, setPin] = useState('');
   const [showPin, setShowPin] = useState(false);
@@ -868,6 +868,26 @@ export default function SettingsTab({ state, setState }: SettingsTabProps) {
                   defaultValue={formatNumber(30)} 
                   className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2.5 text-slate-800 dark:text-slate-200 focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 transition-all font-mono" 
                 />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+                  {isRTL ? 'التحديث التلقائي للوحة التحكم' : 'Dashboard Auto Refresh'}
+                </label>
+                <select
+                  value={String(state.dashboardRefreshIntervalSec)}
+                  onChange={(e) => setState(prev => ({ ...prev, dashboardRefreshIntervalSec: Number(e.target.value) }))}
+                  className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2.5 text-slate-800 dark:text-slate-200 focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 transition-all"
+                >
+                  <option value="5">{isRTL ? 'كل 5 ثوانٍ' : 'Every 5 seconds'}</option>
+                  <option value="30">{isRTL ? 'كل 30 ثانية' : 'Every 30 seconds'}</option>
+                  <option value="60">{isRTL ? 'كل 60 ثانية' : 'Every 60 seconds'}</option>
+                  <option value="120">{isRTL ? 'كل دقيقتين' : 'Every 2 minutes'}</option>
+                  <option value="300">{isRTL ? 'كل 5 دقائق' : 'Every 5 minutes'}</option>
+                </select>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  {isRTL ? 'يُطبق هذا الإعداد على لوحة القيادة الرئيسية للمدير.' : 'This setting controls the main admin dashboard refresh interval.'}
+                </p>
               </div>
 
               <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl">

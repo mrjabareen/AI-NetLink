@@ -4,10 +4,11 @@
  * Website: aljabareen.com
  * Contact: admin@aljabareen.com | +970597409040
  */
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { AlertCircle, CheckCircle2, Info } from 'lucide-react';
-import { AppState, Permission, SettingsCategoryId } from './types';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { AppState, Permission, SettingsCategoryId, Tab } from './types';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
 import DashboardTab from './components/DashboardTab';
@@ -33,6 +34,8 @@ import NetworkRadiusTab from './components/NetworkRadiusTab';
 import FinancialDashboard from './components/FinancialDashboard';
 import Login from './components/Login';
 import { fetchManagers } from './api';
+import { getDefaultTabForRole, getPathForTab, resolveRouteFromPath } from './navigation';
+import { hasPermission as canAccess } from './permissions';
 import { AppToastPayload } from './utils/notify';
 
 const DEFAULT_AI_SETTINGS = {
@@ -79,17 +82,42 @@ const getInitialSettingsCategory = (): SettingsCategoryId => {
     : 'profile';
 };
 
+const getInitialActiveTab = (): Tab => {
+  if (typeof window === 'undefined') return 'dashboard';
+
+  const savedTab = window.localStorage.getItem('sas4_active_tab');
+  const allowedTabs: Tab[] = ['dashboard', 'chat', 'search', 'settings', 'files', 'topology', 'security', 'analytics', 'executive', 'billing', 'inventory', 'crm', 'field', 'reports', 'portal', 'investors', 'suppliers', 'boi_expiry', 'management', 'network_radius', 'financial'];
+  return allowedTabs.includes(savedTab as Tab) ? (savedTab as Tab) : 'dashboard';
+};
+
+const getInitialDashboardRefreshIntervalSec = () => {
+  if (typeof window === 'undefined') return 60;
+
+  const savedValue = Number(window.localStorage.getItem('sas4_dashboard_refresh_interval_sec'));
+  return [5, 30, 60, 120, 300].includes(savedValue) ? savedValue : 60;
+};
+
+const REMEMBERED_USER_KEY = 'sas4_remembered_user';
+const SESSION_USER_KEY = 'sas4_session_user';
+const SHARED_SESSION_USER_KEY = 'sas4_shared_session_user';
+const OPEN_TAB_COUNT_KEY = 'sas4_open_tab_count';
+
 export default function App() {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const skipNextStateUrlSyncRef = useRef(false);
   const [toasts, setToasts] = useState<Array<AppToastPayload & { id: number }>>([]);
   const [state, setState] = useState<AppState>({
     lang: 'ar',
     theme: 'dark',
-    activeTab: localStorage.getItem('sas4_active_tab') || 'dashboard',
+    activeTab: getInitialActiveTab(),
     activeSettingsCategory: getInitialSettingsCategory(),
+    dashboardRefreshIntervalSec: getInitialDashboardRefreshIntervalSec(),
     sidebarOpen: false,
     mobileMenuOpen: false,
     role: 'user',
     currentUser: null,
+    impersonationSource: null,
     isAuthenticated: false,
     currency: 'ILS',
     centralBalance: 50000,
@@ -290,10 +318,14 @@ export default function App() {
 
   // Check for remembered user
   useEffect(() => {
-    const savedUser = localStorage.getItem('sas4_remembered_user');
+    const savedUser = sessionStorage.getItem(SESSION_USER_KEY)
+      || localStorage.getItem(REMEMBERED_USER_KEY)
+      || localStorage.getItem(SHARED_SESSION_USER_KEY);
     if (savedUser) {
       try {
         const user = JSON.parse(savedUser);
+        const routeState = resolveRouteFromPath(location.pathname);
+        const shouldUseRoute = location.pathname !== '/';
         
         // Ensure permissions exist for backward compatibility with older sessions
         if (!user.permissions) {
@@ -311,12 +343,35 @@ export default function App() {
           isAuthenticated: true,
           currentUser: user,
           role: user.role,
-          activeTab: savedTab || (user.role === 'shareholder' ? 'investors' : 'dashboard')
+          activeTab: shouldUseRoute
+            ? routeState.tab
+            : ((savedTab as Tab) || getDefaultTabForRole(user.role)),
+          activeSettingsCategory: shouldUseRoute && routeState.tab === 'settings'
+            ? routeState.settingsCategory
+            : prev.activeSettingsCategory,
         }));
       } catch (e) {
-        localStorage.removeItem('sas4_remembered_user');
+        localStorage.removeItem(REMEMBERED_USER_KEY);
+        localStorage.removeItem(SHARED_SESSION_USER_KEY);
+        sessionStorage.removeItem(SESSION_USER_KEY);
       }
     }
+  }, [location.pathname]);
+
+  useEffect(() => {
+    const currentCount = Math.max(0, Number(localStorage.getItem(OPEN_TAB_COUNT_KEY) || '0'));
+    localStorage.setItem(OPEN_TAB_COUNT_KEY, String(currentCount + 1));
+
+    const handleBeforeUnload = () => {
+      const latestCount = Math.max(0, Number(localStorage.getItem(OPEN_TAB_COUNT_KEY) || '1') - 1);
+      localStorage.setItem(OPEN_TAB_COUNT_KEY, String(latestCount));
+      if (latestCount === 0 && !localStorage.getItem(REMEMBERED_USER_KEY)) {
+        localStorage.removeItem(SHARED_SESSION_USER_KEY);
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, []);
 
   useEffect(() => {
@@ -369,6 +424,56 @@ export default function App() {
     localStorage.setItem('sas4_active_settings_category', state.activeSettingsCategory);
   }, [state.activeSettingsCategory]);
 
+  useEffect(() => {
+    localStorage.setItem('sas4_dashboard_refresh_interval_sec', String(state.dashboardRefreshIntervalSec));
+  }, [state.dashboardRefreshIntervalSec]);
+
+  useEffect(() => {
+    const routeState = resolveRouteFromPath(location.pathname);
+
+    if (
+      state.activeTab !== routeState.tab ||
+      (routeState.tab === 'settings' && state.activeSettingsCategory !== routeState.settingsCategory)
+    ) {
+      skipNextStateUrlSyncRef.current = true;
+    }
+
+    setState((prev) => {
+      const nextSettingsCategory = routeState.tab === 'settings'
+        ? routeState.settingsCategory
+        : prev.activeSettingsCategory;
+
+      if (
+        prev.activeTab === routeState.tab &&
+        prev.activeSettingsCategory === nextSettingsCategory &&
+        !prev.mobileMenuOpen
+      ) {
+        return prev;
+      }
+
+      return {
+        ...prev,
+        activeTab: routeState.tab,
+        activeSettingsCategory: nextSettingsCategory,
+        mobileMenuOpen: false,
+      };
+    });
+  }, [location.pathname]);
+
+  useEffect(() => {
+    if (!state.isAuthenticated) return;
+
+    if (skipNextStateUrlSyncRef.current) {
+      skipNextStateUrlSyncRef.current = false;
+      return;
+    }
+
+    const nextPath = getPathForTab(state.activeTab, state.activeSettingsCategory);
+    if (location.pathname !== nextPath) {
+      navigate(nextPath);
+    }
+  }, [location.pathname, navigate, state.activeSettingsCategory, state.activeTab, state.isAuthenticated]);
+
   // Check for updates
   useEffect(() => {
     const checkUpdate = async () => {
@@ -389,8 +494,7 @@ export default function App() {
     checkUpdate();
   }, []);
 
-  const userPermissions = state.currentUser?.permissions || [];
-  const hasPermission = (perm: Permission) => state.role === 'super_admin' || userPermissions.includes('all') || userPermissions.includes(perm);
+  const hasPermission = (perm: Permission) => canAccess(state, perm);
 
   if (!state.isAuthenticated) {
     return <Login state={state} setState={setState} />;
@@ -457,7 +561,7 @@ export default function App() {
             {state.activeTab === 'dashboard' && hasPermission('view_dashboard') && <DashboardTab state={state} setState={setState} />}
             {state.activeTab === 'executive' && hasPermission('access_executive') && <ExecutiveTab state={state} />}
             {state.activeTab === 'topology' && hasPermission('view_topology') && <TopologyTab state={state} />}
-            {state.activeTab === 'billing' && hasPermission('view_billing') && <BillingTab state={state} />}
+            {state.activeTab === 'billing' && hasPermission('view_billing') && <BillingTab state={state} setState={setState} />}
             {state.activeTab === 'inventory' && hasPermission('view_inventory') && <InventoryTab state={state} />}
             {state.activeTab === 'crm' && hasPermission('view_crm') && <CrmTab state={state} />}
             {state.activeTab === 'field' && hasPermission('view_field_service') && <FieldServiceTab state={state} />}
@@ -465,14 +569,14 @@ export default function App() {
             {state.activeTab === 'portal' && hasPermission('manage_portal') && <PortalDesignerTab state={state} />}
             {state.activeTab === 'investors' && (state.role === 'shareholder' || hasPermission('view_investors')) && <InvestorsTab state={state} setState={setState} />}
             {state.activeTab === 'suppliers' && hasPermission('view_suppliers') && <SuppliersTab state={state} />}
-            {state.activeTab === 'boi_expiry' && hasPermission('view_boi') && <BoiExpiryTab state={state} />}
+            {state.activeTab === 'boi_expiry' && hasPermission('view_boi') && <BoiExpiryTab state={state} setState={setState} />}
             {state.activeTab === 'management' && hasPermission('view_admins') && <ManagementTab state={state} setState={setState} />}
             {state.activeTab === 'network_radius' && hasPermission('view_admins') && <NetworkRadiusTab state={state} setState={setState} />}
             {state.activeTab === 'financial' && hasPermission('view_financial') && <FinancialDashboard state={state} setState={setState} />}
             {state.activeTab === 'chat' && hasPermission('access_chat') && <ChatTab state={state} />}
             {state.activeTab === 'security' && hasPermission('view_security') && <SecurityTab state={state} />}
             {state.activeTab === 'analytics' && hasPermission('view_reports') && <AnalyticsTab state={state} />}
-            {state.activeTab === 'search' && hasPermission('perform_search') && <SearchTab state={state} />}
+            {state.activeTab === 'search' && hasPermission('perform_search') && <SearchTab state={state} setState={setState} />}
             {state.activeTab === 'settings' && hasPermission('edit_settings') && <SettingsTab state={state} setState={setState} />}
             {state.activeTab === 'files' && hasPermission('access_files') && <FilesTab state={state} setState={setState} />}
           </AnimatePresence>
