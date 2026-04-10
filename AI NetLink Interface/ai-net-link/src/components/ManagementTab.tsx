@@ -10,6 +10,7 @@ import { fetchSubscribers, fetchSuppliers, fetchInvestors, addSubscriber, update
 import { getSmartMatchScore, smartMatch } from '../utils/search';
 import { toastError, toastInfo, toastSuccess } from '../utils/notify';
 import { hasPermission as canAccess } from '../permissions';
+import { computeCentralBalanceFromTeamMembers } from '../utils/financeMath';
 import SecurityGroupsTab from './SecurityGroupsTab';
 import AppConfirmDialog from './AppConfirmDialog';
 import AppPromptDialog from './AppPromptDialog';
@@ -761,6 +762,12 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
   const [syncResult, setSyncResult] = useState<{ success: boolean; message: string; details?: SyncResultDetail[] } | null>(null);
   const useSubscriberWorkspace = activeSubTab === 'subscribers';
   const useEntityWorkspace = activeSubTab === 'suppliers' || activeSubTab === 'shareholders' || activeSubTab === 'managers' || activeSubTab === 'iptv';
+  const useOpenSubscriberLayout = useSubscriberWorkspace && subscriberWorkspaceMode === 'list';
+  const useOpenEntityLayout = useEntityWorkspace && entityWorkspaceMode === 'list';
+  const useOpenRecordsLayout = useOpenSubscriberLayout || useOpenEntityLayout;
+  const entityStatClass = (activeClass: string) => useOpenRecordsLayout
+    ? `rounded-[1.75rem] border p-5 text-start transition-all shadow-sm shadow-slate-200/50 dark:shadow-black/10 ${activeClass}`
+    : `rounded-2xl border p-4 text-start transition-all ${activeClass}`;
 
   const SUBSCRIBER_COLUMNS = [
     { id: 'id', label: isRTL ? 'المعرف' : 'ID', defaultVisible: true },
@@ -905,7 +912,7 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
     } else if (targetSubTab === 'shareholders') {
       editObj = {
         ...editObj,
-        name: item.name || item['اسم المستثمر'] || '',
+        name: String(item.name || item['اسم المستثمر'] || ''),
         shares: item.shares || item['رصيد الأسهم'] || 0,
         buyPrice: item.buyPrice || item.sharePrice || item['سعر السهم الواحد'] || 0,
         investment: item.investment || item['سعر الأسهم'] || 0,
@@ -1454,7 +1461,10 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
     dividends: isRTL ? 'الأرباح الموزعة المستحقة أو المدفوعة.' : 'Distributed dividends due/paid.',
     ownership: isRTL ? 'نوع الملكية أو جهة التملك (شخصي/شركة/شريك).' : 'Ownership type (personal/corporate/partner).',
     managerGroup: isRTL ? 'مجموعة الصلاحيات الأمنية التي تحدد ما يمكن للعضو الإداري فعله.' : 'Security permission group that controls what the admin member can do.',
-    managerLimit: isRTL ? 'حد العمليات المالية المسموح للعضو الإداري تنفيذه.' : 'Maximum financial transaction limit for this admin member.',
+    managerLimit: isRTL ? 'الحد الأعلى لكل عملية مالية واحدة مثل شحن أو تحويل أو خصم.' : 'The maximum amount allowed for a single financial operation such as top-up, transfer, or deduction.',
+    managerDebtLimit: isRTL ? 'أقصى مبلغ يمكن للعضو الإداري أن ينزل به تحت الصفر من رأس مال النظام. الصفر أو الحقل الفارغ يعني لا استدانة إطلاقاً.' : 'The maximum amount this admin member can go below zero using company capital. Zero or an empty field means no debt is allowed.',
+    managerDebtToggle: isRTL ? 'عند التفعيل يمكن للعضو أن يصبح رصيده سالباً حتى الحد الذي تحدده هنا فقط. إذا كانت القيمة صفر أو فارغة فلن يُسمح له بالاستدانة.' : 'When enabled, the member can go into a negative balance only up to the debt limit you set here. If the value is zero or empty, debt is not allowed.',
+    managerStatus: isRTL ? 'نشط يعني يمكنه العمل حسب صلاحياته. مجمد يعني مشاهدة فقط، وأي محاولة تنفيذ ستظهر له رسالة مراجعة الإدارة.' : 'Active means the account can operate according to its permissions. Frozen means view-only, and any action attempt will show an admin-contact message.',
     serviceType: isRTL ? 'نوع الخدمة الرقمية (IPTV/VPN/...) لتصنيفها وربطها بالفوترة.' : 'Digital service type (IPTV/VPN/...) for categorization and billing.',
     billingCycle: isRTL ? 'دورية احتساب السعر (شهري/ربع سنوي/سنوي/مرة واحدة).' : 'Pricing cycle (monthly/quarterly/yearly/one-time).',
     sellPrice: isRTL ? 'سعر بيع الخدمة للعميل.' : 'Service selling price to customers.',
@@ -1499,7 +1509,8 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
           title: isRTL ? 'بيانات العضو الإداري' : 'Admin Member Data',
           items: [
             [isRTL ? 'مجموعة الصلاحيات' : 'Permission Group', entityFieldHelp.managerGroup],
-            [isRTL ? 'الحد المالي' : 'TX Limit', entityFieldHelp.managerLimit],
+            [isRTL ? 'حد العملية المالية' : 'Transaction Limit', entityFieldHelp.managerLimit],
+            [isRTL ? 'حد الاستدانة' : 'Debt Limit', entityFieldHelp.managerDebtLimit],
           ],
         },
       ];
@@ -2359,14 +2370,16 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
 
     const currentUserId = String(state.currentUser?.id || '').trim();
     const currentUsername = String(state.currentUser?.username || '').trim();
-    const actor = state.role === 'super_admin'
+    const actorSource = state.role === 'super_admin'
       ? null
-      : ((state.teamMembers.find((member) => String(member.id) === currentUserId)
+      : (state.teamMembers.find((member) => String(member.id) === currentUserId)
         || state.teamMembers.find((member) => (
           member.role !== 'super_admin' &&
           currentUsername &&
           String(member.username || '').trim() === currentUsername
-        ))) as DynamicItem | undefined || (state.currentUser as DynamicItem | null));
+        ))
+        || state.currentUser);
+    const actor = actorSource ? (actorSource as unknown as DynamicItem) : null;
 
     const planName = String(subToActivate.plan || subToActivate['سرعة الخط'] || '');
     const profile = networkProfiles.find((p) => String(p.name || '') === planName) || null;
@@ -2374,6 +2387,20 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
     const commissionRate = actor ? Number(actor.commissionRate || 0) : 0;
     const commissionAmount = price > 0 ? (price * commissionRate) / 100 : 0;
     const costToActor = price - commissionAmount;
+    const explicitDebtLimit = actor ? Number(actor.debtLimit || actor['حد الاستدانة'] || 0) : 0;
+    const legacyDebtLimit = actor ? Number(actor.maxTxLimit || actor['الحد المالي'] || 0) : 0;
+    const effectiveDebtLimit = actor
+      ? (
+          Boolean(actor.isDebtLimitEnabled)
+            ? explicitDebtLimit
+            : (
+                explicitDebtLimit > 0
+                  ? explicitDebtLimit
+                  : ((!actor.isLimitEnabled && legacyDebtLimit > 0) ? legacyDebtLimit : 0)
+              )
+        )
+      : 0;
+    const availableFunds = actor ? Number(actor.balance || 0) + effectiveDebtLimit : price;
 
     return {
       actor,
@@ -2383,20 +2410,25 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
       commissionRate,
       commissionAmount,
       costToActor,
+      effectiveDebtLimit,
+      availableFunds,
     };
   }, [networkProfiles, state.currentUser?.id, state.currentUser?.username, state.role, state.teamMembers, subToActivate]);
 
   const handleActivateSubscriber = async () => {
     if (!subToActivate) return;
 
-    const { actor, costToActor, commissionAmount, commissionRate, planName, price, profile } = activationPricing;
+    const { actor, costToActor, commissionAmount, commissionRate, planName, price, profile, effectiveDebtLimit } = activationPricing;
 
     if (actor && costToActor > 0) {
       const actorBalance = Number(actor.balance || 0);
-      if (actorBalance < costToActor) {
+      const minimumAllowedBalance = effectiveDebtLimit > 0 ? -effectiveDebtLimit : 0;
+      if ((actorBalance - costToActor) < minimumAllowedBalance) {
         toastError(
-          isRTL ? `رصيد المدير (${actor.name}) غير كافٍ. المطلوب خصمه: ${formatCurrency(costToActor, state.currency, state.lang)}` : `Manager balance (${actor.name}) is insufficient. Required deduction: ${formatCurrency(costToActor, state.currency, state.lang)}`,
-          isRTL ? 'رصيد غير كافٍ' : 'Insufficient Balance'
+          isRTL
+            ? `لا يمكن تنفيذ العملية. الرصيد الحالي ${formatCurrency(actorBalance, state.currency, state.lang)} والحد الائتماني المسموح ${formatCurrency(effectiveDebtLimit, state.currency, state.lang)}.`
+            : `The operation cannot be completed. Current balance is ${formatCurrency(actorBalance, state.currency, state.lang)} and allowed debt limit is ${formatCurrency(effectiveDebtLimit, state.currency, state.lang)}.`,
+          isRTL ? 'تجاوز حد الاستدانة' : 'Debt Limit Exceeded'
         );
         return;
       }
@@ -2428,16 +2460,20 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
             }
           };
 
-          setState(prev => ({
-            ...prev,
-            centralBalance: prev.centralBalance + costToActor,
-            financialTransactions: [newTx, ...prev.financialTransactions],
-            teamMembers: prev.teamMembers.map(member => (
+          setState(prev => {
+            const nextTeamMembers = prev.teamMembers.map(member => (
               String(member.id) === String(actor.id)
                 ? { ...member, balance: Number(member.balance || 0) - costToActor }
                 : member
-            ))
-          }));
+            ));
+
+            return {
+              ...prev,
+              centralBalance: computeCentralBalanceFromTeamMembers(nextTeamMembers),
+              financialTransactions: [newTx, ...prev.financialTransactions],
+              teamMembers: nextTeamMembers
+            };
+          });
         }
 
         toastSuccess(
@@ -2968,17 +3004,17 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
             : (isRTL ? 'إيداع في محفظة العضو' : 'Deposit to member wallet'),
         };
 
+        const nextTeamMembers = prev.teamMembers.map(member => (
+          member.id === topUpTarget.id
+            ? { ...member, balance: Number(member.balance || 0) + signedAmount }
+            : member
+        ));
+
         return {
           ...prev,
-          centralBalance: topUpMode === 'withdraw'
-            ? prev.centralBalance + transactionAmount
-            : prev.centralBalance - transactionAmount,
+          centralBalance: computeCentralBalanceFromTeamMembers(nextTeamMembers),
           financialTransactions: [newTransaction, ...prev.financialTransactions],
-          teamMembers: prev.teamMembers.map(member => (
-            member.id === topUpTarget.id
-              ? { ...member, balance: Number(member.balance || 0) + signedAmount }
-              : member
-          ))
+          teamMembers: nextTeamMembers
         };
       });
       setIsTopUpModalOpen(false);
@@ -3134,6 +3170,7 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
     const currentBalance = Number(payload.balance || payload['الرصيد'] || 0);
     const commissionRate = Number(payload.commissionRate || payload['نسبة العمولة'] || 0);
     const maxTxLimit = Number(payload.maxTxLimit || payload['الحد المالي'] || 0);
+    const debtLimit = Number(payload.debtLimit || payload['حد الاستدانة'] || 0);
     const { balance, ['الرصيد']: _arabicBalance, ...rest } = payload as DynamicItem & { ['الرصيد']?: unknown };
     return {
       ...rest,
@@ -3148,6 +3185,9 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
       'نسبة العمولة': commissionRate,
       maxTxLimit,
       'الحد المالي': maxTxLimit,
+      debtLimit,
+      'حد الاستدانة': debtLimit,
+      isDebtLimitEnabled: Boolean(payload.isDebtLimitEnabled),
       balance: currentBalance,
       'الرصيد': currentBalance,
     };
@@ -3683,8 +3723,8 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
       </div>
 
       {/* Main List Area */}
-      <div className="flex-1 min-h-0 glass-card overflow-hidden flex flex-col border border-slate-200/50 dark:border-slate-800/50">
-        <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center bg-slate-50/50 dark:bg-slate-900/50">
+      <div className={`flex-1 min-h-0 flex flex-col ${useOpenRecordsLayout ? '' : 'glass-card overflow-hidden border border-slate-200/50 dark:border-slate-800/50'}`}>
+        <div className={`p-4 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center ${useOpenRecordsLayout ? 'bg-transparent px-0' : 'bg-slate-50/50 dark:bg-slate-900/50'}`}>
           <h3 className="font-bold text-slate-800 dark:text-slate-200">
             {activeSubTab === 'subscribers' && t.management.subscribers.title}
             {activeSubTab === 'iptv' && t.management.iptv.title}
@@ -3836,17 +3876,21 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
             <SecurityGroupsTab state={state} setState={setState} />
           </div>
         ) : (
-          <div className="flex-1 min-h-0 overflow-auto custom-scrollbar">
+          <div className={`flex-1 min-h-0 overflow-auto custom-scrollbar ${useOpenRecordsLayout ? 'px-0' : ''}`}>
             {useSubscriberWorkspace && (
               <div className="p-4 md:p-6 space-y-6">
                 {subscriberWorkspaceMode === 'list' ? (
                   <>
-                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+                    <div className={`grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 ${useOpenRecordsLayout ? 'border-b border-slate-200/70 pb-6 dark:border-slate-800/70' : ''}`}>
                       <button
                         type="button"
                         onClick={() => setSubscriberQuickFilter('all')}
-                        className={`rounded-2xl border p-4 text-start transition-all ${subscriberQuickFilter === 'all' ? 'border-teal-300 dark:border-teal-500/30 bg-teal-50/80 dark:bg-teal-500/10 ring-1 ring-teal-200/70 dark:ring-teal-500/20' : 'border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#101014]'}`}
+                        className={entityStatClass(subscriberQuickFilter === 'all' ? 'border-teal-300 dark:border-teal-500/30 bg-teal-50/80 dark:bg-teal-500/10 ring-1 ring-teal-200/70 dark:ring-teal-500/20' : 'border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#101014]')}
                       >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="rounded-2xl bg-teal-500/10 p-3 text-teal-600 dark:text-teal-400"><Users size={18} /></div>
+                          <span className="text-[10px] font-black text-slate-400">{isRTL ? 'إجمالي' : 'TOTAL'}</span>
+                        </div>
                         <p className="text-[11px] font-black text-slate-500 uppercase tracking-widest">{isRTL ? 'إجمالي المشتركين' : 'Subscribers'}</p>
                         <p className="mt-2 text-2xl font-black text-slate-900 dark:text-white">{formatNumber(subscriberSummary.count)}</p>
                         <p className="mt-1 text-[10px] font-bold text-slate-400">{isRTL ? 'انقر لعرض الجميع' : 'Click to show all'}</p>
@@ -3854,8 +3898,12 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
                       <button
                         type="button"
                         onClick={() => setSubscriberQuickFilter('active')}
-                        className={`rounded-2xl border p-4 text-start transition-all ${subscriberQuickFilter === 'active' ? 'border-emerald-300 dark:border-emerald-500/30 bg-emerald-50/80 dark:bg-emerald-500/10 ring-1 ring-emerald-200/70 dark:ring-emerald-500/20' : 'border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#101014]'}`}
+                        className={entityStatClass(subscriberQuickFilter === 'active' ? 'border-emerald-300 dark:border-emerald-500/30 bg-emerald-50/80 dark:bg-emerald-500/10 ring-1 ring-emerald-200/70 dark:ring-emerald-500/20' : 'border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#101014]')}
                       >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="rounded-2xl bg-emerald-500/10 p-3 text-emerald-600 dark:text-emerald-400"><Wifi size={18} /></div>
+                          <span className="text-[10px] font-black text-slate-400">{isRTL ? 'نشط' : 'ACTIVE'}</span>
+                        </div>
                         <p className="text-[11px] font-black text-slate-500 uppercase tracking-widest">{isRTL ? 'النشطون' : 'Active'}</p>
                         <p className="mt-2 text-xl font-black text-emerald-600 dark:text-emerald-400">{formatNumber(subscriberSummary.activeCount)}</p>
                         <p className="mt-1 text-[10px] font-bold text-slate-400">{isRTL ? 'انقر لعرض النشطين فقط' : 'Click to show active only'}</p>
@@ -3863,20 +3911,28 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
                       <button
                         type="button"
                         onClick={() => setSubscriberQuickFilter('online')}
-                        className={`rounded-2xl border p-4 text-start transition-all ${subscriberQuickFilter === 'online' ? 'border-blue-300 dark:border-blue-500/30 bg-blue-50/80 dark:bg-blue-500/10 ring-1 ring-blue-200/70 dark:ring-blue-500/20' : 'border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#101014]'}`}
+                        className={entityStatClass(subscriberQuickFilter === 'online' ? 'border-blue-300 dark:border-blue-500/30 bg-blue-50/80 dark:bg-blue-500/10 ring-1 ring-blue-200/70 dark:ring-blue-500/20' : 'border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#101014]')}
                       >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="rounded-2xl bg-blue-500/10 p-3 text-blue-600 dark:text-blue-400"><Router size={18} /></div>
+                          <span className="text-[10px] font-black text-slate-400">{isRTL ? 'مباشر' : 'LIVE'}</span>
+                        </div>
                         <p className="text-[11px] font-black text-slate-500 uppercase tracking-widest">{isRTL ? 'المتصلون الآن' : 'Online Now'}</p>
                         <p className="mt-2 text-xl font-black text-blue-600 dark:text-blue-400">{formatNumber(subscriberSummary.onlineCount)}</p>
                         <p className="mt-1 text-[10px] font-bold text-slate-400">{isRTL ? 'انقر لعرض المتصلين الآن' : 'Click to show online only'}</p>
                       </button>
-                      <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#101014] p-4">
+                      <div className={entityStatClass('border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#101014]')}>
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="rounded-2xl bg-amber-500/10 p-3 text-amber-600 dark:text-amber-400"><Wallet size={18} /></div>
+                          <span className="text-[10px] font-black text-slate-400">{isRTL ? 'مالي' : 'FINANCE'}</span>
+                        </div>
                         <p className="text-[11px] font-black text-slate-500 uppercase tracking-widest">{isRTL ? 'إجمالي الرصيد' : 'Total Balance'}</p>
                         <p className="mt-2 text-xl font-black text-amber-600 dark:text-amber-400">{formatCurrency(subscriberSummary.totalBalance, state.currency, state.lang, 2)}</p>
                       </div>
                     </div>
 
-                    <div className="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#101014] overflow-hidden">
-                      <div className="p-4 md:p-5 border-b border-slate-200 dark:border-slate-800 flex flex-col xl:flex-row xl:items-center justify-between gap-4">
+                    <div className={`${useOpenSubscriberLayout ? 'overflow-visible rounded-[2rem] border border-slate-200/70 dark:border-slate-800/70 bg-white/70 dark:bg-white/[0.02] backdrop-blur-sm' : 'rounded-3xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#101014] overflow-hidden'}`}>
+                      <div className={`p-4 md:p-5 border-b border-slate-200 dark:border-slate-800 flex flex-col xl:flex-row xl:items-center justify-between gap-4 ${useOpenSubscriberLayout ? 'bg-transparent' : ''}`}>
                         <div>
                           <h4 className="text-lg font-black text-slate-900 dark:text-white">
                             {isRTL ? 'لوحة إدارة المشتركين' : 'Subscriber Operations Console'}
@@ -4353,19 +4409,23 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
                     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
                       {activeSubTab === 'suppliers' && (
                         <>
-                          <button type="button" onClick={() => setEntityQuickFilter('all')} className={`rounded-2xl border p-4 text-start transition-all ${entityQuickFilter === 'all' ? 'border-teal-300 dark:border-teal-500/30 bg-teal-50/80 dark:bg-teal-500/10 ring-1 ring-teal-200/70 dark:ring-teal-500/20' : 'border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#101014]'}`}>
+                          <button type="button" onClick={() => setEntityQuickFilter('all')} className={entityStatClass(entityQuickFilter === 'all' ? 'border-teal-300 dark:border-teal-500/30 bg-teal-50/80 dark:bg-teal-500/10 ring-1 ring-teal-200/70 dark:ring-teal-500/20' : 'border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#101014]')}>
+                            <div className="mb-3 flex items-start justify-between gap-3"><div className="rounded-2xl bg-teal-500/10 p-3 text-teal-600 dark:text-teal-400"><Truck size={18} /></div><span className="text-[10px] font-black text-slate-400">SUP</span></div>
                             <p className="text-[11px] font-black text-slate-500 uppercase tracking-widest">{isRTL ? 'إجمالي الموردين' : 'Suppliers'}</p>
                             <p className="mt-2 text-2xl font-black text-slate-900 dark:text-white">{formatNumber(supplierSummary.count)}</p>
                           </button>
-                          <button type="button" onClick={() => setEntityQuickFilter('debt')} className={`rounded-2xl border p-4 text-start transition-all ${entityQuickFilter === 'debt' ? 'border-rose-300 dark:border-rose-500/30 bg-rose-50/80 dark:bg-rose-500/10 ring-1 ring-rose-200/70 dark:ring-rose-500/20' : 'border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#101014]'}`}>
+                          <button type="button" onClick={() => setEntityQuickFilter('debt')} className={entityStatClass(entityQuickFilter === 'debt' ? 'border-rose-300 dark:border-rose-500/30 bg-rose-50/80 dark:bg-rose-500/10 ring-1 ring-rose-200/70 dark:ring-rose-500/20' : 'border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#101014]')}>
+                            <div className="mb-3 flex items-start justify-between gap-3"><div className="rounded-2xl bg-rose-500/10 p-3 text-rose-600 dark:text-rose-400"><CreditCard size={18} /></div><span className="text-[10px] font-black text-slate-400">DUE</span></div>
                             <p className="text-[11px] font-black text-slate-500 uppercase tracking-widest">{isRTL ? 'المدينون فقط' : 'With Debt'}</p>
                             <p className="mt-2 text-xl font-black text-rose-600 dark:text-rose-400">{formatCurrency(supplierSummary.totalDebt, state.currency, state.lang, 2)}</p>
                           </button>
-                          <button type="button" onClick={() => setEntityQuickFilter('negative')} className={`rounded-2xl border p-4 text-start transition-all ${entityQuickFilter === 'negative' ? 'border-amber-300 dark:border-amber-500/30 bg-amber-50/80 dark:bg-amber-500/10 ring-1 ring-amber-200/70 dark:ring-amber-500/20' : 'border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#101014]'}`}>
+                          <button type="button" onClick={() => setEntityQuickFilter('negative')} className={entityStatClass(entityQuickFilter === 'negative' ? 'border-amber-300 dark:border-amber-500/30 bg-amber-50/80 dark:bg-amber-500/10 ring-1 ring-amber-200/70 dark:ring-amber-500/20' : 'border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#101014]')}>
+                            <div className="mb-3 flex items-start justify-between gap-3"><div className="rounded-2xl bg-amber-500/10 p-3 text-amber-600 dark:text-amber-400"><Wallet size={18} /></div><span className="text-[10px] font-black text-slate-400">BAL</span></div>
                             <p className="text-[11px] font-black text-slate-500 uppercase tracking-widest">{isRTL ? 'رصيد سلبي' : 'Negative Balance'}</p>
                             <p className="mt-2 text-xl font-black text-amber-600 dark:text-amber-400">{formatCurrency(supplierSummary.totalBalance, state.currency, state.lang, 2)}</p>
                           </button>
-                          <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#101014] p-4">
+                          <div className={entityStatClass('border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#101014]')}>
+                            <div className="mb-3 flex items-start justify-between gap-3"><div className="rounded-2xl bg-emerald-500/10 p-3 text-emerald-600 dark:text-emerald-400"><Coins size={18} /></div><span className="text-[10px] font-black text-slate-400">PAID</span></div>
                             <p className="text-[11px] font-black text-slate-500 uppercase tracking-widest">{isRTL ? 'إجمالي المسدد' : 'Total Paid'}</p>
                             <p className="mt-2 text-xl font-black text-emerald-600 dark:text-emerald-400">{formatCurrency(supplierSummary.totalPaid, state.currency, state.lang, 2)}</p>
                           </div>
@@ -4373,19 +4433,23 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
                       )}
                       {activeSubTab === 'shareholders' && (
                         <>
-                          <button type="button" onClick={() => setEntityQuickFilter('all')} className={`rounded-2xl border p-4 text-start transition-all ${entityQuickFilter === 'all' ? 'border-teal-300 dark:border-teal-500/30 bg-teal-50/80 dark:bg-teal-500/10 ring-1 ring-teal-200/70 dark:ring-teal-500/20' : 'border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#101014]'}`}>
+                          <button type="button" onClick={() => setEntityQuickFilter('all')} className={entityStatClass(entityQuickFilter === 'all' ? 'border-teal-300 dark:border-teal-500/30 bg-teal-50/80 dark:bg-teal-500/10 ring-1 ring-teal-200/70 dark:ring-teal-500/20' : 'border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#101014]')}>
+                            <div className="mb-3 flex items-start justify-between gap-3"><div className="rounded-2xl bg-teal-500/10 p-3 text-teal-600 dark:text-teal-400"><PieChart size={18} /></div><span className="text-[10px] font-black text-slate-400">INV</span></div>
                             <p className="text-[11px] font-black text-slate-500 uppercase tracking-widest">{isRTL ? 'إجمالي المستثمرين' : 'Investors'}</p>
                             <p className="mt-2 text-2xl font-black text-slate-900 dark:text-white">{formatNumber(investorSummary.count)}</p>
                           </button>
-                          <button type="button" onClick={() => setEntityQuickFilter('high_shares')} className={`rounded-2xl border p-4 text-start transition-all ${entityQuickFilter === 'high_shares' ? 'border-blue-300 dark:border-blue-500/30 bg-blue-50/80 dark:bg-blue-500/10 ring-1 ring-blue-200/70 dark:ring-blue-500/20' : 'border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#101014]'}`}>
+                          <button type="button" onClick={() => setEntityQuickFilter('high_shares')} className={entityStatClass(entityQuickFilter === 'high_shares' ? 'border-blue-300 dark:border-blue-500/30 bg-blue-50/80 dark:bg-blue-500/10 ring-1 ring-blue-200/70 dark:ring-blue-500/20' : 'border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#101014]')}>
+                            <div className="mb-3 flex items-start justify-between gap-3"><div className="rounded-2xl bg-blue-500/10 p-3 text-blue-600 dark:text-blue-400"><Briefcase size={18} /></div><span className="text-[10px] font-black text-slate-400">SHR</span></div>
                             <p className="text-[11px] font-black text-slate-500 uppercase tracking-widest">{isRTL ? 'أسهم مرتفعة' : 'High Shares'}</p>
                             <p className="mt-2 text-xl font-black text-blue-600 dark:text-blue-400">{formatNumber(investorSummary.totalShares)}</p>
                           </button>
-                          <button type="button" onClick={() => setEntityQuickFilter('with_dividends')} className={`rounded-2xl border p-4 text-start transition-all ${entityQuickFilter === 'with_dividends' ? 'border-emerald-300 dark:border-emerald-500/30 bg-emerald-50/80 dark:bg-emerald-500/10 ring-1 ring-emerald-200/70 dark:ring-emerald-500/20' : 'border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#101014]'}`}>
+                          <button type="button" onClick={() => setEntityQuickFilter('with_dividends')} className={entityStatClass(entityQuickFilter === 'with_dividends' ? 'border-emerald-300 dark:border-emerald-500/30 bg-emerald-50/80 dark:bg-emerald-500/10 ring-1 ring-emerald-200/70 dark:ring-emerald-500/20' : 'border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#101014]')}>
+                            <div className="mb-3 flex items-start justify-between gap-3"><div className="rounded-2xl bg-emerald-500/10 p-3 text-emerald-600 dark:text-emerald-400"><Coins size={18} /></div><span className="text-[10px] font-black text-slate-400">DIV</span></div>
                             <p className="text-[11px] font-black text-slate-500 uppercase tracking-widest">{isRTL ? 'أرباح موزعة' : 'With Dividends'}</p>
                             <p className="mt-2 text-xl font-black text-emerald-600 dark:text-emerald-400">{formatCurrency(investorSummary.totalDividends, state.currency, state.lang, 2)}</p>
                           </button>
-                          <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#101014] p-4">
+                          <div className={entityStatClass('border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#101014]')}>
+                            <div className="mb-3 flex items-start justify-between gap-3"><div className="rounded-2xl bg-amber-500/10 p-3 text-amber-600 dark:text-amber-400"><Wallet size={18} /></div><span className="text-[10px] font-black text-slate-400">CAP</span></div>
                             <p className="text-[11px] font-black text-slate-500 uppercase tracking-widest">{isRTL ? 'إجمالي الاستثمار' : 'Total Investment'}</p>
                             <p className="mt-2 text-xl font-black text-amber-600 dark:text-amber-400">{formatCurrency(investorSummary.totalInvestment, state.currency, state.lang, 2)}</p>
                           </div>
@@ -4393,19 +4457,23 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
                       )}
                       {activeSubTab === 'managers' && (
                         <>
-                          <button type="button" onClick={() => setEntityQuickFilter('all')} className={`rounded-2xl border p-4 text-start transition-all ${entityQuickFilter === 'all' ? 'border-teal-300 dark:border-teal-500/30 bg-teal-50/80 dark:bg-teal-500/10 ring-1 ring-teal-200/70 dark:ring-teal-500/20' : 'border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#101014]'}`}>
+                          <button type="button" onClick={() => setEntityQuickFilter('all')} className={entityStatClass(entityQuickFilter === 'all' ? 'border-teal-300 dark:border-teal-500/30 bg-teal-50/80 dark:bg-teal-500/10 ring-1 ring-teal-200/70 dark:ring-teal-500/20' : 'border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#101014]')}>
+                            <div className="mb-3 flex items-start justify-between gap-3"><div className="rounded-2xl bg-teal-500/10 p-3 text-teal-600 dark:text-teal-400"><UserCog size={18} /></div><span className="text-[10px] font-black text-slate-400">TEAM</span></div>
                             <p className="text-[11px] font-black text-slate-500 uppercase tracking-widest">{isRTL ? 'إجمالي الطاقم' : 'Team Members'}</p>
                             <p className="mt-2 text-2xl font-black text-slate-900 dark:text-white">{formatNumber(managerSummary.count)}</p>
                           </button>
-                          <button type="button" onClick={() => setEntityQuickFilter('active')} className={`rounded-2xl border p-4 text-start transition-all ${entityQuickFilter === 'active' ? 'border-emerald-300 dark:border-emerald-500/30 bg-emerald-50/80 dark:bg-emerald-500/10 ring-1 ring-emerald-200/70 dark:ring-emerald-500/20' : 'border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#101014]'}`}>
+                          <button type="button" onClick={() => setEntityQuickFilter('active')} className={entityStatClass(entityQuickFilter === 'active' ? 'border-emerald-300 dark:border-emerald-500/30 bg-emerald-50/80 dark:bg-emerald-500/10 ring-1 ring-emerald-200/70 dark:ring-emerald-500/20' : 'border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#101014]')}>
+                            <div className="mb-3 flex items-start justify-between gap-3"><div className="rounded-2xl bg-emerald-500/10 p-3 text-emerald-600 dark:text-emerald-400"><ShieldCheck size={18} /></div><span className="text-[10px] font-black text-slate-400">LIVE</span></div>
                             <p className="text-[11px] font-black text-slate-500 uppercase tracking-widest">{isRTL ? 'النشطون' : 'Active'}</p>
                             <p className="mt-2 text-xl font-black text-emerald-600 dark:text-emerald-400">{formatNumber(managerSummary.activeCount)}</p>
                           </button>
-                          <button type="button" onClick={() => setEntityQuickFilter('limited')} className={`rounded-2xl border p-4 text-start transition-all ${entityQuickFilter === 'limited' ? 'border-amber-300 dark:border-amber-500/30 bg-amber-50/80 dark:bg-amber-500/10 ring-1 ring-amber-200/70 dark:ring-amber-500/20' : 'border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#101014]'}`}>
+                          <button type="button" onClick={() => setEntityQuickFilter('limited')} className={entityStatClass(entityQuickFilter === 'limited' ? 'border-amber-300 dark:border-amber-500/30 bg-amber-50/80 dark:bg-amber-500/10 ring-1 ring-amber-200/70 dark:ring-amber-500/20' : 'border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#101014]')}>
+                            <div className="mb-3 flex items-start justify-between gap-3"><div className="rounded-2xl bg-amber-500/10 p-3 text-amber-600 dark:text-amber-400"><Lock size={18} /></div><span className="text-[10px] font-black text-slate-400">LIMIT</span></div>
                             <p className="text-[11px] font-black text-slate-500 uppercase tracking-widest">{isRTL ? 'بقيود مالية' : 'Limited'}</p>
                             <p className="mt-2 text-xl font-black text-amber-600 dark:text-amber-400">{formatNumber(managerSummary.limitedCount)}</p>
                           </button>
-                          <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#101014] p-4">
+                          <div className={entityStatClass('border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#101014]')}>
+                            <div className="mb-3 flex items-start justify-between gap-3"><div className="rounded-2xl bg-blue-500/10 p-3 text-blue-600 dark:text-blue-400"><Wallet size={18} /></div><span className="text-[10px] font-black text-slate-400">BAL</span></div>
                             <p className="text-[11px] font-black text-slate-500 uppercase tracking-widest">{isRTL ? 'إجمالي الأرصدة' : 'Total Balance'}</p>
                             <p className="mt-2 text-xl font-black text-blue-600 dark:text-blue-400">{formatCurrency(managerSummary.totalBalance, state.currency, state.lang, 2)}</p>
                           </div>
@@ -4413,19 +4481,23 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
                       )}
                       {activeSubTab === 'iptv' && (
                         <>
-                          <button type="button" onClick={() => setEntityQuickFilter('all')} className={`rounded-2xl border p-4 text-start transition-all ${entityQuickFilter === 'all' ? 'border-teal-300 dark:border-teal-500/30 bg-teal-50/80 dark:bg-teal-500/10 ring-1 ring-teal-200/70 dark:ring-teal-500/20' : 'border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#101014]'}`}>
+                          <button type="button" onClick={() => setEntityQuickFilter('all')} className={entityStatClass(entityQuickFilter === 'all' ? 'border-teal-300 dark:border-teal-500/30 bg-teal-50/80 dark:bg-teal-500/10 ring-1 ring-teal-200/70 dark:ring-teal-500/20' : 'border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#101014]')}>
+                            <div className="mb-3 flex items-start justify-between gap-3"><div className="rounded-2xl bg-teal-500/10 p-3 text-teal-600 dark:text-teal-400"><Globe size={18} /></div><span className="text-[10px] font-black text-slate-400">DIGI</span></div>
                             <p className="text-[11px] font-black text-slate-500 uppercase tracking-widest">{isRTL ? 'إجمالي الخدمات' : 'Digital Services'}</p>
                             <p className="mt-2 text-2xl font-black text-slate-900 dark:text-white">{formatNumber(iptvSummary.count)}</p>
                           </button>
-                          <button type="button" onClick={() => setEntityQuickFilter('service_active')} className={`rounded-2xl border p-4 text-start transition-all ${entityQuickFilter === 'service_active' ? 'border-emerald-300 dark:border-emerald-500/30 bg-emerald-50/80 dark:bg-emerald-500/10 ring-1 ring-emerald-200/70 dark:ring-emerald-500/20' : 'border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#101014]'}`}>
+                          <button type="button" onClick={() => setEntityQuickFilter('service_active')} className={entityStatClass(entityQuickFilter === 'service_active' ? 'border-emerald-300 dark:border-emerald-500/30 bg-emerald-50/80 dark:bg-emerald-500/10 ring-1 ring-emerald-200/70 dark:ring-emerald-500/20' : 'border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#101014]')}>
+                            <div className="mb-3 flex items-start justify-between gap-3"><div className="rounded-2xl bg-emerald-500/10 p-3 text-emerald-600 dark:text-emerald-400"><Power size={18} /></div><span className="text-[10px] font-black text-slate-400">ON</span></div>
                             <p className="text-[11px] font-black text-slate-500 uppercase tracking-widest">{isRTL ? 'النشطة' : 'Active'}</p>
                             <p className="mt-2 text-xl font-black text-emerald-600 dark:text-emerald-400">{formatNumber(iptvSummary.activeCount)}</p>
                           </button>
-                          <button type="button" onClick={() => setEntityQuickFilter('service_profitable')} className={`rounded-2xl border p-4 text-start transition-all ${entityQuickFilter === 'service_profitable' ? 'border-blue-300 dark:border-blue-500/30 bg-blue-50/80 dark:bg-blue-500/10 ring-1 ring-blue-200/70 dark:ring-blue-500/20' : 'border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#101014]'}`}>
+                          <button type="button" onClick={() => setEntityQuickFilter('service_profitable')} className={entityStatClass(entityQuickFilter === 'service_profitable' ? 'border-blue-300 dark:border-blue-500/30 bg-blue-50/80 dark:bg-blue-500/10 ring-1 ring-blue-200/70 dark:ring-blue-500/20' : 'border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#101014]')}>
+                            <div className="mb-3 flex items-start justify-between gap-3"><div className="rounded-2xl bg-blue-500/10 p-3 text-blue-600 dark:text-blue-400"><Zap size={18} /></div><span className="text-[10px] font-black text-slate-400">PROFIT</span></div>
                             <p className="text-[11px] font-black text-slate-500 uppercase tracking-widest">{isRTL ? 'الأكثر ربحية' : 'Profitable'}</p>
                             <p className="mt-2 text-xl font-black text-blue-600 dark:text-blue-400">{formatCurrency(iptvSummary.totalRevenue - iptvSummary.totalCost, state.currency, state.lang, 2)}</p>
                           </button>
-                          <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#101014] p-4">
+                          <div className={entityStatClass('border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#101014]')}>
+                            <div className="mb-3 flex items-start justify-between gap-3"><div className="rounded-2xl bg-amber-500/10 p-3 text-amber-600 dark:text-amber-400"><Coins size={18} /></div><span className="text-[10px] font-black text-slate-400">COST</span></div>
                             <p className="text-[11px] font-black text-slate-500 uppercase tracking-widest">{isRTL ? 'إجمالي التكلفة' : 'Total Cost'}</p>
                             <p className="mt-2 text-xl font-black text-amber-600 dark:text-amber-400">{formatCurrency(iptvSummary.totalCost, state.currency, state.lang, 2)}</p>
                           </div>
@@ -4433,8 +4505,8 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
                       )}
                     </div>
 
-                    <div className="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#101014] overflow-hidden">
-                      <div className="p-4 md:p-5 border-b border-slate-200 dark:border-slate-800 flex flex-col xl:flex-row xl:items-center justify-between gap-4">
+                    <div className={`${useOpenEntityLayout ? 'overflow-visible rounded-[2rem] border border-slate-200/70 dark:border-slate-800/70 bg-white/70 dark:bg-white/[0.02] backdrop-blur-sm' : 'rounded-3xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#101014] overflow-hidden'}`}>
+                      <div className={`p-4 md:p-5 border-b border-slate-200 dark:border-slate-800 flex flex-col xl:flex-row xl:items-center justify-between gap-4 ${useOpenEntityLayout ? 'bg-transparent' : ''}`}>
                         <div>
                           <h4 className="text-lg font-black text-slate-900 dark:text-white">
                             {activeSubTab === 'suppliers'
@@ -4611,8 +4683,8 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
                             <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{isRTL ? 'الاسم الثاني' : 'Last Name'}</label><input type="text" value={String(entityFormState['الاسم الثاني'] || entityFormState.lastName || '')} onChange={(e) => setEntityFormField('الاسم الثاني', e.target.value, { lastName: e.target.value })} className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm" /></div>
                             <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{isRTL ? 'اسم الدخول' : 'Username'}</label><input type="text" value={String(entityFormState['اسم الدخول'] || entityFormState.username || '')} onChange={(e) => setEntityFormField('اسم الدخول', e.target.value, { username: e.target.value })} className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm font-mono" /></div>
                             <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{isRTL ? 'كلمة المرور' : 'Password'}</label><input type="text" value={String(entityFormState['كلمة المرور'] || entityFormState.password || '')} onChange={(e) => setEntityFormField('كلمة المرور', e.target.value, { password: e.target.value })} className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm font-mono" /></div>
-                            <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{isRTL ? 'مجموعة الصلاحيات' : 'Permission Group'}</label><select value={String(entityFormState['الصلاحية'] || '')} onChange={(e) => { const group = state.securityGroups.find((g) => g.name === e.target.value); setEntityFormField('الصلاحية', e.target.value, { role: e.target.value, groupId: group?.id || '' }); }} className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm"><option value="">{isRTL ? '-- اختر المجموعة --' : '-- Select Group --'}</option>{state.securityGroups.map((group) => (<option key={group.id} value={group.name}>{group.name}</option>))}</select></div>
-                            <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{isRTL ? 'الحالة' : 'Status'}</label><select value={String(entityFormState.status || 'active')} onChange={(e) => setEntityFormField('status', e.target.value)} className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm"><option value="active">{isRTL ? 'نشط' : 'Active'}</option><option value="inactive">{isRTL ? 'مجمد' : 'Disabled'}</option></select></div>
+                            <div className="space-y-2"><FieldHelpLabel label={isRTL ? 'مجموعة الصلاحيات' : 'Permission Group'} helpText={entityFieldHelp.managerGroup} isRTL={isRTL} /><select value={String(entityFormState['الصلاحية'] || '')} onChange={(e) => { const group = state.securityGroups.find((g) => g.name === e.target.value); setEntityFormField('الصلاحية', e.target.value, { role: e.target.value, groupId: group?.id || '' }); }} className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm"><option value="">{isRTL ? '-- اختر المجموعة --' : '-- Select Group --'}</option>{state.securityGroups.map((group) => (<option key={group.id} value={group.name}>{group.name}</option>))}</select></div>
+                            <div className="space-y-2"><FieldHelpLabel label={isRTL ? 'الحالة' : 'Status'} helpText={entityFieldHelp.managerStatus} isRTL={isRTL} /><select value={String(entityFormState.status || 'active')} onChange={(e) => setEntityFormField('status', e.target.value)} className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm"><option value="active">{isRTL ? 'نشط' : 'Active'}</option><option value="inactive">{isRTL ? 'مجمد' : 'Disabled'}</option></select></div>
                             <div className="space-y-2">
                               <FieldHelpLabel label={isRTL ? 'الرصيد' : 'Balance'} helpText={entityFieldHelp.balance} isRTL={isRTL} />
                               <input
@@ -5923,7 +5995,9 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
                       </div>
                       {MANAGER_FIELDS.map(field => (
                         <div key={field.key} className="space-y-2">
-                          <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{field.label}</label>
+                          {field.key === 'الصلاحية'
+                            ? <FieldHelpLabel label={field.label} helpText={entityFieldHelp.managerGroup} isRTL={isRTL} />
+                            : <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{field.label}</label>}
                           {field.key === 'الصلاحية' ? (
                             <select
                               value={newItem[field.key] || ''}
@@ -5976,9 +6050,7 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
                       </h4>
                       <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
-                          <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-                            {isRTL ? 'سقف العملية (الشحن)' : 'Max Transaction Limit'}
-                          </label>
+                          <FieldHelpLabel label={isRTL ? 'حد العملية المالية' : 'Transaction Limit'} helpText={entityFieldHelp.managerLimit} isRTL={isRTL} />
                           <input 
                             type="text" 
                             inputMode="decimal"
@@ -6001,9 +6073,40 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
                             />
                             <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-teal-300 dark:peer-focus:ring-teal-800 rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-slate-600 peer-checked:bg-teal-600"></div>
                             <span className="ms-3 text-sm font-bold text-slate-600 dark:text-slate-400">
-                              {isRTL ? 'تفعيل الرقابة' : 'Enable Limit'}
+                              {isRTL ? 'تفعيل حد العملية' : 'Enable Transaction Limit'}
                             </span>
                           </label>
+                        </div>
+                        <div className="space-y-2">
+                          <FieldHelpLabel label={isRTL ? 'حد الاستدانة المسموح' : 'Allowed Debt Limit'} helpText={entityFieldHelp.managerDebtLimit} isRTL={isRTL} />
+                          <input
+                            type="text"
+                            inputMode="decimal"
+                            lang="en"
+                            value={newItem.debtLimit ?? 0}
+                            onChange={(e) => {
+                              const val = normalizeDigits(e.target.value);
+                              setNewItem({ ...newItem, debtLimit: val, 'حد الاستدانة': val });
+                            }}
+                            className="w-full bg-white dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all font-mono"
+                          />
+                        </div>
+                        <div className="flex items-center gap-3 h-full pt-6">
+                          <label className="relative inline-flex items-center cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={newItem.isDebtLimitEnabled || false}
+                              onChange={(e) => setNewItem({ ...newItem, isDebtLimitEnabled: e.target.checked })}
+                              className="sr-only peer"
+                            />
+                            <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-amber-300 dark:peer-focus:ring-amber-800 rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-slate-600 peer-checked:bg-amber-500"></div>
+                            <span className="ms-3 text-sm font-bold text-slate-600 dark:text-slate-400">
+                              {isRTL ? 'السماح بالاستدانة' : 'Allow Debt'}
+                            </span>
+                          </label>
+                          <div className="text-[11px] text-slate-500 dark:text-slate-400">
+                            ? {entityFieldHelp.managerDebtToggle}
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -6569,7 +6672,7 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
                       </h4>
                       <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
-                          <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{isRTL ? 'سقف العملية' : 'Max Limit'}</label>
+                          <FieldHelpLabel label={isRTL ? 'حد العملية المالية' : 'Transaction Limit'} helpText={entityFieldHelp.managerLimit} isRTL={isRTL} />
                           <input 
                             type="text" 
                             inputMode="decimal"
@@ -6586,8 +6689,32 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
                            <label className="relative inline-flex items-center cursor-pointer">
                             <input type="checkbox" checked={editingItem.isLimitEnabled || false} onChange={(e) => setEditingItem({ ...editingItem, isLimitEnabled: e.target.checked })} className="sr-only peer" />
                             <div className="w-11 h-6 bg-slate-200 peer-focus:ring-teal-300 dark:peer-focus:ring-teal-800 rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:bg-teal-600 after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all"></div>
-                            <span className="ms-3 text-sm font-bold text-slate-600 dark:text-slate-400">{isRTL ? 'تفعيل الرقابة' : 'Enable Limit'}</span>
+                            <span className="ms-3 text-sm font-bold text-slate-600 dark:text-slate-400">{isRTL ? 'تفعيل حد العملية' : 'Enable Transaction Limit'}</span>
                           </label>
+                        </div>
+                        <div className="space-y-2">
+                          <FieldHelpLabel label={isRTL ? 'حد الاستدانة المسموح' : 'Allowed Debt Limit'} helpText={entityFieldHelp.managerDebtLimit} isRTL={isRTL} />
+                          <input 
+                            type="text" 
+                            inputMode="decimal"
+                            lang="en"
+                            value={editingItem.debtLimit ?? 0}
+                            onChange={(e) => {
+                              const val = normalizeDigits(e.target.value);
+                              setEditingItem({ ...editingItem, debtLimit: val, 'حد الاستدانة': val });
+                            }}
+                            className="w-full bg-white dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all font-mono"
+                          />
+                        </div>
+                        <div className="flex items-center gap-3 pt-6">
+                          <label className="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" checked={editingItem.isDebtLimitEnabled || false} onChange={(e) => setEditingItem({ ...editingItem, isDebtLimitEnabled: e.target.checked })} className="sr-only peer" />
+                            <div className="w-11 h-6 bg-slate-200 peer-focus:ring-amber-300 dark:peer-focus:ring-amber-800 rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:bg-amber-500 after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all"></div>
+                            <span className="ms-3 text-sm font-bold text-slate-600 dark:text-slate-400">{isRTL ? 'السماح بالاستدانة' : 'Allow Debt'}</span>
+                          </label>
+                          <div className="text-[11px] text-slate-500 dark:text-slate-400">
+                            ? {entityFieldHelp.managerDebtToggle}
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -6613,15 +6740,15 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
         {isActivateModalOpen && (
           <div key="activation-modal" className="fixed inset-0 z-[100] flex items-center justify-center p-4">
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-slate-950/60 backdrop-blur-sm" onClick={() => setIsActivateModalOpen(false)} />
-            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="relative w-full max-w-md bg-white dark:bg-[#09090B] rounded-[2.5rem] shadow-2xl overflow-hidden border border-slate-200 dark:border-slate-800 text-left" dir={isRTL ? 'rtl' : 'ltr'}>
-              <div className="p-8 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50/50 dark:bg-slate-900/50">
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="relative w-full max-w-md max-h-[90vh] bg-white dark:bg-[#09090B] rounded-[2.5rem] shadow-2xl overflow-hidden border border-slate-200 dark:border-slate-800 text-left flex flex-col" dir={isRTL ? 'rtl' : 'ltr'}>
+              <div className="p-8 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50/50 dark:bg-slate-900/50 shrink-0">
                 <h3 className="text-2xl font-black text-slate-900 dark:text-white flex items-center gap-3">
                   <Zap className="text-emerald-500 w-8 h-8" />
                   {isRTL ? 'تفعيل الاشتراك الذكي' : 'Smart Activation'}
                 </h3>
                 <button onClick={() => setIsActivateModalOpen(false)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors"><X size={24}/></button>
               </div>
-              <div className="p-8 space-y-6">
+              <div className="p-8 space-y-6 overflow-y-auto custom-scrollbar flex-1">
                 <div className="p-4 bg-blue-50 dark:bg-blue-500/5 rounded-2xl border border-blue-100 dark:border-blue-500/20">
                     <p className="text-sm font-bold text-blue-600 dark:text-blue-400 mb-1">{isRTL ? 'تفعيل للمشترك:' : 'Activating for:'}</p>
                     <p className="text-lg font-black text-slate-800 dark:text-white">{subToActivate?.firstname || subToActivate?.name || subToActivate?.['الاسم الأول']}</p>
@@ -6677,7 +6804,7 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
                     </div>
                     <div className="rounded-xl bg-white/70 dark:bg-slate-900/40 px-4 py-3">
                       <p className="text-slate-500 text-xs font-bold">{isRTL ? 'نسبة عمولتك' : 'Your Commission Rate'}</p>
-                      <p className="mt-1 font-black text-slate-900 dark:text-white">{formatNumber(activationPricing.commissionRate, state.lang)}%</p>
+                      <p className="mt-1 font-black text-slate-900 dark:text-white">{formatNumber(activationPricing.commissionRate)}%</p>
                     </div>
                     <div className="rounded-xl bg-white/70 dark:bg-slate-900/40 px-4 py-3">
                       <p className="text-slate-500 text-xs font-bold">{isRTL ? 'ربحك من العملية' : 'Your Profit'}</p>
@@ -6686,6 +6813,14 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
                     <div className="rounded-xl bg-white/70 dark:bg-slate-900/40 px-4 py-3">
                       <p className="text-slate-500 text-xs font-bold">{isRTL ? 'صافي الخصم عليك' : 'Net Deduction From You'}</p>
                       <p className="mt-1 font-black text-rose-600 dark:text-rose-400">{formatCurrency(activationPricing.costToActor, state.currency, state.lang)}</p>
+                    </div>
+                    <div className="rounded-xl bg-white/70 dark:bg-slate-900/40 px-4 py-3">
+                      <p className="text-slate-500 text-xs font-bold">{isRTL ? 'الحد الائتماني المحتسب' : 'Applied Debt Limit'}</p>
+                      <p className="mt-1 font-black text-amber-600 dark:text-amber-400">{formatCurrency(activationPricing.effectiveDebtLimit, state.currency, state.lang)}</p>
+                    </div>
+                    <div className="rounded-xl bg-white/70 dark:bg-slate-900/40 px-4 py-3">
+                      <p className="text-slate-500 text-xs font-bold">{isRTL ? 'إجمالي المتاح لك' : 'Total Available To You'}</p>
+                      <p className="mt-1 font-black text-indigo-600 dark:text-indigo-400">{formatCurrency(activationPricing.availableFunds, state.currency, state.lang)}</p>
                     </div>
                   </div>
                   {state.role !== 'super_admin' && activationPricing.actor && (
@@ -6697,6 +6832,8 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
                   )}
                 </div>
 
+              </div>
+              <div className="p-6 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-[#09090B] shrink-0">
                 <button 
                   onClick={handleActivateSubscriber}
                   disabled={isActivating}

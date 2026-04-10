@@ -59,6 +59,7 @@ interface SubscriberCardProps {
   status: SubscriberStatus;
   onNotify: () => void;
   onRenew: () => void;
+  onOpenSettings: () => void;
   openMenuId: string | null;
   setOpenMenuId: React.Dispatch<React.SetStateAction<string | null>>;
   actions: MenuAction[];
@@ -828,6 +829,7 @@ export default function BoiExpiryTab({ state, setState }: BoiExpiryTabProps) {
                   status={getSubStatus(sub.expiry || sub['تاريخ الانتهاء'] || sub.expiration)}
                   onNotify={() => { setSelectedSub(sub); setIsMessageModalOpen(true); }}
                   onRenew={() => { setSelectedSub(sub); setIsRenewModalOpen(true); }}
+                  onOpenSettings={() => openSubscriberSettings(sub)}
                   openMenuId={openActionMenuId}
                   setOpenMenuId={setOpenActionMenuId}
                   actions={getActions(sub)}
@@ -1067,7 +1069,7 @@ function StatCard({ label, value, icon: Icon, color, active, onClick }: {
   );
 }
 
-const SubscriberCard: React.FC<SubscriberCardProps> = ({ sub, isRTL, status, onNotify, onRenew, openMenuId, setOpenMenuId, actions, state }) => {
+const SubscriberCard: React.FC<SubscriberCardProps> = ({ sub, isRTL, status, onNotify, onRenew, onOpenSettings, openMenuId, setOpenMenuId, actions, state }) => {
   const currentBalance = parseFloat(String(sub['الرصيد المتبقي له'] || 0)) || 0;
   const currentDebt = parseFloat(String(sub['عليه دين'] || 0)) || 0;
   const balanceValue = currentBalance - currentDebt;
@@ -1091,6 +1093,8 @@ const SubscriberCard: React.FC<SubscriberCardProps> = ({ sub, isRTL, status, onN
       layout
       initial={{ opacity: 0, scale: 0.98 }}
       animate={{ opacity: 1, scale: 1 }}
+      onDoubleClick={onOpenSettings}
+      title={isRTL ? 'دبل كليك لفتح إعدادات المشترك' : 'Double-click to open subscriber settings'}
       className={`glass-card p-4 md:p-6 border-l-4 ring-1 flex flex-col ${statusColors[status]} hover:shadow-2xl transition-all group relative min-h-[300px]`}
     >
       <div className="flex justify-between items-start mb-6">

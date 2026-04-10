@@ -15,6 +15,9 @@ interface InvestorsTabProps {
   setState: React.Dispatch<React.SetStateAction<AppState>>;
 }
 
+const SEARCH_SETTINGS_TARGET_KEY = 'sas4_search_settings_target';
+const ACTIVE_SUBTAB_KEY = 'sas4_active_subtab';
+
 const stockData = [
   { date: '2026-03-20', price: 12.5 },
   { date: '2026-03-21', price: 12.8 },
@@ -129,6 +132,15 @@ const getRelativeRangeBucket = (value: number, values: number[]) => {
 
 export default function InvestorsTab({ state, setState }: InvestorsTabProps) {
   const isRTL = state.lang === 'ar';
+  const openShareholderSettings = (shareholder: ShareholderRecord) => {
+    localStorage.setItem(ACTIVE_SUBTAB_KEY, 'shareholders');
+    localStorage.setItem(SEARCH_SETTINGS_TARGET_KEY, JSON.stringify({
+      type: 'shareholders',
+      targetSubTab: 'shareholders',
+      item: shareholder,
+    }));
+    setState(prev => ({ ...prev, activeTab: 'management' }));
+  };
   const t = dict[state.lang];
   const isShareholder = state.role === 'shareholder';
   const isAdmin = ['super_admin', 'admin', 'sas4_manager'].includes(state.role);
@@ -938,7 +950,13 @@ export default function InvestorsTab({ state, setState }: InvestorsTabProps) {
                       </thead>
                       <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                         {filteredShareholders.map((investor) => (
-                          <tr key={investor.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-900/30 transition-colors cursor-pointer" onClick={() => setSelectedShareholderId(investor.id)}>
+                          <tr
+                            key={investor.id}
+                            className="hover:bg-slate-50/50 dark:hover:bg-slate-900/30 transition-colors cursor-pointer"
+                            onClick={() => setSelectedShareholderId(investor.id)}
+                            onDoubleClick={() => openShareholderSettings(investor)}
+                            title={isRTL ? 'دبل كليك لفتح إعدادات المستثمر' : 'Double-click to open investor settings'}
+                          >
                             <td className="px-6 py-5">
                               <div className="flex items-center gap-4">
                                 <div className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-sm font-bold text-slate-600 dark:text-slate-300">

@@ -11,6 +11,9 @@ interface BillingTabProps {
   setState: React.Dispatch<React.SetStateAction<AppState>>;
 }
 
+const SEARCH_SETTINGS_TARGET_KEY = 'sas4_search_settings_target';
+const ACTIVE_SUBTAB_KEY = 'sas4_active_subtab';
+
 type BillingSubscriber = BaseSubscriberRecord & {
   fullName: string;
   username: string;
@@ -37,6 +40,16 @@ export default function BillingTab({ state, setState }: BillingTabProps) {
   const isRTL = state.lang === 'ar';
   const [subscribers, setSubscribers] = useState<BillingSubscriber[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+
+  const openSubscriberSettings = (subscriber: BillingSubscriber) => {
+    localStorage.setItem(ACTIVE_SUBTAB_KEY, 'subscribers');
+    localStorage.setItem(SEARCH_SETTINGS_TARGET_KEY, JSON.stringify({
+      type: 'subscribers',
+      targetSubTab: 'subscribers',
+      item: subscriber,
+    }));
+    setState(prev => ({ ...prev, activeTab: 'management' }));
+  };
 
   useEffect(() => {
     const loadBillingData = async () => {
@@ -119,7 +132,12 @@ export default function BillingTab({ state, setState }: BillingTabProps) {
                 {isRTL ? 'لا توجد مديونيات حالية على المشتركين.' : 'There are no outstanding subscriber balances right now.'}
               </div>
             ) : unpaidUsers.map(user => (
-              <div key={user.id} className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-[#09090B]/50 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div
+                key={user.id}
+                onDoubleClick={() => openSubscriberSettings(user)}
+                title={isRTL ? 'دبل كليك لفتح إعدادات المشترك' : 'Double-click to open subscriber settings'}
+                className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-[#09090B]/50 flex flex-col sm:flex-row sm:items-center justify-between gap-4 cursor-pointer"
+              >
                 <div>
                   <div className="flex items-center gap-2 mb-1">
                     <h4 className="font-semibold text-slate-800 dark:text-slate-200 text-sm">{user.fullName}</h4>
@@ -131,7 +149,7 @@ export default function BillingTab({ state, setState }: BillingTabProps) {
                 </div>
                 <div className="flex items-center gap-3">
                   <span className="font-bold text-slate-900 dark:text-white">{formatCurrency(user.debtAmount, state.currency, state.lang, state.numberSettings.decimalPlaces)}</span>
-                  <button onClick={() => setState(prev => ({ ...prev, activeTab: 'management' }))} className="p-2 bg-blue-50 hover:bg-blue-100 dark:bg-blue-500/10 dark:hover:bg-blue-500/20 text-blue-600 dark:text-blue-400 rounded-lg transition-colors cursor-pointer" title={state.lang === 'en' ? 'Open subscriber management' : 'فتح إدارة المشترك'}>
+                  <button onClick={() => openSubscriberSettings(user)} className="p-2 bg-blue-50 hover:bg-blue-100 dark:bg-blue-500/10 dark:hover:bg-blue-500/20 text-blue-600 dark:text-blue-400 rounded-lg transition-colors cursor-pointer" title={state.lang === 'en' ? 'Open subscriber settings' : 'فتح إعدادات المشترك'}>
                     <Send size={16} className={isRTL ? 'rotate-180' : ''} />
                   </button>
                 </div>
@@ -162,7 +180,12 @@ export default function BillingTab({ state, setState }: BillingTabProps) {
                 {isRTL ? 'لا توجد حالات مرتفعة الخطورة حالياً.' : 'No high-risk churn cases at the moment.'}
               </div>
             ) : churnRisks.map(user => (
-              <div key={user.id} className="p-4 rounded-xl border border-rose-200 dark:border-rose-900/50 bg-rose-50/50 dark:bg-rose-500/5">
+              <div
+                key={user.id}
+                onDoubleClick={() => openSubscriberSettings(user)}
+                title={isRTL ? 'دبل كليك لفتح إعدادات المشترك' : 'Double-click to open subscriber settings'}
+                className="p-4 rounded-xl border border-rose-200 dark:border-rose-900/50 bg-rose-50/50 dark:bg-rose-500/5 cursor-pointer"
+              >
                 <div className="flex justify-between items-start mb-3">
                   <div>
                     <h4 className="font-semibold text-slate-800 dark:text-slate-200 text-sm">{user.fullName}</h4>
@@ -183,7 +206,7 @@ export default function BillingTab({ state, setState }: BillingTabProps) {
                 </div>
                 
                 <div className="mt-3 flex gap-2">
-                  <button onClick={() => setState(prev => ({ ...prev, activeTab: 'management' }))} className="flex-1 py-2 bg-slate-900 hover:bg-slate-800 dark:bg-slate-100 dark:hover:bg-white text-white dark:text-slate-900 rounded-lg text-xs font-semibold transition-colors">
+                  <button onClick={() => openSubscriberSettings(user)} className="flex-1 py-2 bg-slate-900 hover:bg-slate-800 dark:bg-slate-100 dark:hover:bg-white text-white dark:text-slate-900 rounded-lg text-xs font-semibold transition-colors">
                     {state.lang === 'en' ? 'Open Subscriber' : 'فتح المشترك'}
                   </button>
                   <button onClick={() => setState(prev => ({ ...prev, activeTab: 'crm' }))} className="flex-1 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-lg text-xs font-semibold transition-colors">

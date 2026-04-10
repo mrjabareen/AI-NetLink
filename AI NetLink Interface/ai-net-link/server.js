@@ -94,7 +94,7 @@ const readJson = (filePath) => {
   try {
     const fullPath = getSafePath(DB_PATH, filePath);
     if (!fs.existsSync(fullPath)) return null;
-    const content = fs.readFileSync(fullPath, 'utf-8');
+    const content = stripBom(fs.readFileSync(fullPath, 'utf-8'));
     return JSON.parse(content);
   } catch (error) {
     console.error(`Error reading ${filePath}:`, error);
@@ -2632,7 +2632,7 @@ app.post('/api/subscribers/:id/extend', async (req, res) => {
         let foundFile = null;
 
         for (const file of files) {
-            const content = JSON.parse(fs.readFileSync(getSafePath(subDir, file), 'utf-8'));
+            const content = readJsonFile(getSafePath(subDir, file));
             if (String(content.id) === String(targetId) || `SUB-${content.id}` === targetIdStr) {
                 subscriberData = content;
                 foundFile = file;
@@ -2704,7 +2704,7 @@ app.post('/api/subscribers/:id/activate', async (req, res) => {
 
         for (const file of files) {
             try {
-                const content = JSON.parse(fs.readFileSync(getSafePath(subDir, file), 'utf-8'));
+                const content = readJsonFile(getSafePath(subDir, file));
                 const numericMatch = file.match(/^(\d+)_/);
                 const fileNum = numericMatch ? numericMatch[1] : null;
 
@@ -2835,7 +2835,7 @@ app.post('/api/subscribers/:id/sync-mikrotik', async (req, res) => {
 
     for (const file of files) {
         try {
-            const content = JSON.parse(fs.readFileSync(getSafePath(subDir, file), 'utf-8'));
+            const content = readJsonFile(getSafePath(subDir, file));
             const numericMatch = file.match(/^(\d+)_/);
             const fileNum = numericMatch ? numericMatch[1] : null;
 
@@ -3039,8 +3039,7 @@ app.get('/api/managers', (req, res) => {
     
     const files = fs.readdirSync(dirPath).filter(f => f.endsWith('.json'));
     const users = files.map((file) => {
-      const content = fs.readFileSync(getSafePath(dirPath, file), 'utf-8');
-      const m = JSON.parse(content);
+      const m = readJsonFile(getSafePath(dirPath, file));
       
       const roleStr = m['الصلاحية'] || '';
       let roleKey = 'admin';
@@ -3053,13 +3052,15 @@ app.get('/api/managers', (req, res) => {
         username: m['اسم الدخول'] || '',
         role: roleKey, // Maps to sas4_manager or admin
         permissions: Array.isArray(m.permissions) ? m.permissions : ['view_dashboard', 'access_chat', 'view_subscribers'],
-        status: 'active',
+        status: m.status || m['الحالة'] || 'active',
         joinDate: m['تاريخ الانشاء'] || '2024-01-01',
         lastLogin: m.lastLogin || 'Never',
         balance: Number(m.balance || m['الرصيد'] || 0),
         commissionRate: Number(m.commissionRate || m['نسبة العمولة'] || 0),
         maxTxLimit: Number(m.maxTxLimit || m['الحد المالي'] || 0),
         isLimitEnabled: Boolean(m.isLimitEnabled),
+        debtLimit: Number(m.debtLimit || m['حد الاستدانة'] || 0),
+        isDebtLimitEnabled: Boolean(m.isDebtLimitEnabled),
         groupId: m.groupId || ''
       };
     });
@@ -3080,8 +3081,7 @@ app.get('/api/managers/raw', (req, res) => {
 
     const files = fs.readdirSync(dirPath).filter(f => f.endsWith('.json'));
     const users = files.map((file) => {
-      const content = fs.readFileSync(getSafePath(dirPath, file), 'utf-8');
-      const m = JSON.parse(content);
+      const m = readJsonFile(getSafePath(dirPath, file));
       return { id: file.replace('.json', ''), ...m };
     });
 
@@ -3139,7 +3139,7 @@ app.put('/api/managers/raw/:id', (req, res) => {
     if (!targetFile) return res.status(404).json({ error: 'Manager not found' });
 
     const filePath = getSafePath(dirPath, targetFile);
-    const existingContent = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+    const existingContent = readJsonFile(filePath);
     const body = req.body || {};
     
     const updatedContent = { ...existingContent, ...body };
@@ -3201,12 +3201,18 @@ app.post('/api/managers/:id/topup', (req, res) => {
     if (!targetFile) return res.status(404).json({ error: 'Manager not found' });
 
     const filePath = getSafePath(dirPath, targetFile);
-    const existingContent = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+    const existingContent = readJsonFile(filePath);
     const currentBalance = Number(existingContent.balance || existingContent['الرصيد'] || 0);
     const newBalance = currentBalance + amount;
+    const explicitDebtLimit = Number(existingContent.debtLimit || existingContent['حد الاستدانة'] || 0);
+    const legacyDebtLimit = Number(existingContent.maxTxLimit || existingContent['الحد المالي'] || 0);
+    const effectiveDebtLimit = Boolean(existingContent.isDebtLimitEnabled)
+      ? explicitDebtLimit
+      : (explicitDebtLimit > 0 ? explicitDebtLimit : ((!existingContent.isLimitEnabled && legacyDebtLimit > 0) ? legacyDebtLimit : 0));
+    const minimumAllowedBalance = effectiveDebtLimit > 0 ? -effectiveDebtLimit : 0;
 
-    if (newBalance < 0) {
-      return res.status(400).json({ error: 'Insufficient manager balance' });
+    if (newBalance < minimumAllowedBalance) {
+      return res.status(400).json({ error: 'Debt limit exceeded' });
     }
 
     const updatedContent = {
@@ -3234,8 +3240,7 @@ app.get('/api/subscribers', (req, res) => {
     
     const files = fs.readdirSync(dirPath).filter(f => f.endsWith('.json'));
     const subscribers = files.map(file => {
-      const content = fs.readFileSync(getSafePath(dirPath, file), 'utf-8');
-      const s = JSON.parse(content);
+      const s = readJsonFile(getSafePath(dirPath, file));
       const rawId = String(s.id || file.split('_')[0] || Math.floor(Math.random() * 1000));
       const firstName = s.firstname || s.firstName || s['الاسم الأول'] || s['الاسم الاول'] || '';
       const lastName = s.lastname || s.lastName || s['اسم العائلة'] || s['الاسم الثاني'] || '';
@@ -3364,7 +3369,7 @@ app.put('/api/subscribers/:id', (req, res) => {
       const match = f.match(/^(\d+)_/);
       if (match && match[1] === targetId) return true;
       try {
-        const content = JSON.parse(fs.readFileSync(getSafePath(dirPath, f), 'utf-8'));
+        const content = readJsonFile(getSafePath(dirPath, f));
         if (String(content.id) === targetId || `SUB-${content.id}` === targetIdStr) return true;
       } catch (e) {}
       return false;
@@ -3373,7 +3378,7 @@ app.put('/api/subscribers/:id', (req, res) => {
     if (!targetFile) return res.status(404).json({ error: 'Subscriber not found' });
     
     const filePath = getSafePath(dirPath, targetFile);
-    const existingContent = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+    const existingContent = readJsonFile(filePath);
     const body = req.body || {};
     const normalizedExpiry = String(body.expiry || body.expiration || body['تاريخ الانتهاء'] || body['تاريخ انتهاء الاشتراك'] || body['تاريخ ناهية الاشتراك'] || body['تاريخ النهاية'] || '').trim();
     const normalizedExpiryTime = String(body.expiry_time || body.expiryTime || body['وقت الانتهاء'] || body['وقت نهاية الاشتراك'] || '').trim();
@@ -3437,7 +3442,7 @@ app.delete('/api/subscribers/:id', (req, res) => {
       const match = f.match(/^(\d+)_/);
       if (match && match[1] === targetId) return true;
       try {
-        const content = JSON.parse(fs.readFileSync(getSafePath(dirPath, f), 'utf-8'));
+        const content = readJsonFile(getSafePath(dirPath, f));
         if (String(content.id) === targetId || `SUB-${content.id}` === targetIdStr) return true;
       } catch (e) {}
       return false;
@@ -3462,8 +3467,7 @@ app.get('/api/suppliers', (req, res) => {
     }
     const files = fs.readdirSync(dirPath).filter(f => f.endsWith('.json'));
     const suppliers = files.map((file) => {
-      const content = fs.readFileSync(getSafePath(dirPath, file), 'utf-8');
-      const s = JSON.parse(content);
+      const s = readJsonFile(getSafePath(dirPath, file));
       return {
         id: file.replace('.json', ''),
         ...s
@@ -3522,7 +3526,7 @@ app.put('/api/suppliers/:id', (req, res) => {
     if (!targetFile) return res.status(404).json({ error: 'Supplier not found' });
 
     const filePath = getSafePath(dirPath, targetFile);
-    const existingContent = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+    const existingContent = readJsonFile(filePath);
     const body = req.body || {};
     const updatedContent = { ...existingContent, ...body };
     delete updatedContent.id;
@@ -3574,8 +3578,7 @@ app.get('/api/investors', (req, res) => {
     }
     const files = fs.readdirSync(dirPath).filter(f => f.endsWith('.json'));
     const investors = files.map((file) => {
-      const content = fs.readFileSync(getSafePath(dirPath, file), 'utf-8');
-      const inv = JSON.parse(content);
+      const inv = readJsonFile(getSafePath(dirPath, file));
       const fileIdMatch = file.match(/^(\d+)_/);
       const stableInvestorId = fileIdMatch ? `SH-${fileIdMatch[1]}` : file.replace('.json', '');
       const totalShares = inv['كمية الأسهم الكاملة'] || 0;
@@ -3664,7 +3667,7 @@ app.put('/api/investors/:id', (req, res) => {
     if (!targetFile) return res.status(404).json({ error: 'Investor not found' });
 
     const filePath = getSafePath(dirPath, targetFile);
-    const existingContent = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+    const existingContent = readJsonFile(filePath);
     const body = req.body || {};
     
     // Clean up virtual presentation fields before saving
@@ -3729,8 +3732,7 @@ const setupCrudRoutes = (resourceName, subDir, nameKey) => {
       if (!fs.existsSync(dirPath)) return res.json({ data: [] });
       const files = fs.readdirSync(dirPath).filter(f => f.endsWith('.json'));
       const data = files.map((file, index) => {
-        const content = fs.readFileSync(getSafePath(dirPath, file), 'utf-8');
-        return { id: file.replace('.json', ''), ...JSON.parse(content) };
+        return { id: file.replace('.json', ''), ...readJsonFile(getSafePath(dirPath, file)) };
       });
       res.json({ data });
     } catch (error) { res.status(500).json({ error: `Failed to fetch ${resourceName}` }); }
@@ -3769,7 +3771,7 @@ const setupCrudRoutes = (resourceName, subDir, nameKey) => {
       const targetFile = files.find(f => f.replace('.json', '') === targetId || f.startsWith(`${targetId.split('_')[0]}_`));
       if (!targetFile) return res.status(404).json({ error: 'Not found' });
       const filePath = getSafePath(dirPath, targetFile);
-      const existing = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+      const existing = readJsonFile(filePath);
       const updated = { ...existing, ...(req.body || {}) };
       delete updated.id;
       let newFileName = targetFile;
@@ -4273,7 +4275,7 @@ async function checkSubscriberExpiries() {
             const filePath = getSafePath(subDir, file);
             let subData;
             try {
-                subData = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+                subData = readJsonFile(filePath);
             } catch (e) { continue; }
 
             const status = subData['حالة الحساب'] || subData.status || '';

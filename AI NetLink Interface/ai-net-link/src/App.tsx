@@ -36,8 +36,9 @@ import Login from './components/Login';
 import { fetchManagers } from './api';
 import { getDefaultTabForRole, getPathForTab, resolveRouteFromPath } from './navigation';
 import { hasPermission as canAccess } from './permissions';
-import { AppToastPayload } from './utils/notify';
+import { AppToastPayload, toastInfo } from './utils/notify';
 import { mergeTeamMembersWithStoredFinancialState, readStoredFinancialState, writeStoredFinancialState } from './utils/financialState';
+import { computeCentralBalanceFromTeamMembers, MASTER_CAPITAL } from './utils/financeMath';
 
 const DEFAULT_AI_SETTINGS = {
   primaryModel: 'gemini-3-flash-preview',
@@ -103,6 +104,8 @@ const SESSION_USER_KEY = 'sas4_session_user';
 const SHARED_SESSION_USER_KEY = 'sas4_shared_session_user';
 const OPEN_TAB_COUNT_KEY = 'sas4_open_tab_count';
 const SECURITY_GROUPS_KEY = 'sas4_security_groups';
+const FINANCIAL_RESET_MARKER_KEY = 'sas4_financial_reset_apr_2026_v1';
+const FINANCIAL_STATE_KEY = 'sas4_financial_state_v2';
 const STORED_FINANCIAL_STATE = readStoredFinancialState();
 const STORED_SECURITY_GROUPS = (() => {
   if (typeof window === 'undefined') return null;
@@ -132,10 +135,12 @@ export default function App() {
         permissions: ['view_dashboard', 'access_executive', 'view_central_balance', 'manage_security_groups', 'manage_admins'], 
         status: 'active', 
         joinDate: '2026-01-01', 
-        balance: 50000, 
+        balance: 0, 
         commissionRate: 0,
         maxTxLimit: 0,
-        isLimitEnabled: false
+        isLimitEnabled: false,
+        debtLimit: 0,
+        isDebtLimitEnabled: false
       },
       { 
         id: '5', 
@@ -150,9 +155,12 @@ export default function App() {
         balance: 0, 
         commissionRate: 10,
         maxTxLimit: 0,
-        isLimitEnabled: false
+        isLimitEnabled: false,
+        debtLimit: 0,
+        isDebtLimitEnabled: false
       },
     ], STORED_FINANCIAL_STATE);
+  const initialCentralBalance = computeCentralBalanceFromTeamMembers(defaultTeamMembers);
 
   const [state, setState] = useState<AppState>({
     lang: 'ar',
@@ -167,7 +175,7 @@ export default function App() {
     impersonationSource: null,
     isAuthenticated: false,
     currency: 'ILS',
-    centralBalance: STORED_FINANCIAL_STATE?.centralBalance ?? 50000,
+    centralBalance: initialCentralBalance,
     financialTransactions: STORED_FINANCIAL_STATE?.financialTransactions?.length ? STORED_FINANCIAL_STATE.financialTransactions : [],
     teamMembers: defaultTeamMembers,
     securityGroups: STORED_SECURITY_GROUPS ?? [
@@ -304,6 +312,26 @@ export default function App() {
   });
 
   const isRTL = state.lang === 'ar';
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (window.localStorage.getItem(FINANCIAL_RESET_MARKER_KEY) === 'done') return;
+
+    setState((prev) => {
+      const zeroedTeamMembers = prev.teamMembers.map((member) => ({ ...member, balance: 0 }));
+      return {
+        ...prev,
+        centralBalance: MASTER_CAPITAL,
+        financialTransactions: [],
+        teamMembers: zeroedTeamMembers,
+        currentUser: prev.currentUser ? { ...prev.currentUser, balance: 0 } : null,
+        impersonationSource: prev.impersonationSource ? { ...prev.impersonationSource, balance: 0 } : null,
+      };
+    });
+
+    window.localStorage.removeItem(FINANCIAL_STATE_KEY);
+    window.localStorage.setItem(FINANCIAL_RESET_MARKER_KEY, 'done');
+  }, []);
 
   // Apply theme to HTML element
   useEffect(() => {
@@ -486,6 +514,12 @@ export default function App() {
   }, [state.centralBalance, state.financialTransactions, state.teamMembers]);
 
   useEffect(() => {
+    const computedCentralBalance = computeCentralBalanceFromTeamMembers(state.teamMembers);
+    if (Math.abs(computedCentralBalance - state.centralBalance) < 0.0001) return;
+    setState(prev => ({ ...prev, centralBalance: computedCentralBalance }));
+  }, [state.centralBalance, state.teamMembers]);
+
+  useEffect(() => {
     if (!state.currentUser || state.role === 'super_admin') return;
 
     const currentUserId = String(state.currentUser?.id || '').trim();
@@ -506,6 +540,7 @@ export default function App() {
       email: matchedMember.email || state.currentUser.email,
       username: matchedMember.username || state.currentUser.username,
       groupId: matchedMember.groupId || state.currentUser.groupId,
+      status: (matchedMember.status || state.currentUser.status || 'active') as 'active' | 'inactive',
       permissions: matchedMember.groupId
         ? (state.securityGroups.find(group => group.id === matchedMember.groupId)?.permissions || matchedMember.permissions || state.currentUser.permissions)
         : (matchedMember.permissions || state.currentUser.permissions),
@@ -513,6 +548,8 @@ export default function App() {
       commissionRate: Number(matchedMember.commissionRate || 0),
       maxTxLimit: Number(matchedMember.maxTxLimit || 0),
       isLimitEnabled: Boolean(matchedMember.isLimitEnabled),
+      debtLimit: Number(matchedMember.debtLimit || 0),
+      isDebtLimitEnabled: Boolean(matchedMember.isDebtLimitEnabled),
     };
 
     if (JSON.stringify(nextUser) === JSON.stringify(state.currentUser)) return;
@@ -592,6 +629,145 @@ export default function App() {
   }, []);
 
   const hasPermission = (perm: Permission) => canAccess(state, perm);
+  const canAccessManagementArea = () => (
+    hasPermission('view_admins') ||
+    hasPermission('view_suppliers') ||
+    hasPermission('view_shareholders') ||
+    hasPermission('view_iptv') ||
+    hasPermission('manage_security_groups')
+  );
+  const canAccessTab = (tab: Tab) => {
+    switch (tab) {
+      case 'dashboard': return hasPermission('view_dashboard');
+      case 'executive': return hasPermission('access_executive');
+      case 'topology': return hasPermission('view_topology');
+      case 'billing': return hasPermission('view_billing');
+      case 'inventory': return hasPermission('view_inventory');
+      case 'crm': return hasPermission('view_crm');
+      case 'field': return hasPermission('view_field_service');
+      case 'reports': return hasPermission('create_reports');
+      case 'portal': return hasPermission('manage_portal');
+      case 'investors': return state.role === 'shareholder' || hasPermission('view_investors');
+      case 'suppliers': return hasPermission('view_suppliers');
+      case 'boi_expiry': return hasPermission('view_boi');
+      case 'management': return canAccessManagementArea();
+      case 'network_radius': return hasPermission('view_admins');
+      case 'financial': return hasPermission('view_financial');
+      case 'chat': return hasPermission('access_chat');
+      case 'security': return hasPermission('view_security');
+      case 'analytics': return hasPermission('view_reports');
+      case 'search': return hasPermission('perform_search');
+      case 'settings': return hasPermission('edit_settings');
+      case 'files': return hasPermission('access_files');
+      default: return false;
+    }
+  };
+
+  const getFirstAccessibleTab = (): Tab => {
+    const preferredDefault = getDefaultTabForRole(state.role);
+    if (canAccessTab(preferredDefault)) return preferredDefault;
+
+    const orderedTabs: Tab[] = [
+      'dashboard', 'management', 'financial', 'billing', 'crm', 'boi_expiry', 'investors',
+      'suppliers', 'search', 'settings', 'files', 'chat', 'reports', 'analytics',
+      'inventory', 'field', 'portal', 'topology', 'executive', 'security', 'network_radius'
+    ];
+
+    return orderedTabs.find((tab) => canAccessTab(tab)) || 'dashboard';
+  };
+  const visibleActiveTab = canAccessTab(state.activeTab) ? state.activeTab : getFirstAccessibleTab();
+  const activeContentKey = visibleActiveTab === 'settings'
+    ? `${visibleActiveTab}:${state.activeSettingsCategory}`
+    : visibleActiveTab;
+
+  let activeContent: React.ReactNode = null;
+  switch (visibleActiveTab) {
+    case 'dashboard':
+      activeContent = hasPermission('view_dashboard') ? <DashboardTab state={state} setState={setState} /> : null;
+      break;
+    case 'executive':
+      activeContent = hasPermission('access_executive') ? <ExecutiveTab state={state} /> : null;
+      break;
+    case 'topology':
+      activeContent = hasPermission('view_topology') ? <TopologyTab state={state} /> : null;
+      break;
+    case 'billing':
+      activeContent = hasPermission('view_billing') ? <BillingTab state={state} setState={setState} /> : null;
+      break;
+    case 'inventory':
+      activeContent = hasPermission('view_inventory') ? <InventoryTab state={state} /> : null;
+      break;
+    case 'crm':
+      activeContent = hasPermission('view_crm') ? <CrmTab state={state} /> : null;
+      break;
+    case 'field':
+      activeContent = hasPermission('view_field_service') ? <FieldServiceTab state={state} /> : null;
+      break;
+    case 'reports':
+      activeContent = hasPermission('create_reports') ? <ReportsTab state={state} /> : null;
+      break;
+    case 'portal':
+      activeContent = hasPermission('manage_portal') ? <PortalDesignerTab state={state} /> : null;
+      break;
+    case 'investors':
+      activeContent = (state.role === 'shareholder' || hasPermission('view_investors')) ? <InvestorsTab state={state} setState={setState} /> : null;
+      break;
+    case 'suppliers':
+      activeContent = hasPermission('view_suppliers') ? <SuppliersTab state={state} /> : null;
+      break;
+    case 'boi_expiry':
+      activeContent = hasPermission('view_boi') ? <BoiExpiryTab state={state} setState={setState} /> : null;
+      break;
+    case 'management':
+      activeContent = canAccessManagementArea() ? <ManagementTab state={state} setState={setState} /> : null;
+      break;
+    case 'network_radius':
+      activeContent = hasPermission('view_admins') ? <NetworkRadiusTab state={state} setState={setState} /> : null;
+      break;
+    case 'financial':
+      activeContent = hasPermission('view_financial') ? <FinancialDashboard state={state} setState={setState} /> : null;
+      break;
+    case 'chat':
+      activeContent = hasPermission('access_chat') ? <ChatTab state={state} /> : null;
+      break;
+    case 'security':
+      activeContent = hasPermission('view_security') ? <SecurityTab state={state} /> : null;
+      break;
+    case 'analytics':
+      activeContent = hasPermission('view_reports') ? <AnalyticsTab state={state} /> : null;
+      break;
+    case 'search':
+      activeContent = hasPermission('perform_search') ? <SearchTab state={state} setState={setState} /> : null;
+      break;
+    case 'settings':
+      activeContent = hasPermission('edit_settings') ? <SettingsTab state={state} setState={setState} /> : null;
+      break;
+    case 'files':
+      activeContent = hasPermission('access_files') ? <FilesTab state={state} setState={setState} /> : null;
+      break;
+    default:
+      activeContent = null;
+  }
+
+  useEffect(() => {
+    if (!state.isAuthenticated) return;
+    if (canAccessTab(state.activeTab)) return;
+
+    if (state.currentUser?.status === 'inactive') {
+      toastInfo(
+        state.lang === 'ar'
+          ? 'حسابك مجمد. يمكنك المشاهدة فقط، ولمتابعة أي إجراء يجب مراجعة مدراء النظام.'
+          : 'Your account is frozen. You can view only. Please contact system administrators for any action.',
+        state.lang === 'ar' ? 'الحساب مجمد' : 'Account Frozen'
+      );
+    }
+
+    const fallbackTab = getFirstAccessibleTab();
+    const fallbackPath = getPathForTab(fallbackTab, state.activeSettingsCategory);
+    skipNextStateUrlSyncRef.current = true;
+    setState(prev => ({ ...prev, activeTab: fallbackTab }));
+    if (location.pathname !== fallbackPath) navigate(fallbackPath, { replace: true });
+  }, [location.pathname, navigate, state.activeSettingsCategory, state.activeTab, state.isAuthenticated, state.role, state.securityGroups, state.currentUser]);
 
   if (!state.isAuthenticated) {
     return <Login state={state} setState={setState} />;
@@ -655,27 +831,15 @@ export default function App() {
         
         <div className="p-4 md:p-6 w-full max-w-[1600px] mx-auto flex-1 relative z-10 flex flex-col min-h-0">
           <AnimatePresence mode="wait">
-            {state.activeTab === 'dashboard' && hasPermission('view_dashboard') && <DashboardTab state={state} setState={setState} />}
-            {state.activeTab === 'executive' && hasPermission('access_executive') && <ExecutiveTab state={state} />}
-            {state.activeTab === 'topology' && hasPermission('view_topology') && <TopologyTab state={state} />}
-            {state.activeTab === 'billing' && hasPermission('view_billing') && <BillingTab state={state} setState={setState} />}
-            {state.activeTab === 'inventory' && hasPermission('view_inventory') && <InventoryTab state={state} />}
-            {state.activeTab === 'crm' && hasPermission('view_crm') && <CrmTab state={state} />}
-            {state.activeTab === 'field' && hasPermission('view_field_service') && <FieldServiceTab state={state} />}
-            {state.activeTab === 'reports' && hasPermission('create_reports') && <ReportsTab state={state} />}
-            {state.activeTab === 'portal' && hasPermission('manage_portal') && <PortalDesignerTab state={state} />}
-            {state.activeTab === 'investors' && (state.role === 'shareholder' || hasPermission('view_investors')) && <InvestorsTab state={state} setState={setState} />}
-            {state.activeTab === 'suppliers' && hasPermission('view_suppliers') && <SuppliersTab state={state} />}
-            {state.activeTab === 'boi_expiry' && hasPermission('view_boi') && <BoiExpiryTab state={state} setState={setState} />}
-            {state.activeTab === 'management' && hasPermission('view_admins') && <ManagementTab state={state} setState={setState} />}
-            {state.activeTab === 'network_radius' && hasPermission('view_admins') && <NetworkRadiusTab state={state} setState={setState} />}
-            {state.activeTab === 'financial' && hasPermission('view_financial') && <FinancialDashboard state={state} setState={setState} />}
-            {state.activeTab === 'chat' && hasPermission('access_chat') && <ChatTab state={state} />}
-            {state.activeTab === 'security' && hasPermission('view_security') && <SecurityTab state={state} />}
-            {state.activeTab === 'analytics' && hasPermission('view_reports') && <AnalyticsTab state={state} />}
-            {state.activeTab === 'search' && hasPermission('perform_search') && <SearchTab state={state} setState={setState} />}
-            {state.activeTab === 'settings' && hasPermission('edit_settings') && <SettingsTab state={state} setState={setState} />}
-            {state.activeTab === 'files' && hasPermission('access_files') && <FilesTab state={state} setState={setState} />}
+            <motion.div
+              key={activeContentKey}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              className="flex-1 min-h-0 flex flex-col"
+            >
+              {activeContent}
+            </motion.div>
           </AnimatePresence>
         </div>
       </main>

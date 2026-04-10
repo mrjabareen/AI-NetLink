@@ -121,11 +121,13 @@ export default function Login({ state, setState }: LoginProps) {
             role: (manager['الصلاحية'] === 'Manager-A' || manager['الصلاحية'] === 'Manager') ? 'sas4_manager' : 'admin',
             permissions: Array.isArray(manager.permissions) ? manager.permissions : [],
             groupId: manager.groupId || '',
-            status: 'active',
+            status: manager.status || manager['الحالة'] || 'active',
             balance: Number(manager.balance || manager['الرصيد'] || 0),
             commissionRate: Number(manager.commissionRate || manager['نسبة العمولة'] || 0),
             maxTxLimit: Number(manager.maxTxLimit || manager['الحد المالي'] || 0),
             isLimitEnabled: Boolean(manager.isLimitEnabled),
+            debtLimit: Number(manager.debtLimit || manager['حد الاستدانة'] || 0),
+            isDebtLimitEnabled: Boolean(manager.isDebtLimitEnabled),
           }))], STORED_FINANCIAL_STATE),
           role: user.role,
           activeTab: 'dashboard'
@@ -152,10 +154,13 @@ export default function Login({ state, setState }: LoginProps) {
           role: ((roleLabel === 'Manager-A' || roleLabel === 'Manager') ? 'sas4_manager' : 'admin') as Role,
           permissions: Array.isArray(matchedRawManager.permissions) ? matchedRawManager.permissions : [],
           groupId: matchedRawManager.groupId || '',
+          status: (matchedRawManager.status || matchedRawManager['الحالة'] || 'active') as 'active' | 'inactive',
           balance: Number(matchedRawManager.balance || matchedRawManager['الرصيد'] || 0),
           commissionRate: Number(matchedRawManager.commissionRate || matchedRawManager['نسبة العمولة'] || 0),
           maxTxLimit: Number(matchedRawManager.maxTxLimit || matchedRawManager['الحد المالي'] || 0),
           isLimitEnabled: Boolean(matchedRawManager.isLimitEnabled),
+          debtLimit: Number(matchedRawManager.debtLimit || matchedRawManager['حد الاستدانة'] || 0),
+          isDebtLimitEnabled: Boolean(matchedRawManager.isDebtLimitEnabled),
         };
         persistSession(user);
         setState(prev => ({
@@ -172,11 +177,13 @@ export default function Login({ state, setState }: LoginProps) {
             role: (manager['الصلاحية'] === 'Manager-A' || manager['الصلاحية'] === 'Manager') ? 'sas4_manager' : 'admin',
             permissions: Array.isArray(manager.permissions) ? manager.permissions : [],
             groupId: manager.groupId || '',
-            status: 'active',
+            status: manager.status || manager['الحالة'] || 'active',
             balance: Number(manager.balance || manager['الرصيد'] || 0),
             commissionRate: Number(manager.commissionRate || manager['نسبة العمولة'] || 0),
             maxTxLimit: Number(manager.maxTxLimit || manager['الحد المالي'] || 0),
             isLimitEnabled: Boolean(manager.isLimitEnabled),
+            debtLimit: Number(manager.debtLimit || manager['حد الاستدانة'] || 0),
+            isDebtLimitEnabled: Boolean(manager.isDebtLimitEnabled),
           }))], STORED_FINANCIAL_STATE),
           role: user.role,
           activeTab: user.role === 'shareholder' ? 'investors' : 'dashboard'

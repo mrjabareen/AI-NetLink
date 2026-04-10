@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { motion } from 'motion/react';
-import { Wallet, ArrowUpRight, ArrowDownLeft, History, Users, Settings2, Plus, ArrowRight, ShieldCheck, TrendingUp, PieChart, Landmark, Percent, Save, RefreshCw } from 'lucide-react';
+import { Wallet, ArrowUpRight, ArrowDownLeft, History, Users, Settings2, Plus, ArrowRight, ShieldCheck, TrendingUp, PieChart, Landmark, Percent, Save, RefreshCw, AlertTriangle, Scale } from 'lucide-react';
 import { AppState, FinancialTransaction, TeamMember } from '../types';
 import { dict } from '../dict';
 import { formatCurrency } from '../utils/currency';
@@ -8,11 +8,15 @@ import { formatNumber } from '../utils/format';
 import { toastError, toastSuccess } from '../utils/notify';
 import AppModal from './AppModal';
 import { topUpManager, updateManager } from '../api';
+import { computeCentralBalanceFromTeamMembers, computeFinancialReconciliation } from '../utils/financeMath';
 
 interface FinancialDashboardProps {
   state: AppState;
   setState: React.Dispatch<React.SetStateAction<AppState>>;
 }
+
+const SEARCH_SETTINGS_TARGET_KEY = 'sas4_search_settings_target';
+const ACTIVE_SUBTAB_KEY = 'sas4_active_subtab';
 
 export default function FinancialDashboard({ state, setState }: FinancialDashboardProps) {
   const t = dict[state.lang];
@@ -28,6 +32,17 @@ export default function FinancialDashboard({ state, setState }: FinancialDashboa
     .filter(m => m.role === 'admin' || m.role === 'sas4_manager')
     .map(agent => ({ ...agent, balance: Number(agent.balance || 0), commissionRate: Number(agent.commissionRate || 0) }));
   const totalAgentBalances = agents.reduce((acc, curr) => acc + Number(curr.balance || 0), 0);
+  const reconciliation = computeFinancialReconciliation(state.teamMembers, state.centralBalance);
+
+  const openManagerSettings = (agent: TeamMember) => {
+    localStorage.setItem(ACTIVE_SUBTAB_KEY, 'managers');
+    localStorage.setItem(SEARCH_SETTINGS_TARGET_KEY, JSON.stringify({
+      type: 'managers',
+      targetSubTab: 'managers',
+      item: agent,
+    }));
+    setState(prev => ({ ...prev, activeTab: 'management' }));
+  };
 
   useEffect(() => {
     setCommissionDrafts(prev => {
@@ -67,14 +82,18 @@ export default function FinancialDashboard({ state, setState }: FinancialDashboa
         status: 'completed',
       };
 
-      setState(prev => ({
-        ...prev,
-        centralBalance: prev.centralBalance - amount,
-        financialTransactions: [newTransaction, ...prev.financialTransactions],
-        teamMembers: prev.teamMembers.map(m => 
+      setState(prev => {
+        const nextTeamMembers = prev.teamMembers.map(m =>
           m.id === selectedAgent.id ? { ...m, balance: Number(m.balance || 0) + amount } : m
-        )
-      }));
+        );
+
+        return {
+          ...prev,
+          centralBalance: computeCentralBalanceFromTeamMembers(nextTeamMembers),
+          financialTransactions: [newTransaction, ...prev.financialTransactions],
+          teamMembers: nextTeamMembers
+        };
+      });
 
       setIsTopUpModalOpen(false);
       setSelectedAgent(null);
@@ -133,8 +152,9 @@ export default function FinancialDashboard({ state, setState }: FinancialDashboa
       animate={{ opacity: 1, y: 0 }} 
       className="flex-1 flex flex-col min-h-0 bg-slate-50/50 dark:bg-[#09090B]/50 p-4 md:p-8"
     >
-      <header className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
+      <header className="mb-8 flex flex-col gap-5">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+          <div>
           <h2 className="text-3xl font-black text-slate-900 dark:text-white flex items-center gap-3">
             <Landmark className="text-teal-500" size={32} />
             {t.financial.title}
@@ -143,13 +163,15 @@ export default function FinancialDashboard({ state, setState }: FinancialDashboa
             {t.financial.subtitle}
           </p>
         </div>
+        </div>
 
-        <div className="flex bg-white dark:bg-[#18181B] p-1 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
+        <div className="w-full overflow-x-auto pb-1">
+          <div className="inline-flex min-w-full sm:min-w-0 flex-wrap gap-2 bg-white dark:bg-[#18181B] p-1.5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
           {(['overview', 'transactions', 'commissions'] as const).map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveSubTab(tab)}
-              className={`px-6 py-2 rounded-xl text-sm font-bold transition-all ${
+              className={`flex-1 sm:flex-none px-5 py-2.5 rounded-xl text-sm font-bold transition-all whitespace-nowrap ${
                 activeSubTab === tab 
                   ? 'bg-teal-500 text-white shadow-lg shadow-teal-500/20' 
                   : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
@@ -159,12 +181,13 @@ export default function FinancialDashboard({ state, setState }: FinancialDashboa
                tab === 'transactions' ? t.financial.transactions : t.financial.commissions}
             </button>
           ))}
+          </div>
         </div>
       </header>
 
       {/* Summary Cards */}
       {activeSubTab === 'overview' && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-4 gap-6 mb-8 shrink-0">
           <motion.div whileHover={{ y: -5 }} className="glass-card p-6 bg-gradient-to-br from-teal-500/10 to-transparent border-teal-500/20">
             <div className="flex justify-between items-start mb-4">
               <div className="p-3 bg-teal-500/20 rounded-2xl text-teal-500">
@@ -210,6 +233,21 @@ export default function FinancialDashboard({ state, setState }: FinancialDashboa
             <h3 className="text-slate-500 dark:text-slate-400 text-sm font-bold uppercase tracking-wider">{t.financial.agentBalances}</h3>
             <p className="text-3xl font-black text-slate-900 dark:text-white mt-1">
               {formatCurrency(totalAgentBalances, state.currency, state.lang)}
+            </p>
+          </motion.div>
+
+          <motion.div whileHover={{ y: -5 }} className={`glass-card p-6 border ${reconciliation.isBalanced ? 'bg-gradient-to-br from-emerald-500/10 to-transparent border-emerald-500/20' : 'bg-gradient-to-br from-rose-500/10 to-transparent border-rose-500/20'}`}>
+            <div className="flex justify-between items-start mb-4">
+              <div className={`p-3 rounded-2xl ${reconciliation.isBalanced ? 'bg-emerald-500/20 text-emerald-500' : 'bg-rose-500/20 text-rose-500'}`}>
+                {reconciliation.isBalanced ? <Scale size={24} /> : <AlertTriangle size={24} />}
+              </div>
+            </div>
+            <h3 className="text-slate-500 dark:text-slate-400 text-sm font-bold uppercase tracking-wider">{isRTL ? 'حالة المطابقة المحاسبية' : 'Accounting Reconciliation'}</h3>
+            <p className={`text-xl font-black mt-2 ${reconciliation.isBalanced ? 'text-emerald-500' : 'text-rose-500'}`}>
+              {reconciliation.isBalanced ? (isRTL ? 'متوازن 100%' : 'Balanced 100%') : (isRTL ? 'يوجد فرق محاسبي' : 'Accounting Mismatch')}
+            </p>
+            <p className="mt-3 text-xs font-bold text-slate-500 dark:text-slate-400">
+              {isRTL ? 'فرق المطابقة' : 'Reconciliation Delta'}: {formatCurrency(reconciliation.delta, state.currency, state.lang)}
             </p>
           </motion.div>
         </div>
@@ -273,7 +311,15 @@ export default function FinancialDashboard({ state, setState }: FinancialDashboa
               </h3>
               <div className="space-y-4 overflow-y-auto custom-scrollbar pr-2">
                 {agents.map(agent => (
-                  <div key={agent.id} className="p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#09090B] flex items-center justify-between group hover:border-teal-500/50 transition-all">
+                  <div
+                    key={agent.id}
+                    onClick={(event) => {
+                      if (event.detail === 2) openManagerSettings(agent);
+                    }}
+                    onDoubleClick={() => openManagerSettings(agent)}
+                    title={isRTL ? 'دبل كليك لفتح إعدادات المدير' : 'Double-click to open manager settings'}
+                    className="p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#09090B] flex items-center justify-between group hover:border-teal-500/50 transition-all cursor-pointer"
+                  >
                     <div className="flex items-center gap-4">
                       <div className="w-12 h-12 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-500 font-black">
                         {agent.name.charAt(0)}
@@ -300,6 +346,33 @@ export default function FinancialDashboard({ state, setState }: FinancialDashboa
                     </div>
                   </div>
                 ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeSubTab === 'overview' && (
+          <div className="glass-card mt-8 p-6">
+            <h3 className="font-black text-slate-800 dark:text-white mb-4 flex items-center gap-2">
+              <Scale size={20} className="text-teal-500" />
+              {isRTL ? 'تقرير المطابقة المحاسبية' : 'Accounting Reconciliation Report'}
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-[#09090B] p-4">
+                <p className="text-xs font-bold text-slate-500">{isRTL ? 'رأس المال الرسمي' : 'Official Master Capital'}</p>
+                <p className="mt-2 text-xl font-black text-slate-900 dark:text-white">{formatCurrency(reconciliation.masterCapital, state.currency, state.lang)}</p>
+              </div>
+              <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-[#09090B] p-4">
+                <p className="text-xs font-bold text-slate-500">{isRTL ? 'الرصيد المركزي الحالي' : 'Current Central Balance'}</p>
+                <p className="mt-2 text-xl font-black text-slate-900 dark:text-white">{formatCurrency(reconciliation.centralBalance, state.currency, state.lang)}</p>
+              </div>
+              <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-[#09090B] p-4">
+                <p className="text-xs font-bold text-slate-500">{isRTL ? 'مجموع المحافظ النشطة' : 'Total Active Wallets'}</p>
+                <p className="mt-2 text-xl font-black text-slate-900 dark:text-white">{formatCurrency(reconciliation.walletBalances, state.currency, state.lang)}</p>
+              </div>
+              <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-[#09090B] p-4">
+                <p className="text-xs font-bold text-slate-500">{isRTL ? 'المركزي المتوقع' : 'Expected Central Balance'}</p>
+                <p className="mt-2 text-xl font-black text-slate-900 dark:text-white">{formatCurrency(reconciliation.expectedCentralBalance, state.currency, state.lang)}</p>
               </div>
             </div>
           </div>
@@ -340,9 +413,26 @@ export default function FinancialDashboard({ state, setState }: FinancialDashboa
                           </span>
                         </td>
                         <td className="px-6 py-4 text-xs font-bold text-slate-700 dark:text-slate-300">{tx.fromName}</td>
-                        <td className="px-6 py-4 text-xs font-bold text-slate-700 dark:text-slate-300">{tx.toName}</td>
+                        <td className="px-6 py-4 text-xs font-bold text-slate-700 dark:text-slate-300">
+                          <div>{tx.toName}</div>
+                          {tx.metadata?.packageName && (
+                            <div className="mt-1 text-[10px] font-medium text-slate-500 dark:text-slate-400">
+                              {isRTL ? 'الباقة:' : 'Package:'} {tx.metadata.packageName}
+                            </div>
+                          )}
+                        </td>
                         <td className={`px-6 py-4 text-sm font-black text-right ${tx.type === 'withdraw' ? 'text-rose-500' : 'text-emerald-500'}`}>
-                          {formatCurrency(tx.amount, state.currency, state.lang)}
+                          <div>{formatCurrency(tx.amount, state.currency, state.lang)}</div>
+                          {(tx.metadata?.agentCommission !== undefined || tx.metadata?.deductedFromManager !== undefined) && (
+                            <div className="mt-1 text-[10px] font-bold text-slate-500 dark:text-slate-400">
+                              {tx.metadata?.agentCommission !== undefined && (
+                                <span>{isRTL ? 'الربح:' : 'Profit:'} {formatCurrency(tx.metadata.agentCommission, state.currency, state.lang)}</span>
+                              )}{' '}
+                              {tx.metadata?.deductedFromManager !== undefined && (
+                                <span>{isRTL ? 'الخصم:' : 'Deducted:'} {formatCurrency(tx.metadata.deductedFromManager, state.currency, state.lang)}</span>
+                              )}
+                            </div>
+                          )}
                         </td>
                         <td className="px-6 py-4 text-center">
                           <span className="text-[10px] font-black text-emerald-500 flex items-center justify-center gap-1">

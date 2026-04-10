@@ -512,7 +512,8 @@ export const dict = {
         topup_sub: "Subscriber Charge",
         commission: "Commission Earned",
         transfer: "Internal Transfer",
-        withdraw: "Withdrawal"
+        withdraw: "Withdrawal",
+        wallet_withdraw: "Wallet Settlement"
       }
     },
     currencies: { ILS: "₪ ILS", USD: "$ USD", JOD: "JD JOD" }
@@ -1023,7 +1024,8 @@ export const dict = {
         topup_sub: "شحن مشترك",
         commission: "عمولة مكتسبة",
         transfer: "تحويل داخلي",
-        withdraw: "سحب رصيد"
+        withdraw: "سحب رصيد",
+        wallet_withdraw: "تسوية محفظة"
       }
     },
     currencies: { ILS: "₪ شيكل", USD: "$ دولار", JOD: "JD دينار" }

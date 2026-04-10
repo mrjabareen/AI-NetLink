@@ -69,16 +69,24 @@ export default function Sidebar({ state, setState }: SidebarProps) {
     { id: 'management', icon: ShieldCheck, label: t.nav.management, permission: 'view_admins' },
     { id: 'network_radius', icon: Server, label: t.nav.network_radius, permission: 'view_admins' },
     { id: 'search', icon: Search, label: t.nav.search, permission: 'perform_search' },
-    { id: 'financial', icon: Landmark, label: t.nav.financial, permission: 'view_admins' },
+    { id: 'financial', icon: Landmark, label: t.nav.financial, permission: 'view_financial' },
     { id: 'files', icon: FolderClosed, label: t.nav.files, permission: 'access_files' },
     { id: 'settings', icon: Settings, label: t.nav.settings, permission: 'edit_settings' },
   ];
 
   const hasPermission = (perm: Permission) => canAccess(state, perm);
 
+  const canAccessManagementArea =
+    hasPermission('view_admins') ||
+    hasPermission('view_suppliers') ||
+    hasPermission('view_shareholders') ||
+    hasPermission('view_iptv') ||
+    hasPermission('manage_security_groups');
+
   const navItems = allNavItems.filter(item => {
     // Investors portal is special for shareholders
     if (item.id === 'investors' && state.role === 'shareholder') return true;
+    if (item.id === 'management') return canAccessManagementArea;
     return hasPermission(item.permission);
   });
 

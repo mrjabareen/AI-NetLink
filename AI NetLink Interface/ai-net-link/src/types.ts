@@ -305,10 +305,13 @@ export interface User {
   shareholderId?: string; // Link to shareholder record if role is shareholder
   permissions: Permission[];
   groupId?: string;
+  status?: 'active' | 'inactive';
   balance?: number;
   commissionRate?: number;
   maxTxLimit?: number;
   isLimitEnabled?: boolean;
+  debtLimit?: number;
+  isDebtLimitEnabled?: boolean;
 }
 
 export interface ShareholderRecord {
@@ -334,7 +337,7 @@ export interface ShareholderRecord {
 export interface FinancialTransaction {
   id: string;
   date: string;
-  type: 'topup_agent' | 'topup_sub' | 'commission' | 'withdraw' | 'transfer';
+  type: 'topup_agent' | 'topup_sub' | 'commission' | 'withdraw' | 'wallet_withdraw' | 'transfer';
   amount: number;
   fromId: string;
   fromName: string;
@@ -346,6 +349,8 @@ export interface FinancialTransaction {
     packageId?: string;
     packageName?: string;
     agentCommission?: number;
+    commissionRate?: number;
+    deductedFromManager?: number;
   };
 }
 
@@ -368,6 +373,8 @@ export interface TeamMember {
   commissionRate: number; // Default commission percentage (e.g. 5 for 5%)
   maxTxLimit: number;
   isLimitEnabled: boolean;
+  debtLimit?: number;
+  isDebtLimitEnabled?: boolean;
 }
 
 export interface AppState {
