@@ -37,6 +37,7 @@ import { fetchManagers } from './api';
 import { getDefaultTabForRole, getPathForTab, resolveRouteFromPath } from './navigation';
 import { hasPermission as canAccess } from './permissions';
 import { AppToastPayload } from './utils/notify';
+import { mergeTeamMembersWithStoredFinancialState, readStoredFinancialState, writeStoredFinancialState } from './utils/financialState';
 
 const DEFAULT_AI_SETTINGS = {
   primaryModel: 'gemini-3-flash-preview',
@@ -101,31 +102,26 @@ const REMEMBERED_USER_KEY = 'sas4_remembered_user';
 const SESSION_USER_KEY = 'sas4_session_user';
 const SHARED_SESSION_USER_KEY = 'sas4_shared_session_user';
 const OPEN_TAB_COUNT_KEY = 'sas4_open_tab_count';
+const SECURITY_GROUPS_KEY = 'sas4_security_groups';
+const STORED_FINANCIAL_STATE = readStoredFinancialState();
+const STORED_SECURITY_GROUPS = (() => {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = window.localStorage.getItem(SECURITY_GROUPS_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+})();
 
 export default function App() {
   const location = useLocation();
   const navigate = useNavigate();
   const skipNextStateUrlSyncRef = useRef(false);
   const [toasts, setToasts] = useState<Array<AppToastPayload & { id: number }>>([]);
-  const [state, setState] = useState<AppState>({
-    lang: 'ar',
-    theme: 'dark',
-    activeTab: getInitialActiveTab(),
-    activeSettingsCategory: getInitialSettingsCategory(),
-    dashboardRefreshIntervalSec: getInitialDashboardRefreshIntervalSec(),
-    sidebarOpen: false,
-    mobileMenuOpen: false,
-    role: 'user',
-    currentUser: null,
-    impersonationSource: null,
-    isAuthenticated: false,
-    currency: 'ILS',
-    centralBalance: 50000,
-    financialTransactions: [
-      { id: 'TX-001', date: '2026-04-01 10:00', type: 'topup_agent', amount: 5000, fromId: 'aljabareen', fromName: 'Super Admin', toId: 'admin_1', toName: 'Branch Manager A', status: 'completed', note: 'Initial allocation' },
-      { id: 'TX-002', date: '2026-04-02 14:30', type: 'topup_sub', amount: 100, fromId: 'admin_1', fromName: 'Branch Manager A', toId: 'sub_441', toName: 'User 441', status: 'completed', metadata: { agentCommission: 10 } },
-    ],
-    teamMembers: [
+  const defaultTeamMembers = mergeTeamMembersWithStoredFinancialState([
       { 
         id: '0', 
         name: 'المدير العام (Super Admin)', 
@@ -151,13 +147,30 @@ export default function App() {
         permissions: ['view_dashboard', 'view_admins', 'wallet_deposit'], 
         status: 'active', 
         joinDate: '2026-02-15', 
-        balance: 2450, 
+        balance: 0, 
         commissionRate: 10,
-        maxTxLimit: 1000,
-        isLimitEnabled: true
+        maxTxLimit: 0,
+        isLimitEnabled: false
       },
-    ],
-    securityGroups: [
+    ], STORED_FINANCIAL_STATE);
+
+  const [state, setState] = useState<AppState>({
+    lang: 'ar',
+    theme: 'dark',
+    activeTab: getInitialActiveTab(),
+    activeSettingsCategory: getInitialSettingsCategory(),
+    dashboardRefreshIntervalSec: getInitialDashboardRefreshIntervalSec(),
+    sidebarOpen: false,
+    mobileMenuOpen: false,
+    role: 'user',
+    currentUser: null,
+    impersonationSource: null,
+    isAuthenticated: false,
+    currency: 'ILS',
+    centralBalance: STORED_FINANCIAL_STATE?.centralBalance ?? 50000,
+    financialTransactions: STORED_FINANCIAL_STATE?.financialTransactions?.length ? STORED_FINANCIAL_STATE.financialTransactions : [],
+    teamMembers: defaultTeamMembers,
+    securityGroups: STORED_SECURITY_GROUPS ?? [
       { 
         id: 'grp_admin', 
         name: 'كبار المسؤولين (Administrator)', 
@@ -307,7 +320,7 @@ export default function App() {
         const dbUsers = await fetchManagers();
         if (dbUsers && dbUsers.length > 0) {
           const SUPER_ADMIN = { id: '0', name: 'المدير العام (Super Admin)', email: 'mr.aljabareen@gmail.com', username: 'aljabareen', role: 'super_admin', permissions: ['all'], status: 'active', joinDate: '2026-01-01' };
-          setState(prev => ({ ...prev, teamMembers: [SUPER_ADMIN, ...dbUsers] }));
+          setState(prev => ({ ...prev, teamMembers: mergeTeamMembersWithStoredFinancialState([SUPER_ADMIN, ...dbUsers], readStoredFinancialState()) }));
         }
       } catch (err) {
         console.error('Failed to load managers globally', err);
@@ -357,6 +370,42 @@ export default function App() {
       }
     }
   }, [location.pathname]);
+
+  useEffect(() => {
+    const syncFromSharedSession = () => {
+      if (state.isAuthenticated) return;
+      const sharedSession = localStorage.getItem(SHARED_SESSION_USER_KEY);
+      if (!sharedSession) return;
+
+      try {
+        const user = JSON.parse(sharedSession);
+        setState(prev => ({
+          ...prev,
+          isAuthenticated: true,
+          currentUser: user,
+          impersonationSource: null,
+          role: user.role || 'user',
+        }));
+        sessionStorage.setItem(SESSION_USER_KEY, sharedSession);
+      } catch (_error) {
+        localStorage.removeItem(SHARED_SESSION_USER_KEY);
+      }
+    };
+
+    syncFromSharedSession();
+
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key !== SHARED_SESSION_USER_KEY) return;
+      if (event.newValue) {
+        syncFromSharedSession();
+      } else {
+        setState(prev => ({ ...prev, isAuthenticated: false, currentUser: null, impersonationSource: null, role: 'user' }));
+      }
+    };
+
+    window.addEventListener('storage', handleStorage);
+    return () => window.removeEventListener('storage', handleStorage);
+  }, [state.isAuthenticated]);
 
   useEffect(() => {
     const currentCount = Math.max(0, Number(localStorage.getItem(OPEN_TAB_COUNT_KEY) || '0'));
@@ -427,6 +476,54 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('sas4_dashboard_refresh_interval_sec', String(state.dashboardRefreshIntervalSec));
   }, [state.dashboardRefreshIntervalSec]);
+
+  useEffect(() => {
+    localStorage.setItem(SECURITY_GROUPS_KEY, JSON.stringify(state.securityGroups));
+  }, [state.securityGroups]);
+
+  useEffect(() => {
+    writeStoredFinancialState(state.centralBalance, state.financialTransactions, state.teamMembers);
+  }, [state.centralBalance, state.financialTransactions, state.teamMembers]);
+
+  useEffect(() => {
+    if (!state.currentUser || state.role === 'super_admin') return;
+
+    const currentUserId = String(state.currentUser?.id || '').trim();
+    const currentUsername = String(state.currentUser?.username || '').trim();
+
+    const matchedMember = state.teamMembers.find((member) => String(member.id) === currentUserId)
+      || state.teamMembers.find((member) => (
+        member.role !== 'super_admin' &&
+        currentUsername &&
+        String(member.username || '').trim() === currentUsername
+      ));
+
+    if (!matchedMember) return;
+
+    const nextUser = {
+      ...state.currentUser,
+      name: matchedMember.name || state.currentUser.name,
+      email: matchedMember.email || state.currentUser.email,
+      username: matchedMember.username || state.currentUser.username,
+      groupId: matchedMember.groupId || state.currentUser.groupId,
+      permissions: matchedMember.groupId
+        ? (state.securityGroups.find(group => group.id === matchedMember.groupId)?.permissions || matchedMember.permissions || state.currentUser.permissions)
+        : (matchedMember.permissions || state.currentUser.permissions),
+      balance: Number(matchedMember.balance || 0),
+      commissionRate: Number(matchedMember.commissionRate || 0),
+      maxTxLimit: Number(matchedMember.maxTxLimit || 0),
+      isLimitEnabled: Boolean(matchedMember.isLimitEnabled),
+    };
+
+    if (JSON.stringify(nextUser) === JSON.stringify(state.currentUser)) return;
+
+    setState(prev => ({ ...prev, currentUser: nextUser }));
+    sessionStorage.setItem(SESSION_USER_KEY, JSON.stringify(nextUser));
+    localStorage.setItem(SHARED_SESSION_USER_KEY, JSON.stringify(nextUser));
+    if (localStorage.getItem(REMEMBERED_USER_KEY)) {
+      localStorage.setItem(REMEMBERED_USER_KEY, JSON.stringify(nextUser));
+    }
+  }, [state.currentUser, state.role, state.securityGroups, state.teamMembers]);
 
   useEffect(() => {
     const routeState = resolveRouteFromPath(location.pathname);

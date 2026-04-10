@@ -84,7 +84,9 @@ export type Permission =
   | 'manage_tx_limits'
   | 'view_central_balance'
   | 'sub_activate'
+  | 'sub_add'
   | 'sub_edit'
+  | 'sub_edit_package'
   | 'sub_delete'
   | 'iptv_manage'
   | 'view_financial';
@@ -303,6 +305,10 @@ export interface User {
   shareholderId?: string; // Link to shareholder record if role is shareholder
   permissions: Permission[];
   groupId?: string;
+  balance?: number;
+  commissionRate?: number;
+  maxTxLimit?: number;
+  isLimitEnabled?: boolean;
 }
 
 export interface ShareholderRecord {

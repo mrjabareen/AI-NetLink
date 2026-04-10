@@ -1,12 +1,13 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { motion } from 'motion/react';
-import { Wallet, ArrowUpRight, ArrowDownLeft, History, Users, Settings2, Plus, ArrowRight, ShieldCheck, TrendingUp, PieChart, Landmark, Percent } from 'lucide-react';
+import { Wallet, ArrowUpRight, ArrowDownLeft, History, Users, Settings2, Plus, ArrowRight, ShieldCheck, TrendingUp, PieChart, Landmark, Percent, Save, RefreshCw } from 'lucide-react';
 import { AppState, FinancialTransaction, TeamMember } from '../types';
 import { dict } from '../dict';
 import { formatCurrency } from '../utils/currency';
 import { formatNumber } from '../utils/format';
 import { toastError, toastSuccess } from '../utils/notify';
 import AppModal from './AppModal';
+import { topUpManager, updateManager } from '../api';
 
 interface FinancialDashboardProps {
   state: AppState;
@@ -20,11 +21,27 @@ export default function FinancialDashboard({ state, setState }: FinancialDashboa
   const [selectedAgent, setSelectedAgent] = useState<TeamMember | null>(null);
   const [topUpAmount, setTopUpAmount] = useState('');
   const [activeSubTab, setActiveSubTab] = useState<'overview' | 'transactions' | 'commissions'>('overview');
+  const [commissionDrafts, setCommissionDrafts] = useState<Record<string, string>>({});
+  const [savingCommissionIds, setSavingCommissionIds] = useState<Record<string, boolean>>({});
 
-  const agents = state.teamMembers.filter(m => m.role === 'admin' || m.role === 'sas4_manager');
-  const totalAgentBalances = agents.reduce((acc, curr) => acc + curr.balance, 0);
+  const agents = state.teamMembers
+    .filter(m => m.role === 'admin' || m.role === 'sas4_manager')
+    .map(agent => ({ ...agent, balance: Number(agent.balance || 0), commissionRate: Number(agent.commissionRate || 0) }));
+  const totalAgentBalances = agents.reduce((acc, curr) => acc + Number(curr.balance || 0), 0);
 
-  const handleTopUp = () => {
+  useEffect(() => {
+    setCommissionDrafts(prev => {
+      const next = { ...prev };
+      agents.forEach(agent => {
+        if (next[agent.id] === undefined) {
+          next[agent.id] = String(Number(agent.commissionRate || 0));
+        }
+      });
+      return next;
+    });
+  }, [agents]);
+
+  const handleTopUp = async () => {
     if (!selectedAgent || !topUpAmount) {
       toastError(isRTL ? 'يرجى اختيار الوكيل وإدخال مبلغ صحيح.' : 'Select an agent and enter a valid amount.', isRTL ? 'بيانات ناقصة' : 'Missing Data');
       return;
@@ -35,34 +52,79 @@ export default function FinancialDashboard({ state, setState }: FinancialDashboa
       return;
     }
 
-    const newTransaction: FinancialTransaction = {
-      id: `TX-${Date.now()}`,
-      date: new Date().toLocaleString('en-US'),
-      type: 'topup_agent',
-      amount: amount,
-      fromId: state.currentUser?.id || 'admin',
-      fromName: state.currentUser?.name || 'Super Admin',
-      toId: selectedAgent.id,
-      toName: selectedAgent.name,
-      status: 'completed',
-    };
+    try {
+      await topUpManager(String(selectedAgent.id), amount);
 
-    setState(prev => ({
-      ...prev,
-      centralBalance: prev.centralBalance - amount,
-      financialTransactions: [newTransaction, ...prev.financialTransactions],
-      teamMembers: prev.teamMembers.map(m => 
-        m.id === selectedAgent.id ? { ...m, balance: m.balance + amount } : m
-      )
-    }));
+      const newTransaction: FinancialTransaction = {
+        id: `TX-${Date.now()}`,
+        date: new Date().toLocaleString('en-US'),
+        type: 'topup_agent',
+        amount: amount,
+        fromId: state.currentUser?.id || 'admin',
+        fromName: state.currentUser?.name || 'Super Admin',
+        toId: selectedAgent.id,
+        toName: selectedAgent.name,
+        status: 'completed',
+      };
 
-    setIsTopUpModalOpen(false);
-    setSelectedAgent(null);
-    setTopUpAmount('');
-    toastSuccess(
-      isRTL ? `تم شحن ${selectedAgent.name} بمبلغ ${formatCurrency(amount, state.currency, state.lang)}.` : `${selectedAgent.name} was topped up with ${formatCurrency(amount, state.currency, state.lang)}.`,
-      isRTL ? 'تمت العملية بنجاح' : 'Top Up Completed'
-    );
+      setState(prev => ({
+        ...prev,
+        centralBalance: prev.centralBalance - amount,
+        financialTransactions: [newTransaction, ...prev.financialTransactions],
+        teamMembers: prev.teamMembers.map(m => 
+          m.id === selectedAgent.id ? { ...m, balance: Number(m.balance || 0) + amount } : m
+        )
+      }));
+
+      setIsTopUpModalOpen(false);
+      setSelectedAgent(null);
+      setTopUpAmount('');
+      toastSuccess(
+        isRTL ? `تم شحن ${selectedAgent.name} بمبلغ ${formatCurrency(amount, state.currency, state.lang)}.` : `${selectedAgent.name} was topped up with ${formatCurrency(amount, state.currency, state.lang)}.`,
+        isRTL ? 'تمت العملية بنجاح' : 'Top Up Completed'
+      );
+    } catch (error) {
+      console.error(error);
+      toastError(
+        isRTL ? 'فشل شحن الوكيل من المصدر المالي الحقيقي.' : 'Failed to top up the agent using the real financial source.',
+        isRTL ? 'فشل الشحن' : 'Top Up Failed'
+      );
+    }
+  };
+
+  const handleSaveCommission = async (agent: TeamMember) => {
+    const draftValue = commissionDrafts[agent.id] ?? String(Number(agent.commissionRate || 0));
+    const nextRate = Math.min(100, Math.max(0, parseFloat(draftValue) || 0));
+
+    try {
+      setSavingCommissionIds(prev => ({ ...prev, [agent.id]: true }));
+      await updateManager(String(agent.id), {
+        ...agent,
+        commissionRate: nextRate,
+        'نسبة العمولة': nextRate,
+      });
+
+      setState(prev => ({
+        ...prev,
+        teamMembers: prev.teamMembers.map(member => (
+          member.id === agent.id ? { ...member, commissionRate: nextRate } : member
+        ))
+      }));
+
+      setCommissionDrafts(prev => ({ ...prev, [agent.id]: String(nextRate) }));
+      toastSuccess(
+        isRTL ? `تم حفظ عمولة ${agent.name} بنجاح.` : `${agent.name} commission saved successfully.`,
+        isRTL ? 'تم الحفظ' : 'Saved'
+      );
+    } catch (error) {
+      console.error(error);
+      toastError(
+        isRTL ? 'فشل حفظ نسبة العمولة.' : 'Failed to save commission rate.',
+        isRTL ? 'فشل الحفظ' : 'Save Failed'
+      );
+    } finally {
+      setSavingCommissionIds(prev => ({ ...prev, [agent.id]: false }));
+    }
   };
 
   return (
@@ -318,17 +380,22 @@ export default function FinancialDashboard({ state, setState }: FinancialDashboa
                     <div className="flex items-center gap-3">
                       <input 
                         type="number" lang="en" 
-                        value={agent.commissionRate}
+                        value={commissionDrafts[agent.id] ?? String(Number(agent.commissionRate || 0))}
                         onChange={(e) => {
-                          const val = Math.min(100, Math.max(0, parseFloat(e.target.value) || 0));
-                          setState(prev => ({
-                            ...prev,
-                            teamMembers: prev.teamMembers.map(m => m.id === agent.id ? { ...m, commissionRate: val } : m)
-                          }));
+                          const val = e.target.value;
+                          setCommissionDrafts(prev => ({ ...prev, [agent.id]: val }));
                         }}
                         className="w-20 px-3 py-2 bg-slate-50 dark:bg-[#09090B] border border-slate-200 dark:border-slate-800 rounded-xl text-center font-black text-teal-500 focus:ring-2 focus:ring-teal-500 outline-none"
                       />
                       <span className="font-black text-slate-400">%</span>
+                      <button
+                        onClick={() => void handleSaveCommission(agent)}
+                        disabled={Boolean(savingCommissionIds[agent.id])}
+                        className="inline-flex items-center gap-2 rounded-xl bg-teal-500 px-3 py-2 text-xs font-black text-white transition-all hover:bg-teal-600 disabled:opacity-50"
+                      >
+                        {savingCommissionIds[agent.id] ? <RefreshCw size={14} className="animate-spin" /> : <Save size={14} />}
+                        {isRTL ? 'حفظ' : 'Save'}
+                      </button>
                     </div>
                   </div>
                 ))}

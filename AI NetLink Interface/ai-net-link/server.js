@@ -3038,7 +3038,7 @@ app.get('/api/managers', (req, res) => {
     }
     
     const files = fs.readdirSync(dirPath).filter(f => f.endsWith('.json'));
-    const users = files.map((file, index) => {
+    const users = files.map((file) => {
       const content = fs.readFileSync(getSafePath(dirPath, file), 'utf-8');
       const m = JSON.parse(content);
       
@@ -3047,15 +3047,20 @@ app.get('/api/managers', (req, res) => {
       if (roleStr === 'Manager-A' || roleStr === 'Manager') roleKey = 'sas4_manager';
       
       return {
-        id: `SAS-${100 + index}`,
+        id: file.replace('.json', ''),
         name: `${m['الاسم الاول'] || ''} ${m['الاسم الثاني'] || ''}`.trim() || m['اسم الدخول'] || 'Unknown Manager',
-        email: `${m['اسم الدخول'] || 'user'}@netlink.ai`,
+        email: m.email || `${m['اسم الدخول'] || 'user'}@netlink.ai`,
         username: m['اسم الدخول'] || '',
         role: roleKey, // Maps to sas4_manager or admin
-        permissions: ['view_dashboard', 'access_chat', 'view_subscribers'], // Basic permissions for now
+        permissions: Array.isArray(m.permissions) ? m.permissions : ['view_dashboard', 'access_chat', 'view_subscribers'],
         status: 'active',
         joinDate: m['تاريخ الانشاء'] || '2024-01-01',
-        lastLogin: 'Never'
+        lastLogin: m.lastLogin || 'Never',
+        balance: Number(m.balance || m['الرصيد'] || 0),
+        commissionRate: Number(m.commissionRate || m['نسبة العمولة'] || 0),
+        maxTxLimit: Number(m.maxTxLimit || m['الحد المالي'] || 0),
+        isLimitEnabled: Boolean(m.isLimitEnabled),
+        groupId: m.groupId || ''
       };
     });
 
@@ -3177,6 +3182,44 @@ app.delete('/api/managers/raw/:id', (req, res) => {
   } catch (error) {
     console.error('Error deleting manager:', error);
     res.status(500).json({ error: 'Failed to delete manager' });
+  }
+});
+
+app.post('/api/managers/:id/topup', (req, res) => {
+  try {
+    const dirPath = getSafePath(DB_PATH, 'Financial', 'System_Managers');
+    if (!fs.existsSync(dirPath)) return res.status(404).json({ error: 'DB not found' });
+
+    const targetId = req.params.id;
+    const amount = Number(req.body?.amount || 0);
+    if (!Number.isFinite(amount) || amount === 0) {
+      return res.status(400).json({ error: 'Invalid amount' });
+    }
+
+    const files = fs.readdirSync(dirPath).filter(f => f.endsWith('.json'));
+    const targetFile = files.find(f => f.replace('.json', '') === targetId || f.startsWith(`${targetId}_`));
+    if (!targetFile) return res.status(404).json({ error: 'Manager not found' });
+
+    const filePath = getSafePath(dirPath, targetFile);
+    const existingContent = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+    const currentBalance = Number(existingContent.balance || existingContent['الرصيد'] || 0);
+    const newBalance = currentBalance + amount;
+
+    if (newBalance < 0) {
+      return res.status(400).json({ error: 'Insufficient manager balance' });
+    }
+
+    const updatedContent = {
+      ...existingContent,
+      balance: newBalance,
+      'الرصيد': newBalance,
+    };
+
+    fs.writeFileSync(filePath, JSON.stringify(updatedContent, null, 2), 'utf-8');
+    res.json({ data: { message: 'Balance updated successfully', balance: newBalance } });
+  } catch (error) {
+    console.error('Error updating manager balance:', error);
+    res.status(500).json({ error: 'Failed to update manager balance' });
   }
 });
 

@@ -74,9 +74,10 @@ const PERMISSION_CATEGORIES: PermissionCategory[] = [
     permissions: [
       { id: 'view_crm', labelAr: 'إدارة المشتركين', labelEn: 'Subscriber Management', descriptionAr: 'عرض قائمة المشتركين وبياناتهم', descriptionEn: 'View subscriber lists and data' },
       { id: 'view_subscribers', labelAr: 'عرض المشتركين', labelEn: 'View Subscribers', descriptionAr: 'عرض بيانات المشتركين دون تعديل', descriptionEn: 'View subscribers without editing' },
-      { id: 'manage_subscribers', labelAr: 'إدارة المشتركين', labelEn: 'Manage Subscribers', descriptionAr: 'إضافة وتعديل وحذف المشتركين', descriptionEn: 'Add, edit, and delete subscribers' },
+      { id: 'sub_add', labelAr: 'إضافة مشترك', labelEn: 'Add Subscriber', descriptionAr: 'إضافة مشترك جديد إلى النظام', descriptionEn: 'Add a new subscriber to the system' },
       { id: 'sub_activate', labelAr: 'تفعيل المشتركين', labelEn: 'Activate Subscribers', descriptionAr: 'صلاحية تفعيل وتجديد الاشتراكات', descriptionEn: 'Authority to activate/renew subscriptions' },
-      { id: 'sub_edit', labelAr: 'تعديل البيانات', labelEn: 'Edit Data', descriptionAr: 'تعديل بيانات المشتركين والحزم', descriptionEn: 'Modify subscriber data and packages' },
+      { id: 'sub_edit', labelAr: 'تعديل بيانات المشترك', labelEn: 'Edit Subscriber Data', descriptionAr: 'تعديل بيانات المشترك الأساسية', descriptionEn: 'Modify core subscriber information' },
+      { id: 'sub_edit_package', labelAr: 'تعديل الباقة والحزمة', labelEn: 'Edit Package & Plan', descriptionAr: 'تعديل الباقة وسرعة الخط والحزمة المرتبطة', descriptionEn: 'Modify the assigned package, plan, and speed profile' },
       { id: 'sub_delete', labelAr: 'حذف مشتركين', labelEn: 'Delete Subscribers', descriptionAr: 'حذف سجلات المشتركين من النظام', descriptionEn: 'Remove subscriber records from system' },
     ]
   },
@@ -122,6 +123,7 @@ const PERMISSION_CATEGORIES: PermissionCategory[] = [
 
 export default function SecurityGroupsTab({ state, setState }: SecurityGroupsTabProps) {
   const isRTL = state.lang === 'ar';
+  const SECURITY_GROUPS_KEY = 'sas4_security_groups';
   
   const cleanName = (name: string) => {
     if (!name.includes('(')) return name;
@@ -150,6 +152,7 @@ export default function SecurityGroupsTab({ state, setState }: SecurityGroupsTab
   
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
   React.useEffect(() => {
     if (selectedGroupId) {
@@ -180,6 +183,16 @@ export default function SecurityGroupsTab({ state, setState }: SecurityGroupsTab
         return { ...group, permissions: newPerms as Permission[] };
       })
     }));
+    setHasUnsavedChanges(true);
+  };
+
+  const handleSavePermissions = () => {
+    setIsSubmitting(true);
+    window.setTimeout(() => {
+      localStorage.setItem(SECURITY_GROUPS_KEY, JSON.stringify(state.securityGroups));
+      setHasUnsavedChanges(false);
+      setIsSubmitting(false);
+    }, 300);
   };
 
   const handleConfirmCreateGroup = () => {
@@ -321,6 +334,14 @@ export default function SecurityGroupsTab({ state, setState }: SecurityGroupsTab
                       className={`${isRTL ? 'pr-12 pl-4' : 'pl-12 pr-4'} py-3 glass-panel !bg-slate-50/50 dark:!bg-slate-900/50 border-none w-full focus:ring-2 focus:ring-teal-500/30 transition-all outline-none text-sm font-bold dark:text-white`}
                     />
                   </div>
+                  <button
+                    onClick={handleSavePermissions}
+                    disabled={!hasUnsavedChanges || isSubmitting}
+                    className="inline-flex items-center justify-center gap-2 rounded-2xl bg-teal-500 px-4 py-3 text-sm font-black text-white transition-all hover:bg-teal-600 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {isSubmitting ? <RefreshCw size={18} className="animate-spin" /> : <Save size={18} />}
+                    <span>{isRTL ? 'حفظ الصلاحيات' : 'Save Permissions'}</span>
+                  </button>
                   <div className="flex gap-2 w-full sm:w-auto shrink-0">
                     <button onClick={() => { setEditGroupName(selectedGroup.name); setEditGroupDescription(selectedGroup.description); setIsEditModalOpen(true); }} className="flex-1 sm:flex-none p-3 glass-panel border-none bg-slate-50 dark:bg-slate-900 text-slate-400 hover:text-teal-500 transition-all flex items-center justify-center"><Edit2 size={20} /></button>
                     <button onClick={() => setIsDeleteModalOpen(true)} className="flex-1 sm:flex-none p-3 glass-panel border-none bg-slate-50 dark:bg-slate-900 text-slate-400 hover:text-red-500 transition-all flex items-center justify-center"><Trash2 size={20} /></button>

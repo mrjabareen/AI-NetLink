@@ -84,9 +84,15 @@ export default function BoiExpiryTab({ state, setState }: BoiExpiryTabProps) {
   const [isBulkRenewing, setIsBulkRenewing] = useState(false);
   const [bulkRenewFilter, setBulkRenewFilter] = useState<'all' | 'expired' | 'today' | '3days' | 'active' | 'online' | 'activeOffline' | 'suspended' | 'demands' | 'debts'>('expired');
   const [bulkRenewDays, setBulkRenewDays] = useState(30);
+  const [bulkRenewMethods, setBulkRenewMethods] = useState<Set<string>>(new Set(['whatsapp']));
+  const [bulkRenewTemplate, setBulkRenewTemplate] = useState('');
+  const [bulkRenewMessage, setBulkRenewMessage] = useState('');
   const [bulkNotifyFilter, setBulkNotifyFilter] = useState<'all' | 'expired' | 'today' | '3days' | 'active' | 'online' | 'activeOffline' | 'suspended' | 'demands' | 'debts'>('expired');
+  const [bulkNotifyMethods, setBulkNotifyMethods] = useState<Set<string>>(new Set(['whatsapp']));
+  const [bulkNotifyTemplate, setBulkNotifyTemplate] = useState('');
   const [bulkNotifyMessage, setBulkNotifyMessage] = useState('');
   const [terminateCandidate, setTerminateCandidate] = useState<SubscriberRecord | null>(null);
+  const [messageData, setMessageData] = useState<{ templates: Array<{ id?: string; name?: string; title?: string; content?: string; body?: string }>; groups: any[] }>({ templates: [], groups: [] });
 
   // Status State
   const [onlineStatuses, setOnlineStatuses] = useState<Record<string, boolean>>({});
@@ -166,6 +172,85 @@ export default function BoiExpiryTab({ state, setState }: BoiExpiryTabProps) {
   useEffect(() => {
     loadData();
   }, []);
+
+  useEffect(() => {
+    const loadMessageTemplates = async () => {
+      const data = await getMessageData();
+      setMessageData({
+        templates: Array.isArray(data?.templates) ? data.templates : [],
+        groups: Array.isArray(data?.groups) ? data.groups : [],
+      });
+    };
+
+    loadMessageTemplates();
+  }, []);
+
+  const getTemplateText = (templateId: string) => {
+    if (!templateId) return '';
+    const selectedTemplate = messageData.templates.find((template) => String(template.id || template.name || template.title || '') === templateId);
+    return String(selectedTemplate?.text || selectedTemplate?.content || selectedTemplate?.body || '').trim();
+  };
+
+  const sendBulkMessages = async (
+    targets: SubscriberRecord[],
+    methods: Set<string>,
+    messageText: string,
+    emailSubject: string
+  ) => {
+    if (!messageText.trim()) {
+      throw new Error(isRTL ? 'نص الرسالة فارغ.' : 'Message text is empty.');
+    }
+
+    if (methods.size === 0) {
+      throw new Error(isRTL ? 'يجب اختيار قناة إرسال واحدة على الأقل.' : 'Select at least one delivery channel.');
+    }
+
+    const mobileTargets = targets.map((sub) => String(sub.phone || sub['الهاتف'] || '').trim()).filter(Boolean);
+    const emailTargets = targets.map((sub) => String(sub.email || sub['البريد الإلكتروني'] || '').trim()).filter(Boolean);
+    const requests: Promise<{ type: string; ok: boolean; message?: string }>[] = [];
+
+    if (methods.has('whatsapp') && mobileTargets.length > 0) {
+      requests.push(
+        fetch(`${BASE_URL}/whatsapp/send`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mobile: mobileTargets, text: messageText })
+        }).then(async (res) => ({ type: 'WhatsApp', ok: res.ok, message: res.ok ? undefined : JSON.stringify(await res.json().catch(() => ({})))}))
+      );
+    }
+
+    if (methods.has('sms') && mobileTargets.length > 0) {
+      requests.push(
+        fetch(`${BASE_URL}/sms/send`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mobile: mobileTargets, text: messageText })
+        }).then(async (res) => ({ type: 'SMS', ok: res.ok, message: res.ok ? undefined : JSON.stringify(await res.json().catch(() => ({})))}))
+      );
+    }
+
+    if (methods.has('email') && emailTargets.length > 0) {
+      requests.push(
+        fetch(`${BASE_URL}/email/send`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ emails: emailTargets, subject: emailSubject, text: messageText })
+        }).then(async (res) => ({ type: 'Email', ok: res.ok, message: res.ok ? undefined : JSON.stringify(await res.json().catch(() => ({})))}))
+      );
+    }
+
+    if (requests.length === 0) {
+      throw new Error(isRTL ? 'لا توجد بيانات صالحة للإرسال عبر القنوات المحددة.' : 'No valid recipient data found for the selected channels.');
+    }
+
+    const results = await Promise.all(requests);
+    const failed = results.filter((result) => !result.ok);
+    if (failed.length === results.length) {
+      throw new Error(failed.map((item) => `${item.type}: ${item.message || 'failed'}`).join(' | '));
+    }
+
+    return results;
+  };
 
   useEffect(() => {
     let interval: ReturnType<typeof setInterval> | undefined;
@@ -394,6 +479,9 @@ export default function BoiExpiryTab({ state, setState }: BoiExpiryTabProps) {
 
   const handleOpenBulkRenew = () => {
     setBulkRenewFilter(activeFilter === 'all' ? 'expired' : activeFilter);
+    setBulkRenewTemplate('');
+    setBulkRenewMethods(new Set(['whatsapp']));
+    setBulkRenewMessage('');
     setIsBulkRenewConfirmOpen(true);
   };
 
@@ -424,6 +512,16 @@ export default function BoiExpiryTab({ state, setState }: BoiExpiryTabProps) {
         toastInfo(
           isRTL ? `تم تجديد ${successCount} وفشل ${failedCount}.` : `Renewed ${successCount} and failed ${failedCount}.`,
           isRTL ? 'نتيجة التجديد' : 'Renewal Result'
+        );
+      }
+
+      const selectedMessage = (bulkRenewTemplate ? getTemplateText(bulkRenewTemplate) : bulkRenewMessage).trim();
+      if (selectedMessage) {
+        await sendBulkMessages(
+          autoRenewTargets,
+          bulkRenewMethods,
+          selectedMessage,
+          isRTL ? 'إشعار تجديد اشتراك' : 'Subscription Renewal Notice'
         );
       }
     } catch (error) {
@@ -506,7 +604,9 @@ export default function BoiExpiryTab({ state, setState }: BoiExpiryTabProps) {
   ];
 
   const handleBulkNotify = async () => {
-    if (!bulkNotifyMessage.trim()) {
+    const effectiveMessage = (bulkNotifyTemplate ? getTemplateText(bulkNotifyTemplate) : bulkNotifyMessage).trim();
+
+    if (!effectiveMessage) {
       toastInfo(isRTL ? 'اكتب نص الرسالة قبل الإرسال.' : 'Write the message before sending.', isRTL ? 'رسالة مطلوبة' : 'Message Required');
       return;
     }
@@ -516,10 +616,22 @@ export default function BoiExpiryTab({ state, setState }: BoiExpiryTabProps) {
     }
     if (isBulkNotifying) return;
     setIsBulkNotifying(true);
-    await new Promise(r => setTimeout(r, 2000));
-    setIsBulkNotifying(false);
-    setIsBulkNotifyModalOpen(false);
-    toastSuccess(isRTL ? `تم تجهيز التنبيه لـ ${bulkNotifyTargets.length} مشترك.` : `Prepared notifications for ${bulkNotifyTargets.length} subscribers.`, isRTL ? 'اكتمل الإرسال' : 'Notifications Sent');
+    try {
+      await sendBulkMessages(
+        bulkNotifyTargets,
+        bulkNotifyMethods,
+        effectiveMessage,
+        isRTL ? 'إشعار من النظام' : 'System Notification'
+      );
+
+      setIsBulkNotifyModalOpen(false);
+      toastSuccess(isRTL ? `تم إرسال التنبيه إلى ${bulkNotifyTargets.length} مشترك.` : `Sent notifications to ${bulkNotifyTargets.length} subscribers.`, isRTL ? 'اكتمل الإرسال' : 'Notifications Sent');
+    } catch (error) {
+      console.error(error);
+      toastError(isRTL ? 'فشل إرسال التنبيهات.' : 'Failed to send bulk notifications.', isRTL ? 'فشل الإرسال' : 'Send Failed');
+    } finally {
+      setIsBulkNotifying(false);
+    }
   };
 
   // Close menus on click outside
@@ -554,6 +666,8 @@ export default function BoiExpiryTab({ state, setState }: BoiExpiryTabProps) {
           <button 
             onClick={() => {
               setBulkNotifyFilter(activeFilter === 'all' ? 'expired' : activeFilter);
+              setBulkNotifyMethods(new Set(['whatsapp']));
+              setBulkNotifyTemplate('');
               setBulkNotifyMessage(isRTL ? 'نذكركم بضرورة مراجعة حالة الاشتراك واتخاذ الإجراء المناسب.' : 'Reminder to review your subscription status and take the required action.');
               setIsBulkNotifyModalOpen(true);
             }}
@@ -791,6 +905,14 @@ export default function BoiExpiryTab({ state, setState }: BoiExpiryTabProps) {
             targetFilter={bulkNotifyFilter}
             onTargetFilterChange={setBulkNotifyFilter}
             targetCount={bulkNotifyTargets.length}
+            methods={bulkNotifyMethods}
+            onMethodsChange={setBulkNotifyMethods}
+            templateValue={bulkNotifyTemplate}
+            onTemplateChange={(value) => {
+              setBulkNotifyTemplate(value);
+              setBulkNotifyMessage(getTemplateText(value));
+            }}
+            templates={messageData.templates}
             message={bulkNotifyMessage}
             onMessageChange={setBulkNotifyMessage}
             onClose={() => setIsBulkNotifyModalOpen(false)}
@@ -809,6 +931,16 @@ export default function BoiExpiryTab({ state, setState }: BoiExpiryTabProps) {
             targetCount={autoRenewTargets.length}
             renewDays={bulkRenewDays}
             onRenewDaysChange={setBulkRenewDays}
+            methods={bulkRenewMethods}
+            onMethodsChange={setBulkRenewMethods}
+            templateValue={bulkRenewTemplate}
+            onTemplateChange={(value) => {
+              setBulkRenewTemplate(value);
+              setBulkRenewMessage(getTemplateText(value));
+            }}
+            templates={messageData.templates}
+            message={bulkRenewMessage}
+            onMessageChange={setBulkRenewMessage}
             onClose={() => setIsBulkRenewConfirmOpen(false)}
             onConfirm={confirmBulkRenew}
             busy={isBulkRenewing}
@@ -1287,6 +1419,13 @@ function BulkRenewModal({
   targetCount,
   renewDays,
   onRenewDaysChange,
+  methods,
+  onMethodsChange,
+  templateValue,
+  onTemplateChange,
+  templates,
+  message,
+  onMessageChange,
   onClose,
   onConfirm,
   busy,
@@ -1297,6 +1436,13 @@ function BulkRenewModal({
   targetCount: number;
   renewDays: number;
   onRenewDaysChange: (value: number) => void;
+  methods: Set<string>;
+  onMethodsChange: React.Dispatch<React.SetStateAction<Set<string>>>;
+  templateValue: string;
+  onTemplateChange: (value: string) => void;
+  templates: Array<{ id?: string; name?: string; title?: string; text?: string; content?: string; body?: string }>;
+  message: string;
+  onMessageChange: (value: string) => void;
   onClose: () => void;
   onConfirm: () => void;
   busy: boolean;
@@ -1304,8 +1450,8 @@ function BulkRenewModal({
   return (
     <div className="fixed inset-0 z-[230] flex items-center justify-center p-4">
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-slate-950/70 backdrop-blur-sm" onClick={onClose} />
-      <motion.div initial={{ scale: 0.94, opacity: 0, y: 16 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.94, opacity: 0, y: 16 }} className="relative z-10 w-full max-w-xl rounded-[2rem] border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-800 dark:bg-[#18181B]">
-        <h3 className="text-xl font-black text-slate-900 dark:text-white">{isRTL ? 'إعداد التجديد التلقائي' : 'Bulk Auto Renew Setup'}</h3>
+      <motion.div initial={{ scale: 0.94, opacity: 0, y: 16 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.94, opacity: 0, y: 16 }} className="relative z-10 w-full max-w-2xl rounded-[2.5rem] border border-slate-200 bg-white p-8 shadow-2xl dark:border-slate-800 dark:bg-[#09090B]">
+        <h3 className="text-2xl font-black text-slate-900 dark:text-white">{isRTL ? 'التجديد التلقائي الجماعي' : 'Bulk Auto Renew'}</h3>
         <div className="mt-5 space-y-4">
           <div>
             <label className="mb-2 block text-xs font-black uppercase tracking-wider text-slate-500">{isRTL ? 'الفئة المستهدفة' : 'Target Filter'}</label>
@@ -1326,6 +1472,35 @@ function BulkRenewModal({
             <label className="mb-2 block text-xs font-black uppercase tracking-wider text-slate-500">{isRTL ? 'عدد الأيام' : 'Renew Days'}</label>
             <input type="number" min={1} max={365} value={renewDays} onChange={(e) => onRenewDaysChange(Math.max(1, Number(e.target.value) || 30))} className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold dark:border-slate-800 dark:bg-slate-900/50" />
           </div>
+          <div>
+            <label className="mb-2 block text-xs font-black uppercase tracking-wider text-slate-500">{isRTL ? 'قنوات إشعار ما بعد التجديد' : 'Post-Renew Delivery Channels'}</label>
+            <div className="grid grid-cols-3 gap-3">
+              <button onClick={() => onMethodsChange(prev => { const next = new Set(prev); next.has('whatsapp') ? next.delete('whatsapp') : next.add('whatsapp'); return next; })} className={`py-4 rounded-xl flex flex-col items-center justify-center gap-2 font-bold transition-all border-2 ${methods.has('whatsapp') ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'border-slate-100 dark:border-slate-800 text-slate-400'}`}>
+                <MessageSquare size={24} /> <span className="text-[10px]">WhatsApp</span>
+              </button>
+              <button onClick={() => onMethodsChange(prev => { const next = new Set(prev); next.has('sms') ? next.delete('sms') : next.add('sms'); return next; })} className={`py-4 rounded-xl flex flex-col items-center justify-center gap-2 font-bold transition-all border-2 ${methods.has('sms') ? 'border-blue-500 bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400' : 'border-slate-100 dark:border-slate-800 text-slate-400'}`}>
+                <Smartphone size={24} /> <span className="text-[10px]">SMS</span>
+              </button>
+              <button onClick={() => onMethodsChange(prev => { const next = new Set(prev); next.has('email') ? next.delete('email') : next.add('email'); return next; })} className={`py-4 rounded-xl flex flex-col items-center justify-center gap-2 font-bold transition-all border-2 ${methods.has('email') ? 'border-violet-500 bg-violet-50 dark:bg-violet-500/10 text-violet-600 dark:text-violet-400' : 'border-slate-100 dark:border-slate-800 text-slate-400'}`}>
+                <Mail size={24} /> <span className="text-[10px]">Email</span>
+              </button>
+            </div>
+          </div>
+          <div>
+            <label className="mb-2 block text-xs font-black uppercase tracking-wider text-slate-500">{isRTL ? 'قالب الرسالة المحفوظ' : 'Saved Message Template'}</label>
+            <select value={templateValue} onChange={(e) => onTemplateChange(e.target.value)} className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold dark:border-slate-800 dark:bg-slate-900/50">
+              <option value="">{isRTL ? 'بدون رسالة إضافية' : 'No extra message'}</option>
+              {templates.map((template, index) => (
+                <option key={String(template.id || template.name || template.title || index)} value={String(template.id || template.name || template.title || '')}>
+                  {template.title || template.name || `${isRTL ? 'قالب' : 'Template'} ${index + 1}`}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="mb-2 block text-xs font-black uppercase tracking-wider text-slate-500">{isRTL ? 'نص الإشعار بعد التجديد' : 'Post-Renew Message Text'}</label>
+            <textarea value={message} onChange={(e) => onMessageChange(e.target.value)} rows={4} className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium dark:border-slate-800 dark:bg-slate-900/50" />
+          </div>
           <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm font-bold text-slate-600 dark:border-slate-800 dark:bg-slate-900/50 dark:text-slate-300">
             {isRTL ? `سيتم استهداف ${targetCount} مشترك حالياً.` : `${targetCount} subscribers will be targeted currently.`}
           </div>
@@ -1344,6 +1519,11 @@ function BulkNotifyModal({
   targetFilter,
   onTargetFilterChange,
   targetCount,
+  methods,
+  onMethodsChange,
+  templateValue,
+  onTemplateChange,
+  templates,
   message,
   onMessageChange,
   onClose,
@@ -1354,6 +1534,11 @@ function BulkNotifyModal({
   targetFilter: 'all' | 'expired' | 'today' | '3days' | 'active' | 'online' | 'activeOffline' | 'suspended' | 'demands' | 'debts';
   onTargetFilterChange: (value: 'all' | 'expired' | 'today' | '3days' | 'active' | 'online' | 'activeOffline' | 'suspended' | 'demands' | 'debts') => void;
   targetCount: number;
+  methods: Set<string>;
+  onMethodsChange: React.Dispatch<React.SetStateAction<Set<string>>>;
+  templateValue: string;
+  onTemplateChange: (value: string) => void;
+  templates: Array<{ id?: string; name?: string; title?: string; text?: string; content?: string; body?: string }>;
   message: string;
   onMessageChange: (value: string) => void;
   onClose: () => void;
@@ -1363,7 +1548,7 @@ function BulkNotifyModal({
   return (
     <div className="fixed inset-0 z-[230] flex items-center justify-center p-4">
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-slate-950/70 backdrop-blur-sm" onClick={onClose} />
-      <motion.div initial={{ scale: 0.94, opacity: 0, y: 16 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.94, opacity: 0, y: 16 }} className="relative z-10 w-full max-w-2xl rounded-[2rem] border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-800 dark:bg-[#18181B]">
+      <motion.div initial={{ scale: 0.94, opacity: 0, y: 16 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.94, opacity: 0, y: 16 }} className="relative z-10 w-full max-w-2xl rounded-[2.5rem] border border-slate-200 bg-white p-8 shadow-2xl dark:border-slate-800 dark:bg-[#09090B]">
         <h3 className="text-xl font-black text-slate-900 dark:text-white">{isRTL ? 'إعداد تبليغ الجميع' : 'Bulk Notify Setup'}</h3>
         <div className="mt-5 space-y-4">
           <div>
@@ -1379,6 +1564,31 @@ function BulkNotifyModal({
               <option value="demands">{isRTL ? 'عليهم مطالبات' : 'With Demands'}</option>
               <option value="debts">{isRTL ? 'لهم أرصدة' : 'With Balances'}</option>
               <option value="all">{isRTL ? 'الكل' : 'All'}</option>
+            </select>
+          </div>
+          <div>
+            <label className="mb-2 block text-xs font-black uppercase tracking-wider text-slate-500">{isRTL ? 'قناة الإرسال' : 'Delivery Channel'}</label>
+            <div className="grid grid-cols-3 gap-3">
+              <button onClick={() => onMethodsChange(prev => { const next = new Set(prev); next.has('whatsapp') ? next.delete('whatsapp') : next.add('whatsapp'); return next; })} className={`py-4 rounded-xl flex flex-col items-center justify-center gap-2 font-bold transition-all border-2 ${methods.has('whatsapp') ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'border-slate-100 dark:border-slate-800 text-slate-400'}`}>
+                <MessageSquare size={24} /> <span className="text-[10px]">WhatsApp</span>
+              </button>
+              <button onClick={() => onMethodsChange(prev => { const next = new Set(prev); next.has('sms') ? next.delete('sms') : next.add('sms'); return next; })} className={`py-4 rounded-xl flex flex-col items-center justify-center gap-2 font-bold transition-all border-2 ${methods.has('sms') ? 'border-blue-500 bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400' : 'border-slate-100 dark:border-slate-800 text-slate-400'}`}>
+                <Smartphone size={24} /> <span className="text-[10px]">SMS</span>
+              </button>
+              <button onClick={() => onMethodsChange(prev => { const next = new Set(prev); next.has('email') ? next.delete('email') : next.add('email'); return next; })} className={`py-4 rounded-xl flex flex-col items-center justify-center gap-2 font-bold transition-all border-2 ${methods.has('email') ? 'border-violet-500 bg-violet-50 dark:bg-violet-500/10 text-violet-600 dark:text-violet-400' : 'border-slate-100 dark:border-slate-800 text-slate-400'}`}>
+                <Mail size={24} /> <span className="text-[10px]">Email</span>
+              </button>
+            </div>
+          </div>
+          <div>
+            <label className="mb-2 block text-xs font-black uppercase tracking-wider text-slate-500">{isRTL ? 'قالب الرسالة المحفوظ' : 'Saved Message Template'}</label>
+            <select value={templateValue} onChange={(e) => onTemplateChange(e.target.value)} className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold dark:border-slate-800 dark:bg-slate-900/50">
+              <option value="">{isRTL ? 'رسالة مخصصة يدوياً' : 'Custom Manual Message'}</option>
+              {templates.map((template, index) => (
+                <option key={String(template.id || template.name || template.title || index)} value={String(template.id || template.name || template.title || '')}>
+                  {template.title || template.name || `${isRTL ? 'قالب' : 'Template'} ${index + 1}`}
+                </option>
+              ))}
             </select>
           </div>
           <div>

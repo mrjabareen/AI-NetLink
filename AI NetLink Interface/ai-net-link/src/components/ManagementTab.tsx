@@ -9,6 +9,7 @@ import { formatCurrency } from '../utils/currency';
 import { fetchSubscribers, fetchSuppliers, fetchInvestors, addSubscriber, updateSubscriber, deleteSubscriber, addSupplier, updateSupplier, deleteSupplier, fetchManagersRaw, addManager, updateManager, deleteManager, addInvestor, updateInvestor, deleteInvestor, directorsApi, deputiesApi, iptvApi, getMikrotikStatus, getMikrotikStatusBatch, disconnectSubscriber, disconnectAllSubscribers, deleteSecret, disableSecret, enableSecret, syncSubscriberToMikrotik, fetchRoutersList, fetchProfiles, activateSubscriber, extendSubscriber, getMessageData, saveMessageData, BASE_URL, topUpManager, updateManagerTxLimit } from '../api';
 import { getSmartMatchScore, smartMatch } from '../utils/search';
 import { toastError, toastInfo, toastSuccess } from '../utils/notify';
+import { hasPermission as canAccess } from '../permissions';
 import SecurityGroupsTab from './SecurityGroupsTab';
 import AppConfirmDialog from './AppConfirmDialog';
 import AppPromptDialog from './AppPromptDialog';
@@ -254,21 +255,7 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
   const t = dict[state.lang];
   const isRTL = state.lang === 'ar';
   
-  const userPermissions = state.currentUser?.permissions || [];
-  const hasPermission = (perm: Permission | 'all') => {
-    if (state.role === 'super_admin') return true;
-    
-    // Check individual permissions
-    if (userPermissions.includes(perm)) return true;
-    
-    // Check group permissions
-    if (state.currentUser?.groupId) {
-      const group = state.securityGroups.find(g => g.id === state.currentUser?.groupId);
-      if (group?.permissions.includes(perm)) return true;
-    }
-    
-    return false;
-  };
+  const hasPermission = (perm: Permission | 'all') => canAccess(state, perm);
 
   const getSupplierFieldValue = (item: DynamicItem, key: string) => String(item?.[key] ?? '').trim();
   const getSupplierCode = (item: DynamicItem) => getSupplierFieldValue(item, 'كود');
@@ -707,6 +694,11 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
   const [isTopUpModalOpen, setIsTopUpModalOpen] = useState(false);
   const [topUpTarget, setTopUpTarget] = useState<DynamicItem | null>(null);
   const [topUpAmount, setTopUpAmount] = useState('');
+  const [topUpMode, setTopUpMode] = useState<'deposit' | 'withdraw'>('deposit');
+  const [isLimitModalOpen, setIsLimitModalOpen] = useState(false);
+  const [limitTarget, setLimitTarget] = useState<DynamicItem | null>(null);
+  const [limitAmount, setLimitAmount] = useState('');
+  const [limitEnabled, setLimitEnabled] = useState(false);
   const [disconnectCandidate, setDisconnectCandidate] = useState<string | null>(null);
   const [deleteSecretCandidate, setDeleteSecretCandidate] = useState<string | null>(null);
   const [bulkDisconnectConfirmOpen, setBulkDisconnectConfirmOpen] = useState(false);
@@ -1934,10 +1926,14 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
 
   const getActions = (item: DynamicItem): MenuAction[] => {
     const actions: MenuAction[] = [];
+    const subscriberCanAdd = hasPermission('sub_add') || hasPermission('manage_subscribers');
+    const subscriberCanEdit = hasPermission('sub_edit') || hasPermission('sub_edit_package') || hasPermission('manage_subscribers');
+    const subscriberCanDelete = hasPermission('sub_delete') || hasPermission('manage_subscribers');
+    const subscriberCanActivate = hasPermission('sub_activate') || hasPermission('manage_subscribers');
     
     // Check main edit permission
     const canManageTabs = 
-      (activeSubTab === 'subscribers' && hasPermission('manage_subscribers')) ||
+      (activeSubTab === 'subscribers' && (subscriberCanAdd || subscriberCanEdit || subscriberCanDelete || subscriberCanActivate)) ||
       (activeSubTab === 'iptv' && hasPermission('manage_iptv')) ||
       (activeSubTab === 'suppliers' && hasPermission('manage_suppliers')) ||
       (activeSubTab === 'shareholders' && hasPermission('manage_shareholders')) ||
@@ -1968,15 +1964,17 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
     }
 
     // Common Actions
-    actions.push({
-      id: 'edit',
-      label: isRTL ? 'تعديل السجل' : 'Edit Record',
-      icon: Edit,
-      onClick: (item) => handleEdit(item),
-      tooltip: isRTL ? `تحديث بيانات ${getTabEntityLabel()} الحالي` : `Update the selected ${getTabEntityLabel()}.`
-    });
+    if (activeSubTab !== 'subscribers' || subscriberCanEdit || state.role === 'super_admin') {
+      actions.push({
+        id: 'edit',
+        label: isRTL ? 'تعديل السجل' : 'Edit Record',
+        icon: Edit,
+        onClick: (item) => handleEdit(item),
+        tooltip: isRTL ? `تحديث بيانات ${getTabEntityLabel()} الحالي` : `Update the selected ${getTabEntityLabel()}.`
+      });
+    }
 
-    if (activeSubTab === 'subscribers') {
+    if (activeSubTab === 'subscribers' && (subscriberCanActivate || state.role === 'super_admin')) {
       actions.push(
         {
           id: 'activate',
@@ -2075,6 +2073,19 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
     if (activeSubTab === 'managers') {
       actions.push(
         {
+          id: 'deposit',
+          label: isRTL ? 'إيداع رصيد' : 'Deposit Balance',
+          icon: Wallet,
+          variant: 'success',
+          onClick: (item) => {
+            setTopUpTarget(item);
+            setTopUpAmount('');
+            setTopUpMode('deposit');
+            setIsTopUpModalOpen(true);
+          },
+          tooltip: isRTL ? 'شحن محفظة العضو من الرصيد المركزي' : 'Top up the member wallet from the central balance.'
+        },
+        {
           id: 'withdraw',
           label: isRTL ? 'سحب رصيد (التسوية)' : 'Withdraw Balance',
           icon: CreditCard,
@@ -2082,8 +2093,8 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
           onClick: (item) => {
             setTopUpTarget(item);
             setTopUpAmount('');
+            setTopUpMode('withdraw');
             setIsTopUpModalOpen(true);
-            // I'll repurpose TopUp modal for both or add a flag
           },
           tooltip: isRTL ? 'سحب المبالغ المحصلة من محفظة العضو' : 'Collect cash and deduct from member wallet.'
         },
@@ -2092,10 +2103,10 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
           label: isRTL ? 'إدارة القيود المالية' : 'Manage Limits',
           icon: Lock,
           onClick: (item) => {
-            toastInfo(
-              isRTL ? 'ستتوفر واجهة إدارة القيود المالية قريبًا.' : 'Financial limits management UI will be available soon.',
-              isRTL ? 'قريبًا' : 'Coming Soon'
-            );
+            setLimitTarget(item);
+            setLimitAmount(String(item.maxTxLimit || item['الحد المالي'] || '0'));
+            setLimitEnabled(Boolean(item.isLimitEnabled || Number(item.maxTxLimit || item['الحد المالي']) > 0));
+            setIsLimitModalOpen(true);
           },
           tooltip: isRTL ? 'تحديد الحد الأقصى لكل عملية شحن' : 'Set the maximum amount allowed per transaction.'
         }
@@ -2103,14 +2114,16 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
     }
 
     // Global Delete
-    actions.push({
-      id: 'delete',
-      label: isRTL ? 'حذف من النظام' : 'Delete from System',
-      icon: Trash,
-      variant: 'danger',
-      onClick: (item) => setDeleteCandidateId(item.id),
-      tooltip: isRTL ? `حذف ${getTabEntityLabel()} نهائيًا من قاعدة البيانات` : `Permanently remove this ${getTabEntityLabel()} from the database.`
-    });
+    if (activeSubTab !== 'subscribers' || subscriberCanDelete || state.role === 'super_admin') {
+      actions.push({
+        id: 'delete',
+        label: isRTL ? 'حذف من النظام' : 'Delete from System',
+        icon: Trash,
+        variant: 'danger',
+        onClick: (item) => setDeleteCandidateId(item.id),
+        tooltip: isRTL ? `حذف ${getTabEntityLabel()} نهائيًا من قاعدة البيانات` : `Permanently remove this ${getTabEntityLabel()} from the database.`
+      });
+    }
 
     return actions;
   };
@@ -2331,58 +2344,102 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
     }
   };
 
+  const activationPricing = useMemo(() => {
+    if (!subToActivate) {
+      return {
+        actor: null as DynamicItem | null,
+        planName: '',
+        profile: null as NetworkProfile | null,
+        price: 0,
+        commissionRate: 0,
+        commissionAmount: 0,
+        costToActor: 0,
+      };
+    }
+
+    const currentUserId = String(state.currentUser?.id || '').trim();
+    const currentUsername = String(state.currentUser?.username || '').trim();
+    const actor = state.role === 'super_admin'
+      ? null
+      : ((state.teamMembers.find((member) => String(member.id) === currentUserId)
+        || state.teamMembers.find((member) => (
+          member.role !== 'super_admin' &&
+          currentUsername &&
+          String(member.username || '').trim() === currentUsername
+        ))) as DynamicItem | undefined || (state.currentUser as DynamicItem | null));
+
+    const planName = String(subToActivate.plan || subToActivate['سرعة الخط'] || '');
+    const profile = networkProfiles.find((p) => String(p.name || '') === planName) || null;
+    const price = Number(profile?.price || subToActivate.bill || subToActivate['قيمة الفاتورة'] || 0);
+    const commissionRate = actor ? Number(actor.commissionRate || 0) : 0;
+    const commissionAmount = price > 0 ? (price * commissionRate) / 100 : 0;
+    const costToActor = price - commissionAmount;
+
+    return {
+      actor,
+      planName,
+      profile,
+      price,
+      commissionRate,
+      commissionAmount,
+      costToActor,
+    };
+  }, [networkProfiles, state.currentUser?.id, state.currentUser?.username, state.role, state.teamMembers, subToActivate]);
+
   const handleActivateSubscriber = async () => {
     if (!subToActivate) return;
-    
-    // Financial Logic: Find the agent/manager for this subscriber
-    const agentName = subToActivate.agent || subToActivate['الوكيل المسؤل'];
-    const agent = state.teamMembers.find(m => m.name === agentName || m.username === agentName || m['اسم الدخول'] === agentName);
-    const planName = subToActivate.plan || subToActivate['سرعة الخط'];
-    const profile = networkProfiles.find(p => p.name === planName);
-    const price = profile?.price || parseFloat(subToActivate.bill || subToActivate['قيمة الفاتورة'] || 0);
 
-    if (agent) {
-      const commissionRate = agent.commissionRate || 0;
-      const commissionAmount = (price * commissionRate) / 100;
-      const costToAgent = price - commissionAmount;
+    const { actor, costToActor, commissionAmount, commissionRate, planName, price, profile } = activationPricing;
 
-      if (agent.balance < costToAgent && state.role !== 'super_admin') {
+    if (actor && costToActor > 0) {
+      const actorBalance = Number(actor.balance || 0);
+      if (actorBalance < costToActor) {
         toastError(
-          isRTL ? `رصيد الوكيل (${agent.name}) غير كافٍ. المطلوب: ${costToAgent} شيكل` : `Agent (${agent.name}) has insufficient balance. Required: ${costToAgent} ILS`,
+          isRTL ? `رصيد المدير (${actor.name}) غير كافٍ. المطلوب خصمه: ${formatCurrency(costToActor, state.currency, state.lang)}` : `Manager balance (${actor.name}) is insufficient. Required deduction: ${formatCurrency(costToActor, state.currency, state.lang)}`,
           isRTL ? 'رصيد غير كافٍ' : 'Insufficient Balance'
         );
         return;
       }
-
-      // Deduct balance from agent and record transaction
-      const newTx: FinancialTransaction = {
-        id: `TX-${Date.now()}`,
-        date: new Date().toLocaleString('en-US'),
-        type: 'topup_sub',
-        amount: price,
-        fromId: agent.id,
-        fromName: agent.name,
-        toId: subToActivate.id,
-        toName: subToActivate.firstname || subToActivate.name,
-        status: 'completed',
-        metadata: {
-          packageId: profile?.id,
-          packageName: planName,
-          agentCommission: commissionAmount
-        }
-      };
-
-      setState(prev => ({
-        ...prev,
-        financialTransactions: [newTx, ...prev.financialTransactions],
-        teamMembers: prev.teamMembers.map(m => m.id === agent.id ? { ...m, balance: m.balance - costToAgent } : m)
-      }));
     }
 
     setIsActivating(true);
     try {
       const data = await activateSubscriber(subToActivate.id, activationOption, activationTarget);
       if (data.success) {
+        if (actor && costToActor > 0) {
+          await topUpManager(String(actor.id), -costToActor);
+
+          const newTx: FinancialTransaction = {
+            id: `TX-${Date.now()}`,
+            date: new Date().toLocaleString('en-US'),
+            type: 'topup_sub',
+            amount: price,
+            fromId: String(actor.id),
+            fromName: String(actor.name || actor.username || ''),
+            toId: subToActivate.id,
+            toName: String(subToActivate.firstname || subToActivate.name || subToActivate['الاسم الأول'] || ''),
+            status: 'completed',
+            metadata: {
+              packageId: profile?.id,
+              packageName: planName,
+              agentCommission: commissionAmount,
+              commissionRate,
+              deductedFromManager: costToActor,
+            }
+          };
+
+          setState(prev => ({
+            ...prev,
+            centralBalance: prev.centralBalance + costToActor,
+            financialTransactions: [newTx, ...prev.financialTransactions],
+            teamMembers: prev.teamMembers.map(member => (
+              String(member.id) === String(actor.id)
+                ? { ...member, balance: Number(member.balance || 0) - costToActor }
+                : member
+            ))
+          }));
+        }
+
         toastSuccess(
           data.message || (isRTL ? `تم تفعيل المشترك بنجاح حتى: ${data.displayExpiry}` : `Activated successfully until: ${data.displayExpiry}`),
           isRTL ? 'تم التفعيل' : 'Activation Completed'
@@ -2799,7 +2856,7 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
     } else if (activeSubTab === 'managers') {
       try {
         setIsLoading(true);
-        await addManager(newItem);
+        await addManager(sanitizeManagerFinancialPayload(newItem));
         const data = await fetchManagersRaw();
         setManagers(data);
       } catch (err) {
@@ -2889,17 +2946,81 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
     try {
       setIsLoading(true);
       const amount = parseFloat(topUpAmount);
-      // Logic for top up (could be deposit or withdraw depending on amount/UI)
-      await topUpManager(topUpTarget.id, amount);
+      const signedAmount = topUpMode === 'withdraw' ? -Math.abs(amount) : Math.abs(amount);
+      await topUpManager(topUpTarget.id, signedAmount);
       
       const data = await fetchManagersRaw();
       setManagers(data);
+      setState(prev => {
+        const transactionAmount = Math.abs(amount);
+        const newTransaction: FinancialTransaction = {
+          id: `TX-${Date.now()}`,
+          date: new Date().toLocaleString('en-US'),
+          type: topUpMode === 'withdraw' ? 'wallet_withdraw' : 'topup_agent',
+          amount: transactionAmount,
+          fromId: topUpMode === 'withdraw' ? String(topUpTarget.id) : (prev.currentUser?.id || 'admin'),
+          fromName: topUpMode === 'withdraw' ? String(topUpTarget.name || topUpTarget.username || '') : (prev.currentUser?.name || 'Super Admin'),
+          toId: topUpMode === 'withdraw' ? (prev.currentUser?.id || 'admin') : String(topUpTarget.id),
+          toName: topUpMode === 'withdraw' ? (prev.currentUser?.name || 'Super Admin') : String(topUpTarget.name || topUpTarget.username || ''),
+          status: 'completed',
+          note: topUpMode === 'withdraw'
+            ? (isRTL ? 'تسوية وسحب من محفظة العضو' : 'Settlement and withdrawal from member wallet')
+            : (isRTL ? 'إيداع في محفظة العضو' : 'Deposit to member wallet'),
+        };
+
+        return {
+          ...prev,
+          centralBalance: topUpMode === 'withdraw'
+            ? prev.centralBalance + transactionAmount
+            : prev.centralBalance - transactionAmount,
+          financialTransactions: [newTransaction, ...prev.financialTransactions],
+          teamMembers: prev.teamMembers.map(member => (
+            member.id === topUpTarget.id
+              ? { ...member, balance: Number(member.balance || 0) + signedAmount }
+              : member
+          ))
+        };
+      });
       setIsTopUpModalOpen(false);
       setTopUpAmount('');
       setShowSuccess(true);
       setTimeout(() => setShowSuccess(false), 3000);
     } catch (err) {
-      setApiError(isRTL ? 'فشل عملية الشحن' : 'Top up failed');
+      console.error(err);
+      setApiError(topUpMode === 'withdraw'
+        ? (isRTL ? 'فشل عملية السحب/التسوية' : 'Withdrawal failed')
+        : (isRTL ? 'فشل عملية الإيداع' : 'Deposit failed'));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSaveManagerLimit = async () => {
+    if (!limitTarget) return;
+    const normalizedLimit = Number(limitAmount || 0);
+    if (limitEnabled && normalizedLimit <= 0) {
+      toastInfo(
+        isRTL ? 'أدخل قيمة صحيحة للحد المالي قبل الحفظ.' : 'Enter a valid transaction limit before saving.',
+        isRTL ? 'قيمة مطلوبة' : 'Value Required'
+      );
+      return;
+    }
+    try {
+      setIsLoading(true);
+      await updateManagerTxLimit(String(limitTarget.id), normalizedLimit, limitEnabled);
+      const data = await fetchManagersRaw();
+      setManagers(data || []);
+      setIsLimitModalOpen(false);
+      setLimitTarget(null);
+      setLimitAmount('');
+      setLimitEnabled(false);
+      toastSuccess(
+        isRTL ? 'تم حفظ القيود المالية بنجاح.' : 'Financial limits saved successfully.',
+        isRTL ? 'تم الحفظ' : 'Saved'
+      );
+    } catch (err) {
+      console.error(err);
+      setApiError(isRTL ? 'فشل حفظ القيود المالية' : 'Failed to save financial limits');
     } finally {
       setIsLoading(false);
     }
@@ -2982,7 +3103,7 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
     } else if (activeSubTab === 'managers') {
       try {
         setIsLoading(true);
-        await updateManager(editingItem.id, editingItem);
+        await updateManager(editingItem.id, sanitizeManagerFinancialPayload(editingItem));
         const data = await fetchManagersRaw();
         setManagers(data);
       } catch (err) {
@@ -3003,6 +3124,33 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
     }
     setShowSuccess(true);
     setTimeout(() => setShowSuccess(false), 3000);
+  };
+
+  const sanitizeManagerFinancialPayload = (payload: DynamicItem) => {
+    const firstName = String(payload.firstName || payload['الاسم الاول'] || '').trim();
+    const lastName = String(payload.lastName || payload['الاسم الثاني'] || '').trim();
+    const fullName = `${firstName} ${lastName}`.trim() || String(payload.name || '').trim();
+    const username = String(payload.username || payload['اسم الدخول'] || '').trim();
+    const currentBalance = Number(payload.balance || payload['الرصيد'] || 0);
+    const commissionRate = Number(payload.commissionRate || payload['نسبة العمولة'] || 0);
+    const maxTxLimit = Number(payload.maxTxLimit || payload['الحد المالي'] || 0);
+    const { balance, ['الرصيد']: _arabicBalance, ...rest } = payload as DynamicItem & { ['الرصيد']?: unknown };
+    return {
+      ...rest,
+      firstName,
+      lastName,
+      'الاسم الاول': firstName,
+      'الاسم الثاني': lastName,
+      name: fullName,
+      username,
+      'اسم الدخول': username,
+      commissionRate,
+      'نسبة العمولة': commissionRate,
+      maxTxLimit,
+      'الحد المالي': maxTxLimit,
+      balance: currentBalance,
+      'الرصيد': currentBalance,
+    };
   };
 
   const filteredData = () => {
@@ -3545,7 +3693,7 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
             {activeSubTab === 'managers' && (isRTL ? 'إدارة الطاقم والارصدة' : 'Staff & Balance Management')}
             {activeSubTab === 'groups' && (isRTL ? 'المجموعات وتخصيص الصلاحيات' : 'Groups & Permissions')}
           </h3>
-          {(activeSubTab === 'subscribers' && hasPermission('manage_subscribers')) ||
+          {(activeSubTab === 'subscribers' && (hasPermission('sub_add') || hasPermission('manage_subscribers'))) ||
            (activeSubTab === 'iptv' && hasPermission('manage_iptv')) ||
            (activeSubTab === 'suppliers' && hasPermission('manage_suppliers')) ||
            (activeSubTab === 'shareholders' && (hasPermission('manage_shareholders') || state.role === 'super_admin')) ||
@@ -3581,13 +3729,15 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
                   </button>
                 </>
               )}
-              <button 
-                onClick={handleAdd}
-                className="px-6 py-2.5 bg-teal-500 hover:bg-teal-600 text-white rounded-xl text-sm font-bold flex items-center gap-2 transition-all shadow-lg shadow-teal-500/20"
-              >
-                <Plus size={16} />
-                {getAddButtonLabel()}
-              </button>
+              {(activeSubTab !== 'subscribers' || hasPermission('sub_add') || hasPermission('manage_subscribers') || state.role === 'super_admin') && (
+                <button 
+                  onClick={handleAdd}
+                  className="px-6 py-2.5 bg-teal-500 hover:bg-teal-600 text-white rounded-xl text-sm font-bold flex items-center gap-2 transition-all shadow-lg shadow-teal-500/20"
+                >
+                  <Plus size={16} />
+                  {getAddButtonLabel()}
+                </button>
+              )}
             </div>
           ) : null}
         </div>
@@ -4463,7 +4613,16 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
                             <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{isRTL ? 'كلمة المرور' : 'Password'}</label><input type="text" value={String(entityFormState['كلمة المرور'] || entityFormState.password || '')} onChange={(e) => setEntityFormField('كلمة المرور', e.target.value, { password: e.target.value })} className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm font-mono" /></div>
                             <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{isRTL ? 'مجموعة الصلاحيات' : 'Permission Group'}</label><select value={String(entityFormState['الصلاحية'] || '')} onChange={(e) => { const group = state.securityGroups.find((g) => g.name === e.target.value); setEntityFormField('الصلاحية', e.target.value, { role: e.target.value, groupId: group?.id || '' }); }} className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm"><option value="">{isRTL ? '-- اختر المجموعة --' : '-- Select Group --'}</option>{state.securityGroups.map((group) => (<option key={group.id} value={group.name}>{group.name}</option>))}</select></div>
                             <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{isRTL ? 'الحالة' : 'Status'}</label><select value={String(entityFormState.status || 'active')} onChange={(e) => setEntityFormField('status', e.target.value)} className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm"><option value="active">{isRTL ? 'نشط' : 'Active'}</option><option value="inactive">{isRTL ? 'مجمد' : 'Disabled'}</option></select></div>
-                            <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{isRTL ? 'الرصيد' : 'Balance'}</label><input type="text" inputMode="decimal" value={String(entityFormState.balance || entityFormState['الرصيد'] || '0')} onChange={(e) => setEntityFormField('balance', normalizeDigits(e.target.value), { 'الرصيد': normalizeDigits(e.target.value) })} className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm font-mono" /></div>
+                            <div className="space-y-2">
+                              <FieldHelpLabel label={isRTL ? 'الرصيد' : 'Balance'} helpText={entityFieldHelp.balance} isRTL={isRTL} />
+                              <input
+                                type="text"
+                                inputMode="decimal"
+                                value={String(entityFormState.balance || entityFormState['الرصيد'] || '0')}
+                                readOnly
+                                className="w-full bg-slate-100 dark:bg-[#111114] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm font-mono text-slate-500 dark:text-slate-400 cursor-not-allowed"
+                              />
+                            </div>
                             <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{isRTL ? 'الحد المالي' : 'Tx Limit'}</label><input type="text" inputMode="decimal" value={String(entityFormState.maxTxLimit || entityFormState['الحد المالي'] || '')} onChange={(e) => setEntityFormField('maxTxLimit', normalizeDigits(e.target.value), { 'الحد المالي': normalizeDigits(e.target.value) })} className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm font-mono" /></div>
                             <div className="space-y-2 md:col-span-2"><label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{isRTL ? 'ملاحظات' : 'Notes'}</label><textarea rows={3} value={String(entityFormState.notes || '')} onChange={(e) => setEntityFormField('notes', e.target.value)} className="w-full bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm resize-none" /></div>
                           </div>
@@ -6509,6 +6668,35 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
                    </select>
                 </div>
 
+                <div className="rounded-2xl border border-emerald-200 dark:border-emerald-500/20 bg-emerald-50 dark:bg-emerald-500/5 p-5 space-y-3">
+                  <p className="text-xs font-black text-emerald-600 uppercase tracking-widest">{isRTL ? 'الملخص المالي قبل التفعيل' : 'Financial Summary Before Activation'}</p>
+                  <div className="grid grid-cols-2 gap-3 text-sm">
+                    <div className="rounded-xl bg-white/70 dark:bg-slate-900/40 px-4 py-3">
+                      <p className="text-slate-500 text-xs font-bold">{isRTL ? 'سعر الباقة على المشترك' : 'Subscriber Price'}</p>
+                      <p className="mt-1 font-black text-slate-900 dark:text-white">{formatCurrency(activationPricing.price, state.currency, state.lang)}</p>
+                    </div>
+                    <div className="rounded-xl bg-white/70 dark:bg-slate-900/40 px-4 py-3">
+                      <p className="text-slate-500 text-xs font-bold">{isRTL ? 'نسبة عمولتك' : 'Your Commission Rate'}</p>
+                      <p className="mt-1 font-black text-slate-900 dark:text-white">{formatNumber(activationPricing.commissionRate, state.lang)}%</p>
+                    </div>
+                    <div className="rounded-xl bg-white/70 dark:bg-slate-900/40 px-4 py-3">
+                      <p className="text-slate-500 text-xs font-bold">{isRTL ? 'ربحك من العملية' : 'Your Profit'}</p>
+                      <p className="mt-1 font-black text-emerald-600 dark:text-emerald-400">{formatCurrency(activationPricing.commissionAmount, state.currency, state.lang)}</p>
+                    </div>
+                    <div className="rounded-xl bg-white/70 dark:bg-slate-900/40 px-4 py-3">
+                      <p className="text-slate-500 text-xs font-bold">{isRTL ? 'صافي الخصم عليك' : 'Net Deduction From You'}</p>
+                      <p className="mt-1 font-black text-rose-600 dark:text-rose-400">{formatCurrency(activationPricing.costToActor, state.currency, state.lang)}</p>
+                    </div>
+                  </div>
+                  {state.role !== 'super_admin' && activationPricing.actor && (
+                    <p className="text-xs font-bold text-slate-600 dark:text-slate-300">
+                      {isRTL
+                        ? `سيتم الخصم من رصيد: ${activationPricing.actor.name || activationPricing.actor.username}`
+                        : `The deduction will be taken from: ${activationPricing.actor.name || activationPricing.actor.username}`}
+                    </p>
+                  )}
+                </div>
+
                 <button 
                   onClick={handleActivateSubscriber}
                   disabled={isActivating}
@@ -6693,17 +6881,22 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
           <div key="topup-modal" className="fixed inset-0 z-[110] flex items-center justify-center p-4">
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm" onClick={() => setIsTopUpModalOpen(false)} />
             <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }} className="relative w-full max-w-md bg-white dark:bg-[#09090B] rounded-[2.5rem] shadow-2xl overflow-hidden border border-slate-200 dark:border-slate-800 text-left" dir={isRTL ? 'rtl' : 'ltr'}>
-              <div className="p-8 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-gradient-to-r from-emerald-500/10 to-teal-500/10">
+              <div className={`p-8 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-gradient-to-r ${topUpMode === 'withdraw' ? 'from-amber-500/10 to-orange-500/10' : 'from-emerald-500/10 to-teal-500/10'}`}>
                 <h3 className="text-2xl font-black text-slate-900 dark:text-white flex items-center gap-3">
-                  <Coins className="text-emerald-500 w-8 h-8" />
-                  {t.financial.topUp}
+                  <Coins className={`${topUpMode === 'withdraw' ? 'text-amber-500' : 'text-emerald-500'} w-8 h-8`} />
+                  {topUpMode === 'withdraw' ? (isRTL ? 'سحب / تسوية رصيد' : 'Withdraw / Settle Balance') : t.financial.topUp}
                 </h3>
                 <button onClick={() => setIsTopUpModalOpen(false)} className="p-2 hover:bg-white dark:hover:bg-slate-800 rounded-xl transition-all"><X size={24} /></button>
               </div>
               <div className="p-8 space-y-6">
-                <div className="p-4 bg-emerald-50 dark:bg-emerald-500/5 rounded-2xl border border-emerald-100 dark:border-emerald-500/20">
-                  <p className="text-xs font-black text-emerald-600 uppercase tracking-widest mb-1">{isRTL ? 'المستلم:' : 'Recipient:'}</p>
+                <div className={`p-4 rounded-2xl border ${topUpMode === 'withdraw' ? 'bg-amber-50 dark:bg-amber-500/5 border-amber-100 dark:border-amber-500/20' : 'bg-emerald-50 dark:bg-emerald-500/5 border-emerald-100 dark:border-emerald-500/20'}`}>
+                  <p className={`text-xs font-black uppercase tracking-widest mb-1 ${topUpMode === 'withdraw' ? 'text-amber-600' : 'text-emerald-600'}`}>{isRTL ? 'المستلم:' : 'Recipient:'}</p>
                   <p className="text-lg font-black text-slate-800 dark:text-white">{topUpTarget.name || topUpTarget['اسم الدخول'] || topUpTarget.username}</p>
+                </div>
+                <div className={`rounded-2xl border px-4 py-3 text-sm font-bold ${topUpMode === 'withdraw' ? 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-300' : 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-300'}`}>
+                  {topUpMode === 'withdraw'
+                    ? (isRTL ? 'سيتم سحب هذا المبلغ من محفظة العضو وإعادته إلى الرصيد المركزي.' : 'This amount will be deducted from the member wallet and returned to the central balance.')
+                    : (isRTL ? 'سيتم إيداع هذا المبلغ في محفظة العضو وخصمه من الرصيد المركزي.' : 'This amount will be deposited into the member wallet and deducted from the central balance.')}
                 </div>
                 <div className="space-y-3">
                   <label className="text-xs font-black text-slate-400 uppercase tracking-widest">{t.financial.amount}:</label>
@@ -6714,11 +6907,11 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
                       lang="en"
                       value={topUpAmount}
                       onChange={(e) => {
-                        const val = e.target.value.replace(/[^0-9.]/g, '');
+                        const val = normalizeDigits(e.target.value);
                         setTopUpAmount(val);
                       }}
                       placeholder="0.00"
-                      className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl px-6 py-5 text-3xl font-black text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 transition-all outline-none text-center"
+                      className={`w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl px-6 py-5 text-3xl font-black text-slate-900 dark:text-white transition-all outline-none text-center ${topUpMode === 'withdraw' ? 'focus:ring-2 focus:ring-amber-500' : 'focus:ring-2 focus:ring-emerald-500'}`}
                     />
                     <span className="absolute right-6 top-1/2 -translate-y-1/2 font-black text-slate-400">{state.currency}</span>
                   </div>
@@ -6726,10 +6919,61 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
                 <button 
                   onClick={handleTopUpManager}
                   disabled={!topUpAmount || parseFloat(topUpAmount) <= 0}
-                  className="w-full py-5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-2xl font-black text-xl shadow-xl shadow-emerald-500/20 transition-all flex items-center justify-center gap-3 disabled:opacity-50"
+                  className={`w-full py-5 text-white rounded-2xl font-black text-xl transition-all flex items-center justify-center gap-3 disabled:opacity-50 ${topUpMode === 'withdraw' ? 'bg-amber-500 hover:bg-amber-600 shadow-xl shadow-amber-500/20' : 'bg-emerald-500 hover:bg-emerald-600 shadow-xl shadow-emerald-500/20'}`}
                 >
                   <ShieldCheck size={24} />
-                  {isRTL ? 'تأكيد الشحن الآن' : 'Confirm Recharge'}
+                  {topUpMode === 'withdraw' ? (isRTL ? 'تأكيد السحب الآن' : 'Confirm Withdrawal') : (isRTL ? 'تأكيد الشحن الآن' : 'Confirm Recharge')}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+
+        {isLimitModalOpen && limitTarget && (
+          <div key="limit-modal" className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm" onClick={() => setIsLimitModalOpen(false)} />
+            <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }} className="relative w-full max-w-md bg-white dark:bg-[#09090B] rounded-[2.5rem] shadow-2xl overflow-hidden border border-slate-200 dark:border-slate-800 text-left" dir={isRTL ? 'rtl' : 'ltr'}>
+              <div className="p-8 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-gradient-to-r from-amber-500/10 to-orange-500/10">
+                <h3 className="text-2xl font-black text-slate-900 dark:text-white flex items-center gap-3">
+                  <Lock className="text-amber-500 w-8 h-8" />
+                  {isRTL ? 'إدارة القيود المالية' : 'Manage Financial Limits'}
+                </h3>
+                <button onClick={() => setIsLimitModalOpen(false)} className="p-2 hover:bg-white dark:hover:bg-slate-800 rounded-xl transition-all"><X size={24} /></button>
+              </div>
+              <div className="p-8 space-y-6">
+                <div className="p-4 bg-amber-50 dark:bg-amber-500/5 rounded-2xl border border-amber-100 dark:border-amber-500/20">
+                  <p className="text-xs font-black text-amber-600 uppercase tracking-widest mb-1">{isRTL ? 'العضو:' : 'Member:'}</p>
+                  <p className="text-lg font-black text-slate-800 dark:text-white">{limitTarget.name || limitTarget['اسم الدخول'] || limitTarget.username}</p>
+                </div>
+                <label className="flex items-center justify-between gap-3 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50">
+                  <div>
+                    <p className="text-sm font-black text-slate-800 dark:text-white">{isRTL ? 'تفعيل الحد المالي' : 'Enable Transaction Limit'}</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">{isRTL ? 'عند التفعيل سيتم منع أي عملية تتجاوز السقف المحدد.' : 'When enabled, any transaction above the configured ceiling will be blocked.'}</p>
+                  </div>
+                  <input type="checkbox" checked={limitEnabled} onChange={(e) => setLimitEnabled(e.target.checked)} className="h-5 w-5 accent-amber-500" />
+                </label>
+                <div className="space-y-3">
+                  <label className="text-xs font-black text-slate-400 uppercase tracking-widest">{isRTL ? 'قيمة الحد المالي' : 'Transaction Limit'}:</label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      lang="en"
+                      value={limitAmount}
+                      onChange={(e) => setLimitAmount(normalizeDigits(e.target.value))}
+                      className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl px-5 py-4 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-500 text-2xl font-black font-mono"
+                      placeholder="0.00"
+                    />
+                    <div className="absolute inset-y-0 end-5 flex items-center pointer-events-none text-slate-400 font-black">{state.currency}</div>
+                  </div>
+                </div>
+                <button
+                  onClick={handleSaveManagerLimit}
+                  disabled={isLoading}
+                  className="w-full py-5 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white rounded-2xl font-black text-xl shadow-xl shadow-amber-500/20 transition-all flex items-center justify-center gap-3 disabled:opacity-50 disabled:grayscale"
+                >
+                  {isLoading ? <RefreshCw className="animate-spin" /> : <Save size={24} />}
+                  {isRTL ? 'حفظ القيود المالية' : 'Save Financial Limits'}
                 </button>
               </div>
             </motion.div>

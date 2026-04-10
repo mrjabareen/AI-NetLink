@@ -10,6 +10,7 @@ import { LogIn, Mail, Lock, Shield, User, Briefcase, TrendingUp, Eye, EyeOff, Ch
 import { AppState, Role, User as UserType } from '../types';
 import { dict } from '../dict';
 import { fetchManagersRaw, fetchSubscribers } from '../api';
+import { mergeTeamMembersWithStoredFinancialState, readStoredFinancialState } from '../utils/financialState';
 
 interface LoginProps {
   state: AppState;
@@ -20,6 +21,7 @@ const SUPER_ADMIN: UserType = { id: '0', name: 'المدير العام (Super A
 const REMEMBERED_USER_KEY = 'sas4_remembered_user';
 const SESSION_USER_KEY = 'sas4_session_user';
 const SHARED_SESSION_USER_KEY = 'sas4_shared_session_user';
+const STORED_FINANCIAL_STATE = readStoredFinancialState();
 
 const buildSubscriberIdentity = (subscriber: any): UserType => {
   const firstName = String(subscriber.firstName || subscriber.firstname || subscriber['الاسم الاول'] || '').trim();
@@ -110,7 +112,7 @@ export default function Login({ state, setState }: LoginProps) {
           isAuthenticated: true,
           currentUser: user,
           impersonationSource: null,
-          teamMembers: [user, ...dbUsers.map((manager: any, index: number) => ({
+          teamMembers: mergeTeamMembersWithStoredFinancialState([user, ...dbUsers.map((manager: any, index: number) => ({
             id: String(manager.id || `SAS-${100 + index}`),
             name: `${manager['الاسم الاول'] || ''} ${manager['الاسم الثاني'] || ''}`.trim() || manager['اسم الدخول'] || 'Unknown Manager',
             email: manager.email || `${manager['اسم الدخول'] || 'user'}@netlink.ai`,
@@ -120,7 +122,11 @@ export default function Login({ state, setState }: LoginProps) {
             permissions: Array.isArray(manager.permissions) ? manager.permissions : [],
             groupId: manager.groupId || '',
             status: 'active',
-          }))],
+            balance: Number(manager.balance || manager['الرصيد'] || 0),
+            commissionRate: Number(manager.commissionRate || manager['نسبة العمولة'] || 0),
+            maxTxLimit: Number(manager.maxTxLimit || manager['الحد المالي'] || 0),
+            isLimitEnabled: Boolean(manager.isLimitEnabled),
+          }))], STORED_FINANCIAL_STATE),
           role: user.role,
           activeTab: 'dashboard'
         }));
@@ -146,6 +152,10 @@ export default function Login({ state, setState }: LoginProps) {
           role: ((roleLabel === 'Manager-A' || roleLabel === 'Manager') ? 'sas4_manager' : 'admin') as Role,
           permissions: Array.isArray(matchedRawManager.permissions) ? matchedRawManager.permissions : [],
           groupId: matchedRawManager.groupId || '',
+          balance: Number(matchedRawManager.balance || matchedRawManager['الرصيد'] || 0),
+          commissionRate: Number(matchedRawManager.commissionRate || matchedRawManager['نسبة العمولة'] || 0),
+          maxTxLimit: Number(matchedRawManager.maxTxLimit || matchedRawManager['الحد المالي'] || 0),
+          isLimitEnabled: Boolean(matchedRawManager.isLimitEnabled),
         };
         persistSession(user);
         setState(prev => ({
@@ -153,7 +163,7 @@ export default function Login({ state, setState }: LoginProps) {
           isAuthenticated: true,
           currentUser: user,
           impersonationSource: null,
-          teamMembers: [SUPER_ADMIN, ...dbUsers.map((manager: any, index: number) => ({
+          teamMembers: mergeTeamMembersWithStoredFinancialState([SUPER_ADMIN, ...dbUsers.map((manager: any, index: number) => ({
             id: String(manager.id || `SAS-${100 + index}`),
             name: `${manager['الاسم الاول'] || ''} ${manager['الاسم الثاني'] || ''}`.trim() || manager['اسم الدخول'] || 'Unknown Manager',
             email: manager.email || `${manager['اسم الدخول'] || 'user'}@netlink.ai`,
@@ -163,7 +173,11 @@ export default function Login({ state, setState }: LoginProps) {
             permissions: Array.isArray(manager.permissions) ? manager.permissions : [],
             groupId: manager.groupId || '',
             status: 'active',
-          }))],
+            balance: Number(manager.balance || manager['الرصيد'] || 0),
+            commissionRate: Number(manager.commissionRate || manager['نسبة العمولة'] || 0),
+            maxTxLimit: Number(manager.maxTxLimit || manager['الحد المالي'] || 0),
+            isLimitEnabled: Boolean(manager.isLimitEnabled),
+          }))], STORED_FINANCIAL_STATE),
           role: user.role,
           activeTab: user.role === 'shareholder' ? 'investors' : 'dashboard'
         }));
