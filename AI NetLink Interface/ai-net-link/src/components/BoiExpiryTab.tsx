@@ -263,7 +263,8 @@ export default function BoiExpiryTab({ state, setState }: BoiExpiryTabProps) {
   }, [subscribers.length]);
 
   // Helper: Status Calculation
-  const getSubStatus = (expiry: string) => {
+  const getSubStatus = (expiryRaw: unknown) => {
+    const expiry = String(expiryRaw || '').trim();
     if (!expiry || expiry === 'N/A') return 'active';
     const now = new Date();
     // Support various formats, stripping extra time if needed
@@ -778,8 +779,8 @@ export default function BoiExpiryTab({ state, setState }: BoiExpiryTabProps) {
       </div>
 
       {/* Main Panel */}
-      <div className="flex-1 flex flex-col glass-panel rounded-[2.5rem] border border-slate-200/50 dark:border-slate-800/50 shadow-2xl overflow-hidden min-h-[28rem] group/panel">
-        <div className="p-6 border-b border-slate-200/50 dark:border-slate-800/50 flex flex-col sm:flex-row gap-4 justify-between items-center bg-slate-50/30 dark:bg-slate-900/30 backdrop-blur-md">
+      <div className="flex-1 flex flex-col rounded-[2rem] border border-slate-200/70 dark:border-slate-800/70 bg-white/70 dark:bg-white/[0.02] backdrop-blur-sm group/panel">
+        <div className="p-6 border-b border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row gap-4 justify-between items-center bg-transparent">
           <div className="relative w-full sm:w-96">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
             <input 
@@ -806,20 +807,20 @@ export default function BoiExpiryTab({ state, setState }: BoiExpiryTabProps) {
           </div>
         </div>
 
-        {isLoading ? (
-          <div className="flex-1 flex flex-col items-center justify-center space-y-4 opacity-50">
-            <Loader2 className="animate-spin text-rose-500" size={48} />
-            <p className="font-black text-slate-500 animate-pulse">{isRTL ? 'جاري جلب بيانات المشتركين...' : 'Syncing subscriber database...'}</p>
-          </div>
-        ) : filteredList.length === 0 ? (
-          <div className="flex-1 flex flex-col items-center justify-center space-y-4">
-            <div className="w-20 h-20 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center text-slate-400">
-              <Search size={32} />
+        <div className="flex-1 p-6">
+          {isLoading ? (
+            <div className="flex flex-col items-center justify-center space-y-4 opacity-50">
+              <Loader2 className="animate-spin text-rose-500" size={48} />
+              <p className="font-black text-slate-500 animate-pulse">{isRTL ? 'جاري جلب بيانات المشتركين...' : 'Syncing subscriber database...'}</p>
             </div>
-            <p className="font-black text-slate-500">{isRTL ? 'لا يوجد مشتركين في هذا التصنيف.' : 'No subscribers found for this filter.'}</p>
-          </div>
-        ) : (
-          <div className="flex-1 overflow-y-auto custom-scrollbar p-6 scroll-smooth">
+          ) : filteredList.length === 0 ? (
+            <div className="flex flex-col items-center justify-center space-y-4">
+              <div className="w-20 h-20 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center text-slate-400">
+                <Search size={32} />
+              </div>
+              <p className="font-black text-slate-500">{isRTL ? 'لا يوجد مشتركين في هذا التصنيف.' : 'No subscribers found for this filter.'}</p>
+            </div>
+          ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
               {filteredList.map((sub, idx) => (
                 <SubscriberCard 
@@ -837,8 +838,8 @@ export default function BoiExpiryTab({ state, setState }: BoiExpiryTabProps) {
                 />
               ))}
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       {/* Sync Modal */}
@@ -1274,7 +1275,7 @@ function SimpleMessageModal({ sub, isRTL, onClose }: {
             </button>
           </div>
 
-          <div className="mb-8 p-6 bg-slate-50 dark:bg-slate-900 rounded-3xl border border-dashed border-slate-200 dark:border-slate-700">
+          <div className="mb-8 p-6 bg-white/80 dark:bg-[#101014] rounded-3xl border border-slate-200 dark:border-slate-700">
             <div className="flex items-center gap-4">
               <div className="w-12 h-12 bg-white dark:bg-slate-800 rounded-full flex items-center justify-center shadow-inner">
                 <User size={24} className="text-teal-500" />
@@ -1355,7 +1356,7 @@ function SimpleRenewModal({ sub, isRTL, onClose, onCompleted }: {
         await activateSubscriber(String(sub.id), 'today', 'all');
         toastSuccess(isRTL ? 'تم تفعيل الاشتراك ابتداءً من اليوم.' : 'Subscription activated starting today.', isRTL ? 'تم التفعيل' : 'Activated');
       } else {
-        await activateSubscriber(String(sub.id), 'month_start', 'all');
+        await activateSubscriber(String(sub.id), 'first_of_month', 'all');
         toastSuccess(isRTL ? 'تمت إعادة التفعيل من بداية الشهر.' : 'Subscription reactivated from the start of the month.', isRTL ? 'تم التفعيل' : 'Activated');
       }
 

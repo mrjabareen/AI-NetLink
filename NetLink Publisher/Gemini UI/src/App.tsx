@@ -91,6 +91,7 @@ const translations = {
     diagnosticsStatusFail: 'فشل',
     diagnoseConnection: 'فحص الاتصال',
     diagnoseToken: 'فحص التوكن',
+    createMissing: 'إنشاء ملفات المزامنة',
     diagnosticsTokenUser: 'حساب التوكن',
     diagnosticsConnectionOnly: 'جاري فحص الاتصال بالمستودع...',
     diagnosticsTokenOnly: 'جاري فحص صلاحية التوكن...',
@@ -174,6 +175,7 @@ const translations = {
     diagnosticsStatusFail: 'Failed',
     diagnoseConnection: 'Check Connection',
     diagnoseToken: 'Check Token',
+    createMissing: 'Create Sync Files',
     diagnosticsTokenUser: 'Token User',
     diagnosticsConnectionOnly: 'Checking repository connectivity...',
     diagnosticsTokenOnly: 'Checking token validity...',
@@ -552,6 +554,20 @@ export default function App() {
     }
   };
 
+  const createMissingSyncFiles = async () => {
+    try {
+      await window.netlinkPublisher.saveSettings(settings);
+      const res = await window.netlinkPublisher.ensureSyncFiles({ projectPath: settings.projectPath });
+      if (res?.versionPath) {
+        addLog(isRtl ? `تم تجهيز ملف الإصدار: ${res.versionPath}` : `Prepared version file: ${res.versionPath}`, 'success');
+        await refreshProject('refresh');
+      }
+    } catch (error) {
+      setStatus('error');
+      logFriendlyError(error);
+    }
+  };
+
   const handleSaveSettings = async () => {
     try {
       await window.netlinkPublisher.saveSettings(settings);
@@ -568,7 +584,7 @@ export default function App() {
     try {
       const bundle = await window.netlinkPublisher.saveCurrentProject({
         ...settings,
-        projectId: selectedProjectId || undefined,
+        projectId: undefined,
         name: project?.projectName || '',
       });
       applyConfigBundle(bundle);
@@ -597,9 +613,13 @@ export default function App() {
   };
 
   const handleDeleteSavedProject = async () => {
-    if (!selectedProjectId) return;
+    const targetId = window.prompt(isRtl ? 'أدخل رقم تعريف المشروع لحذفه (أو اتركه فارغًا لاستخدام المحدد حاليًا):' : 'Enter the project ID to delete (or leave empty to delete the currently selected one):') || '';
+    const idToDelete = targetId.trim() || selectedProjectId;
+    if (!idToDelete) return;
+    const pinInput = window.prompt(isRtl ? 'أدخل الرقم السري لتأكيد حذف المشروع:' : 'Enter PIN to confirm deleting the project:');
+    if (pinInput !== '1993') return;
     try {
-      const bundle = await window.netlinkPublisher.deleteSavedProject(selectedProjectId);
+      const bundle = await window.netlinkPublisher.deleteSavedProject(idToDelete);
       applyConfigBundle(bundle);
       applyProjectState(null);
       addLog(t.projectDeleted, 'success');
@@ -629,8 +649,11 @@ export default function App() {
       await saveDraft();
       addLog(t.diagnosticsAuto, 'info');
       const diagnostics = await runGitHubDiagnostics(true);
-      if (!diagnostics?.repoAccess || !diagnostics?.versionFileReadable) {
-        throw new Error(isRtl ? 'فشل تشخيص GitHub. تحقق من الاتصال والتوكن وصلاحية الوصول للملف البعيد.' : 'GitHub diagnostics failed. Verify connectivity, token, and remote file access.');
+      if (!diagnostics?.repoAccess) {
+        throw new Error(isRtl ? 'تعذر الوصول إلى المستودع. تحقق من الرابط والتوكن.' : 'Repository is not reachable. Verify URL and token.');
+      }
+      if (diagnostics && diagnostics.repoAccess && !diagnostics.versionFileReadable) {
+        addLog(isRtl ? 'لم يتم العثور على version.json على GitHub، سيتم إنشاء النسخة الأولى محليًا ثم دفعها.' : 'version.json not found on GitHub; an initial file will be created locally and pushed.', 'info');
       }
       setPublishProgress(28);
       addLog(t.logBuild, 'info');
@@ -813,7 +836,7 @@ export default function App() {
                           {t.deleteProject}
                         </button>
                       </div>
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                      <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                         <button
                           onClick={() => runGitHubDiagnostics(false, 'connection')}
                           disabled={isPublishing || isDiagnosingGithub}
@@ -829,6 +852,13 @@ export default function App() {
                         >
                           {isDiagnosingGithub ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />}
                           {t.diagnoseToken}
+                        </button>
+                        <button
+                          onClick={createMissingSyncFiles}
+                          disabled={isPublishing || isDiagnosingGithub}
+                          className="bg-emerald-600 hover:bg-emerald-700 disabled:bg-neutral-300 dark:disabled:bg-[#333] text-white px-6 py-2.5 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2 shadow-sm disabled:cursor-not-allowed"
+                        >
+                          {t.createMissing}
                         </button>
                         <button
                           onClick={() => runGitHubDiagnostics(false, 'full')}

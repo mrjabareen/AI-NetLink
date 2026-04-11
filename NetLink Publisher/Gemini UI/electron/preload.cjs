@@ -12,4 +12,5 @@ contextBridge.exposeInMainWorld('netlinkPublisher', {
   loadVersion: (payload) => ipcRenderer.invoke('publisher:load-version', payload),
   saveVersionDraft: (payload) => ipcRenderer.invoke('publisher:save-version-draft', payload),
   publishRelease: (payload) => ipcRenderer.invoke('publisher:publish-release', payload),
+  ensureSyncFiles: (payload) => ipcRenderer.invoke('publisher:ensure-sync-files', payload),
 });

@@ -332,19 +332,22 @@ async function resolveProjectContext(selectedPath) {
   }
 
   let appRoot = path.join(repoRoot, 'AI NetLink Interface', 'ai-net-link');
-  const rootVersionPath = path.join(appRoot, 'public', 'version.json');
+  let versionPath = path.join(appRoot, 'public', 'version.json');
 
-  if (!fs.existsSync(rootVersionPath)) {
-    const directVersionPath = path.join(candidate, 'public', 'version.json');
+  if (!fs.existsSync(versionPath)) {
+    const directPublicVersion = path.join(candidate, 'public', 'version.json');
     const directPackagePath = path.join(candidate, 'package.json');
-    if (fs.existsSync(directVersionPath) && fs.existsSync(directPackagePath)) {
+    if (fs.existsSync(directPublicVersion) && fs.existsSync(directPackagePath)) {
       appRoot = candidate;
+      versionPath = directPublicVersion;
+    } else if (fs.existsSync(directPackagePath)) {
+      appRoot = candidate;
+      versionPath = path.join(appRoot, 'version.json');
     } else {
-      throw new Error('Could not find ai-net-link inside the selected path.');
+      appRoot = candidate;
+      versionPath = path.join(appRoot, 'version.json');
     }
   }
-
-  const versionPath = path.join(appRoot, 'public', 'version.json');
   const packagePath = path.join(appRoot, 'package.json');
   const fallbackProjectName = path.basename(repoRoot) || 'AI NetLink';
 
@@ -370,9 +373,8 @@ async function resolveProjectContext(selectedPath) {
 
 function loadVersionData(versionPath) {
   if (!fs.existsSync(versionPath)) {
-    throw new Error('version.json was not found.');
+    return null;
   }
-
   const data = readJsonFile(versionPath);
   return {
     version: String(data.version || ''),
@@ -469,23 +471,41 @@ async function updateGitHubFile(repoUrl, token, remotePath, contentUtf8, message
   return response.json();
 }
 
-async function getRemoteVersionData(repoUrl, token) {
+function computeRemoteVersionPath(projectPath) {
+  try {
+    if (projectPath && String(projectPath).trim()) {
+      // Resolve local context and compute path of version.json relative to repo root
+      // so we can access the same path on GitHub.
+      const resolved = fs.existsSync(projectPath)
+        ? null
+        : null;
+    }
+  } catch {}
+  return null;
+}
+
+async function getRemoteVersionData(repoUrl, token, remotePath) {
   if (!repoUrl || !String(repoUrl).trim()) {
     return null;
   }
 
-  const meta = await getGitHubContentMeta(repoUrl, token, REMOTE_VERSION_PATH, 'main');
-  if (!meta.content) {
-    throw new Error('Could not read the current GitHub version.');
+  const pathToUse = String(remotePath || REMOTE_VERSION_PATH || '').trim() || 'public/version.json';
+  try {
+    const meta = await getGitHubContentMeta(repoUrl, token, pathToUse, 'main');
+    if (!meta.content) {
+      return null;
+    }
+    const content = Buffer.from(String(meta.content).replace(/\n/g, ''), 'base64').toString('utf8');
+    return JSON.parse(stripBom(content));
+  } catch {
+    return null;
   }
-
-  const content = Buffer.from(String(meta.content).replace(/\n/g, ''), 'base64').toString('utf8');
-  return JSON.parse(stripBom(content));
 }
 
 async function diagnoseGitHub(input) {
   const repoUrl = String(input?.repoUrl || '').trim();
   const token = String(input?.githubToken || '').trim();
+  const projectPath = String(input?.projectPath || '').trim();
   if (!repoUrl) {
     throw new Error('Enter the GitHub repository URL first.');
   }
@@ -554,14 +574,29 @@ async function diagnoseGitHub(input) {
     }
     result.checks.push({ label: 'Repository Reachability', ok: true, detail: `${repo.owner}/${repo.name}` });
 
-    const versionMeta = await getGitHubContentMeta(repoUrl, token, REMOTE_VERSION_PATH, result.branch);
-    result.versionFileReadable = Boolean(versionMeta?.content);
-    result.checks.push({ label: 'version.json Access', ok: result.versionFileReadable, detail: REMOTE_VERSION_PATH });
+    // Compute remote path dynamically from selected project if possible
+    let dynamicRemotePath = REMOTE_VERSION_PATH;
+    try {
+      if (projectPath && fs.existsSync(projectPath)) {
+        const context = await resolveProjectContext(projectPath);
+        const rel = toGitRelativePath(path.relative(context.repoRoot, context.versionPath));
+        if (rel) dynamicRemotePath = rel;
+      }
+    } catch {}
+    result.remotePath = dynamicRemotePath;
 
-    if (versionMeta?.content) {
-      const content = Buffer.from(String(versionMeta.content).replace(/\n/g, ''), 'base64').toString('utf8');
-      const parsed = JSON.parse(stripBom(content));
-      result.githubVersion = parsed?.version || null;
+    try {
+      const versionMeta = await getGitHubContentMeta(repoUrl, token, dynamicRemotePath, result.branch);
+      result.versionFileReadable = Boolean(versionMeta?.content);
+      result.checks.push({ label: 'version.json Access', ok: result.versionFileReadable, detail: dynamicRemotePath });
+      if (versionMeta?.content) {
+        const content = Buffer.from(String(versionMeta.content).replace(/\n/g, ''), 'base64').toString('utf8');
+        const parsed = JSON.parse(stripBom(content));
+        result.githubVersion = parsed?.version || null;
+      }
+    } catch {
+      result.versionFileReadable = false;
+      result.checks.push({ label: 'version.json Access', ok: false, detail: dynamicRemotePath });
     }
 
     if (token) {
@@ -588,7 +623,8 @@ async function getProjectState({ projectPath, repoUrl, githubToken }) {
   let remoteVersion = null;
 
   try {
-    remoteVersion = await getRemoteVersionData(repoUrl, githubToken);
+    const rel = toGitRelativePath(path.relative(context.repoRoot, context.versionPath));
+    remoteVersion = await getRemoteVersionData(repoUrl, githubToken, rel);
   } catch {
     remoteVersion = null;
   }
@@ -597,9 +633,9 @@ async function getProjectState({ projectPath, repoUrl, githubToken }) {
     projectName: context.projectName,
     repoRoot: context.repoRoot,
     frontendFolder: context.appRoot,
-    loadedVersion: localVersion.version,
-    buildDate: localVersion.buildDate,
-    changelog: localVersion.changelog,
+    loadedVersion: (localVersion?.version || remoteVersion?.version || ''),
+    buildDate: (localVersion?.buildDate || remoteVersion?.buildDate || ''),
+    changelog: (localVersion?.changelog || []),
     githubVersion: remoteVersion?.version || null,
   };
 }
@@ -612,6 +648,24 @@ async function saveVersionDraft(input) {
 
   saveVersionData(context.versionPath, input.version, input.buildDate, changelog);
   return getProjectState(input);
+}
+
+async function ensureSyncFiles(input) {
+  const context = await resolveProjectContext(input.projectPath);
+  const dir = path.dirname(context.versionPath);
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+  const existed = fs.existsSync(context.versionPath);
+  if (!existed) {
+    const today = new Date().toISOString().slice(0, 10);
+    saveVersionData(context.versionPath, '0.1.0', today, []);
+  }
+  return {
+    created: !existed,
+    versionPath: context.versionPath,
+    projectName: context.projectName,
+  };
 }
 
 async function publishRelease(input) {
@@ -657,7 +711,8 @@ async function publishRelease(input) {
       return getProjectState(input);
     }
 
-    const remoteVersion = await getRemoteVersionData(repoUrl, token);
+    const rel = toGitRelativePath(path.relative(context.repoRoot, context.versionPath));
+    const remoteVersion = await getRemoteVersionData(repoUrl, token, rel);
     if (remoteVersion?.version === version) {
       throw new Error('The version number is still the same as GitHub. Change the version before publishing.');
     }
@@ -716,4 +771,5 @@ module.exports = {
   diagnoseGitHub,
   saveVersionDraft,
   publishRelease,
+  ensureSyncFiles,
 };

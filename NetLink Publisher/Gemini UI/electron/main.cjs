@@ -77,6 +77,10 @@ app.whenReady().then(() => {
     return core.publishRelease(payload);
   });
 
+  ipcMain.handle('publisher:ensure-sync-files', async (_event, payload) => {
+    return core.ensureSyncFiles(payload);
+  });
+
   createWindow();
 
   app.on('activate', () => {
