@@ -165,6 +165,32 @@ const writeJsonSafe = (filePath, data) => {
   fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8');
 };
 
+const NOTIFICATIONS_PATH = getSafePath(DB_PATH, 'System', 'notifications.json');
+
+const ensureDir = (...segments) => {
+  const dirPath = getSafePath(DB_PATH, ...segments);
+  if (!fs.existsSync(dirPath)) fs.mkdirSync(dirPath, { recursive: true });
+  return dirPath;
+};
+
+const readNotifications = () => readJsonSafeWithFallback(NOTIFICATIONS_PATH, []);
+const saveNotifications = (items) => writeJsonSafe(NOTIFICATIONS_PATH, items.slice(0, 500));
+const appendNotification = (payload) => {
+  const existing = readNotifications();
+  const id = crypto.randomBytes(16).toString('hex');
+  const entry = {
+    id,
+    createdAt: new Date().toISOString(),
+    read: false,
+    type: payload.type || 'info',
+    title: payload.title || '',
+    message: payload.message || '',
+    payload: payload.payload || null,
+  };
+  saveNotifications([entry, ...existing]);
+  return entry;
+};
+
 const mergeBackupConfig = (rawConfig = {}) => ({
   ...getDefaultBackupConfig(),
   ...rawConfig,
@@ -3458,6 +3484,155 @@ app.delete('/api/subscribers/:id', (req, res) => {
   }
 });
 
+app.post('/api/subscribers/:id/redeem-voucher', (req, res) => {
+  try {
+    const subscriberId = String(req.params.id || '').trim();
+    const code = String(req.body?.code || '').trim();
+    if (!subscriberId || !code) return res.status(400).json({ error: 'Missing subscriber id or voucher code' });
+
+    const vouchersPath = getSafePath(DB_PATH, 'Financial', 'vouchers.json');
+    const vouchers = readJsonSafeWithFallback(vouchersPath, []);
+    const now = new Date().toISOString();
+    const idx = Array.isArray(vouchers) ? vouchers.findIndex(v => String(v.code || '').trim() === code && !v.redeemed) : -1;
+    if (idx === -1) return res.status(400).json({ error: 'Invalid or already used voucher code' });
+
+    const voucher = vouchers[idx] || {};
+    const updatedVoucher = {
+      ...voucher,
+      redeemed: true,
+      redeemedAt: now,
+      subscriberId,
+    };
+    const updatedList = [...vouchers];
+    updatedList[idx] = updatedVoucher;
+    writeJsonSafe(vouchersPath, updatedList);
+
+    appendNotification({
+      type: 'voucher_redeemed',
+      title: 'Voucher redeemed',
+      message: `Subscriber ${subscriberId} redeemed voucher ${code}`,
+      payload: { subscriberId, code },
+    });
+
+    res.json({ data: { message: 'Voucher redeemed', voucher: updatedVoucher } });
+  } catch (error) {
+    console.error('Error redeeming voucher:', error);
+    res.status(500).json({ error: 'Failed to redeem voucher' });
+  }
+});
+
+app.get('/api/subscribers/:id/invoices', (req, res) => {
+  try {
+    const subscriberId = String(req.params.id || '').trim();
+    if (!subscriberId) return res.status(400).json({ error: 'Missing subscriber id' });
+    const safeId = sanitizeFileName(subscriberId);
+    const dirPath = ensureDir('Financial', 'Subscriber_Invoices');
+    const filePath = path.join(dirPath, `${safeId}.json`);
+    const invoices = readJsonSafeWithFallback(filePath, []);
+    res.json({ data: Array.isArray(invoices) ? invoices : [] });
+  } catch (error) {
+    console.error('Error fetching subscriber invoices:', error);
+    res.status(500).json({ error: 'Failed to fetch subscriber invoices' });
+  }
+});
+
+app.get('/api/subscribers/:id/usage', (req, res) => {
+  try {
+    const subscriberId = String(req.params.id || '').trim();
+    if (!subscriberId) return res.status(400).json({ error: 'Missing subscriber id' });
+    const safeId = sanitizeFileName(subscriberId);
+    const dirPath = ensureDir('Analytics', 'Subscriber_Usage');
+    const filePath = path.join(dirPath, `${safeId}.json`);
+    const defaultUsage = {
+      today: { downloadBytes: 0, uploadBytes: 0 },
+      month: { downloadBytes: 0, uploadBytes: 0 },
+      year: { downloadBytes: 0, uploadBytes: 0 },
+      timeline: [],
+    };
+    const raw = readJsonSafeWithFallback(filePath, defaultUsage);
+    res.json({ data: raw || defaultUsage });
+  } catch (error) {
+    console.error('Error fetching subscriber usage:', error);
+    res.status(500).json({ error: 'Failed to fetch subscriber usage' });
+  }
+});
+
+app.get('/api/subscribers/:id/sessions', (req, res) => {
+  try {
+    const subscriberId = String(req.params.id || '').trim();
+    if (!subscriberId) return res.status(400).json({ error: 'Missing subscriber id' });
+    const safeId = sanitizeFileName(subscriberId);
+    const dirPath = ensureDir('Analytics', 'Subscriber_Sessions');
+    const filePath = path.join(dirPath, `${safeId}.json`);
+    const sessions = readJsonSafeWithFallback(filePath, []);
+    res.json({ data: Array.isArray(sessions) ? sessions : [] });
+  } catch (error) {
+    console.error('Error fetching subscriber sessions:', error);
+    res.status(500).json({ error: 'Failed to fetch subscriber sessions' });
+  }
+});
+
+app.get('/api/subscribers/:id/tickets', (req, res) => {
+  try {
+    const subscriberId = String(req.params.id || '').trim();
+    if (!subscriberId) return res.status(400).json({ error: 'Missing subscriber id' });
+    const safeId = sanitizeFileName(subscriberId);
+    const dirPath = ensureDir('Support', 'Subscriber_Tickets');
+    const filePath = path.join(dirPath, `${safeId}.json`);
+    const tickets = readJsonSafeWithFallback(filePath, []);
+    res.json({ data: Array.isArray(tickets) ? tickets : [] });
+  } catch (error) {
+    console.error('Error fetching subscriber tickets:', error);
+    res.status(500).json({ error: 'Failed to fetch subscriber tickets' });
+  }
+});
+
+app.post('/api/subscribers/:id/tickets', (req, res) => {
+  try {
+    const subscriberId = String(req.params.id || '').trim();
+    const subject = String(req.body?.subject || '').trim();
+    const message = String(req.body?.message || '').trim();
+    const category = String(req.body?.category || 'technical').trim() || 'technical';
+    if (!subscriberId || !subject || !message) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+    const safeId = sanitizeFileName(subscriberId);
+    const dirPath = ensureDir('Support', 'Subscriber_Tickets');
+    const filePath = path.join(dirPath, `${safeId}.json`);
+    const existing = readJsonSafeWithFallback(filePath, []);
+    const now = new Date().toISOString();
+    const ticketId = `T-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`;
+    const ticket = {
+      id: ticketId,
+      subscriberId: safeId,
+      subject,
+      message,
+      category,
+      status: 'open',
+      createdAt: now,
+    };
+    const updated = [ticket, ...(Array.isArray(existing) ? existing : [])].slice(0, 200);
+    writeJsonSafe(filePath, updated);
+
+    const globalTicketsPath = getSafePath(DB_PATH, 'Support', 'tickets.json');
+    const globalTickets = readJsonSafeWithFallback(globalTicketsPath, []);
+    const updatedGlobal = [ticket, ...(Array.isArray(globalTickets) ? globalTickets : [])].slice(0, 500);
+    writeJsonSafe(globalTicketsPath, updatedGlobal);
+
+    appendNotification({
+      type: 'ticket_created',
+      title: 'New support ticket',
+      message: `Subscriber ${safeId}: ${subject}`,
+      payload: { subscriberId: safeId, ticketId },
+    });
+
+    res.status(201).json({ data: ticket });
+  } catch (error) {
+    console.error('Error creating subscriber ticket:', error);
+    res.status(500).json({ error: 'Failed to create subscriber ticket' });
+  }
+});
+
 // GET Suppliers
 app.get('/api/suppliers', (req, res) => {
   try {
@@ -4113,6 +4288,90 @@ app.post('/api/files/upload', upload.single('file'), (req, res) => {
   }
 });
 
+const subscriberUpload = multer({ dest: path.join(__dirname, 'uploads', 'subscribers') });
+
+app.get('/api/subscribers/:id/documents', (req, res) => {
+  try {
+    const subscriberId = String(req.params.id || '').trim();
+    if (!subscriberId) return res.status(400).json({ error: 'Missing subscriber id' });
+    const safeId = sanitizeFileName(subscriberId);
+    const baseDir = ensureDir('Subscribers_Documents', safeId);
+    const indexPath = path.join(baseDir, '_index.json');
+    const docs = readJsonSafeWithFallback(indexPath, []);
+    res.json({ data: Array.isArray(docs) ? docs : [] });
+  } catch (err) {
+    console.error('Error fetching subscriber documents:', err);
+    res.status(500).json({ error: 'Failed to fetch subscriber documents' });
+  }
+});
+
+app.post('/api/subscribers/:id/documents', subscriberUpload.single('file'), (req, res) => {
+  try {
+    const subscriberId = String(req.params.id || '').trim();
+    if (!subscriberId) return res.status(400).json({ error: 'Missing subscriber id' });
+    if (!req.file) return res.status(400).json({ error: 'No file uploaded.' });
+    const safeId = sanitizeFileName(subscriberId);
+    const baseDir = ensureDir('Subscribers_Documents', safeId);
+    const finalPath = path.join(baseDir, req.file.originalname);
+    fs.renameSync(req.file.path, finalPath);
+    const indexPath = path.join(baseDir, '_index.json');
+    const existing = readJsonSafeWithFallback(indexPath, []);
+    const now = new Date().toISOString();
+    const docId = crypto.randomBytes(12).toString('hex');
+    const doc = {
+      id: docId,
+      name: req.file.originalname,
+      filename: req.file.originalname,
+      uploadedAt: now,
+    };
+    const updated = [doc, ...(Array.isArray(existing) ? existing : [])].slice(0, 200);
+    writeJsonSafe(indexPath, updated);
+
+    appendNotification({
+      type: 'document_uploaded',
+      title: 'New subscriber document',
+      message: `Subscriber ${safeId} uploaded ${req.file.originalname}`,
+      payload: { subscriberId: safeId, documentId: docId },
+    });
+
+    res.json({ data: doc });
+  } catch (err) {
+    if (req.file && fs.existsSync(req.file.path)) {
+      try { fs.unlinkSync(req.file.path); } catch (e) {}
+    }
+    console.error('Error uploading subscriber document:', err);
+    res.status(500).json({ error: 'Failed to upload subscriber document' });
+  }
+});
+
+app.delete('/api/subscribers/:id/documents/:documentId', (req, res) => {
+  try {
+    const subscriberId = String(req.params.id || '').trim();
+    const documentId = String(req.params.documentId || '').trim();
+    if (!subscriberId || !documentId) return res.status(400).json({ error: 'Missing subscriber id or document id' });
+    const safeId = sanitizeFileName(subscriberId);
+    const baseDir = ensureDir('Subscribers_Documents', safeId);
+    const indexPath = path.join(baseDir, '_index.json');
+    const existing = readJsonSafeWithFallback(indexPath, []);
+    if (!Array.isArray(existing) || existing.length === 0) {
+      return res.status(404).json({ error: 'Document not found' });
+    }
+    const doc = existing.find(d => String(d.id) === documentId);
+    const remaining = existing.filter(d => String(d.id) !== documentId);
+    writeJsonSafe(indexPath, remaining);
+    if (doc && doc.filename) {
+      const target = path.join(baseDir, String(doc.filename));
+      if (fs.existsSync(target)) {
+        try { fs.unlinkSync(target); } catch (e) {}
+      }
+    }
+    res.json({ data: { message: 'Document deleted' } });
+  } catch (err) {
+    console.error('Error deleting subscriber document:', err);
+    res.status(500).json({ error: 'Failed to delete subscriber document' });
+  }
+});
+
 app.get('/api/files/download', (req, res) => {
   try {
     const targetPath = req.query.path || '';
@@ -4239,6 +4498,37 @@ app.post('/api/email/send', async (req, res) => {
   } catch (err) {
     console.error('Email API Error:', err.message);
     res.status(500).json({ error: 'Failed to send Email.', details: err.message });
+  }
+});
+
+app.get('/api/notifications', (req, res) => {
+  try {
+    const notifications = readNotifications();
+    res.json({ data: Array.isArray(notifications) ? notifications : [] });
+  } catch (err) {
+    console.error('Error fetching notifications:', err);
+    res.status(500).json({ error: 'Failed to fetch notifications' });
+  }
+});
+
+app.post('/api/notifications/mark-read', (req, res) => {
+  try {
+    const body = req.body || {};
+    const ids = Array.isArray(body.ids) ? new Set(body.ids.map((v) => String(v))) : null;
+    const notifications = readNotifications();
+    const updated = Array.isArray(notifications)
+      ? notifications.map((n) => {
+          if (!ids || ids.has(String(n.id))) {
+            return { ...n, read: true };
+          }
+          return n;
+        })
+      : [];
+    saveNotifications(updated);
+    res.json({ data: { updated: updated.length } });
+  } catch (err) {
+    console.error('Error updating notifications:', err);
+    res.status(500).json({ error: 'Failed to update notifications' });
   }
 });
 

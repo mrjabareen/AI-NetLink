@@ -33,6 +33,7 @@ interface DashboardTabProps {
 }
 
 type DashboardView = 'overview' | 'subscribers' | 'investors' | 'operations';
+type SubscriberView = 'overview' | 'billing' | 'usage' | 'sessions' | 'support' | 'documents';
 
 type SupplierRecord = {
   id: string;
@@ -257,6 +258,7 @@ export default function DashboardTab({ state, setState }: DashboardTabProps) {
   const [loadingDocuments, setLoadingDocuments] = useState(false);
   const [uploadingDocument, setUploadingDocument] = useState(false);
   const [documentFile, setDocumentFile] = useState<File | null>(null);
+  const [subscriberView, setSubscriberView] = useState<SubscriberView>('overview');
 
   const labels = {
     title: isRTL ? 'الداشبورد الرئيسية' : 'Main Dashboard',
@@ -550,6 +552,15 @@ export default function DashboardTab({ state, setState }: DashboardTabProps) {
     { id: 'operations', label: labels.operations, icon: Server },
   ];
 
+  const subscriberNavItems: Array<{ id: SubscriberView; label: string }> = [
+    { id: 'overview', label: isRTL ? 'معلومات عامة' : 'Overview' },
+    { id: 'billing', label: isRTL ? 'الحسابات والفواتير' : 'Accounts & Billing' },
+    { id: 'usage', label: isRTL ? 'استهلاك الإنترنت' : 'Usage' },
+    { id: 'sessions', label: isRTL ? 'سجل الجلسات' : 'Sessions' },
+    { id: 'support', label: isRTL ? 'الدعم الفني' : 'Support' },
+    { id: 'documents', label: isRTL ? 'وثائق شخصية' : 'Documents' },
+  ];
+
   if (isSubscriberRole) {
     return (
       <motion.div key="dashboard" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="flex-1 min-h-0 overflow-y-auto custom-scrollbar pb-6 pr-2 space-y-6">
@@ -573,8 +584,25 @@ export default function DashboardTab({ state, setState }: DashboardTabProps) {
           <MetricCard title={isRTL ? 'حالة الاشتراك' : 'Subscription Status'} value={personalSubscriber?.statusText || (isRTL ? 'غير معروفة' : 'Unknown')} subtitle={personalSubscriber?.isOnline ? (isRTL ? 'المشترك متصل الآن' : 'Connected now') : (isRTL ? 'لا توجد جلسة نشطة حالياً' : 'No active session currently')} icon={personalSubscriber?.isOnline ? Wifi : WifiOff} accent="bg-gradient-to-r from-amber-500 to-orange-500" />
         </div>
 
-        <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
-          <SectionCard title={isRTL ? 'تفاصيل الاشتراك' : 'Subscription Details'} subtitle={isRTL ? 'ملخص مباشر لبيانات حسابك الحالية.' : 'Direct summary of your current account details.'}>
+        <div className="flex flex-wrap gap-2.5 sm:gap-3">
+          {subscriberNavItems.map(item => (
+            <button
+              key={item.id}
+              onClick={() => setSubscriberView(item.id)}
+              className={`inline-flex items-center gap-2 rounded-2xl px-3 py-2.5 sm:px-4 sm:py-3 text-xs sm:text-sm font-black transition-all ${
+                subscriberView === item.id
+                  ? 'bg-slate-900 text-white shadow-xl shadow-slate-950/10 dark:bg-white dark:text-slate-900'
+                  : 'border border-slate-200 bg-white/80 text-slate-600 hover:border-slate-300 hover:text-slate-900 dark:border-slate-800 dark:bg-[#09090B]/80 dark:text-slate-300 dark:hover:text-white'
+              }`}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+
+        {subscriberView === 'overview' && (
+          <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
+            <SectionCard title={isRTL ? 'تفاصيل الاشتراك' : 'Subscription Details'} subtitle={isRTL ? 'ملخص مباشر لبيانات حسابك الحالية.' : 'Direct summary of your current account details.'}>
             <div className="space-y-3">
               <div className="rounded-2xl border border-slate-200/80 bg-slate-50/80 px-4 py-4 dark:border-slate-800 dark:bg-slate-900/50">
                 <div className="text-xs font-black uppercase tracking-wider text-slate-500">{isRTL ? 'تاريخ الانتهاء' : 'Expiry Date'}</div>
@@ -607,7 +635,7 @@ export default function DashboardTab({ state, setState }: DashboardTabProps) {
             </div>
           </SectionCard>
 
-          <SectionCard title={isRTL ? 'إدارة الخدمة' : 'Service Actions'} subtitle={isRTL ? 'التحكم بالخدمة مباشرة من حساب المشترك.' : 'Control your service directly from your account.'}>
+            <SectionCard title={isRTL ? 'إدارة الخدمة' : 'Service Actions'} subtitle={isRTL ? 'التحكم بالخدمة مباشرة من حساب المشترك.' : 'Control your service directly from your account.'}>
             <div className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <div className="rounded-2xl border border-slate-200/80 bg-slate-50/80 px-4 py-4 dark:border-slate-800 dark:bg-slate-900/50 space-y-3">
@@ -742,10 +770,12 @@ export default function DashboardTab({ state, setState }: DashboardTabProps) {
               </div>
             </div>
           </SectionCard>
-        </div>
+          </div>
+        )}
 
-        <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
-          <SectionCard title={isRTL ? 'الحسابات والفواتير' : 'Accounts & Invoices'} subtitle={isRTL ? 'عرض المطالبات المالية المرتبطة بحسابك.' : 'View financial charges linked to your account.'}>
+        {subscriberView === 'billing' && (
+          <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
+            <SectionCard title={isRTL ? 'الحسابات والفواتير' : 'Accounts & Invoices'} subtitle={isRTL ? 'عرض المطالبات المالية المرتبطة بحسابك.' : 'View financial charges linked to your account.'}>
             <div className="space-y-3">
               <div className="rounded-2xl border border-slate-200/80 bg-slate-50/80 px-4 py-3 dark:border-slate-800 dark:bg-slate-900/50 flex items-center justify-between">
                 <div>
@@ -801,8 +831,12 @@ export default function DashboardTab({ state, setState }: DashboardTabProps) {
               </div>
             </div>
           </SectionCard>
+          </div>
+        )}
 
-          <SectionCard title={isRTL ? 'استهلاك الإنترنت' : 'Internet Usage'} subtitle={isRTL ? 'متابعة استهلاكك اليومي والشهري.' : 'Track your daily and monthly usage.'}>
+        {subscriberView === 'usage' && (
+          <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
+            <SectionCard title={isRTL ? 'استهلاك الإنترنت' : 'Internet Usage'} subtitle={isRTL ? 'متابعة استهلاكك اليومي والشهري.' : 'Track your daily and monthly usage.'}>
             <div className="space-y-3">
               {loadingUsage && (
                 <div className="rounded-2xl border border-slate-200/80 bg-slate-50/80 px-4 py-3 dark:border-slate-800 dark:bg-slate-900/50 text-xs font-medium text-slate-500 dark:text-slate-400">
@@ -855,10 +889,12 @@ export default function DashboardTab({ state, setState }: DashboardTabProps) {
               )}
             </div>
           </SectionCard>
-        </div>
+          </div>
+        )}
 
-        <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
-          <SectionCard title={isRTL ? 'سجل الجلسات' : 'Sessions History'} subtitle={isRTL ? 'متى اتصلت وانقطع اتصالك بالشبكة.' : 'When your device connected and disconnected from the network.'}>
+        {subscriberView === 'sessions' && (
+          <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
+            <SectionCard title={isRTL ? 'سجل الجلسات' : 'Sessions History'} subtitle={isRTL ? 'متى اتصلت وانقطع اتصالك بالشبكة.' : 'When your device connected and disconnected from the network.'}>
             <div className="space-y-3">
               {loadingSessions && (
                 <div className="rounded-2xl border border-slate-200/80 bg-slate-50/80 px-4 py-3 dark:border-slate-800 dark:bg-slate-900/50 text-xs font-medium text-slate-500 dark:text-slate-400">
@@ -892,8 +928,12 @@ export default function DashboardTab({ state, setState }: DashboardTabProps) {
               )}
             </div>
           </SectionCard>
+          </div>
+        )}
 
-          <SectionCard title={isRTL ? 'الدعم الفني' : 'Technical Support'} subtitle={isRTL ? 'فتح تذكرة دعم ومتابعة الطلبات السابقة.' : 'Open a support ticket and track your previous requests.'}>
+        {subscriberView === 'support' && (
+          <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
+            <SectionCard title={isRTL ? 'الدعم الفني' : 'Technical Support'} subtitle={isRTL ? 'فتح تذكرة دعم ومتابعة الطلبات السابقة.' : 'Open a support ticket and track your previous requests.'}>
             <div className="space-y-4 text-xs">
               <div className="rounded-2xl border border-slate-200/80 bg-slate-50/80 px-4 py-3 dark:border-slate-800 dark:bg-slate-900/50 space-y-2">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
@@ -1002,9 +1042,11 @@ export default function DashboardTab({ state, setState }: DashboardTabProps) {
               </div>
             </div>
           </SectionCard>
-        </div>
+          </div>
+        )}
 
-        <SectionCard title={isRTL ? 'وثائق شخصية' : 'Personal Documents'} subtitle={isRTL ? 'رفع وحفظ الوثائق المطلوبة من مزود الخدمة.' : 'Upload and keep the documents required by your provider.'}>
+        {subscriberView === 'documents' && (
+          <SectionCard title={isRTL ? 'وثائق شخصية' : 'Personal Documents'} subtitle={isRTL ? 'رفع وحفظ الوثائق المطلوبة من مزود الخدمة.' : 'Upload and keep the documents required by your provider.'}>
           <div className="space-y-3 text-xs">
             <div className="rounded-2xl border border-slate-200/80 bg-slate-50/80 px-4 py-3 dark:border-slate-800 dark:bg-slate-900/50 flex flex-col md:flex-row items-center gap-3">
               <input
@@ -1098,6 +1140,7 @@ export default function DashboardTab({ state, setState }: DashboardTabProps) {
             </div>
           </div>
         </SectionCard>
+        )}
       </motion.div>
     );
   }
