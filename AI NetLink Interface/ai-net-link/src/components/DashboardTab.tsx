@@ -464,7 +464,7 @@ export default function DashboardTab({ state, setState }: DashboardTabProps) {
           </div>
         </header>
 
-        <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-4">
+        <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-4">
           <MetricCard title={isRTL ? 'الاسم الحقيقي' : 'Full Name'} value={personalSubscriber?.name || state.currentUser?.name || '-'} subtitle={isRTL ? 'الاسم المسجل في النظام' : 'Registered name'} icon={Users} accent="bg-gradient-to-r from-blue-500 to-cyan-500" />
           <MetricCard title={isRTL ? 'اسم الدخول' : 'Username'} value={personalSubscriber?.username || state.currentUser?.username || '-'} subtitle={isRTL ? 'المستخدم المرتبط بالخدمة' : 'Service login username'} icon={ShieldCheck} accent="bg-gradient-to-r from-emerald-500 to-teal-500" />
           <MetricCard title={isRTL ? 'الباقة الحالية' : 'Current Plan'} value={personalSubscriber?.plan || (isRTL ? 'غير محددة' : 'Unassigned')} subtitle={isRTL ? 'الباقة أو البروفايل الفعلي' : 'Assigned package or profile'} icon={Sparkles} accent="bg-gradient-to-r from-violet-500 to-indigo-500" />
@@ -566,7 +566,7 @@ export default function DashboardTab({ state, setState }: DashboardTabProps) {
       ) : null}
 
       {loading ? (
-        <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-4">
+        <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-4">
           {Array.from({ length: 8 }).map((_, index) => (
             <div key={index} className="h-36 animate-pulse rounded-[2rem] border border-slate-200 bg-white/70 dark:border-slate-800 dark:bg-[#09090B]/70" />
           ))}
@@ -575,7 +575,7 @@ export default function DashboardTab({ state, setState }: DashboardTabProps) {
 
       {!loading && activeView === 'overview' ? (
         <>
-          <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-4">
+          <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-4">
             {overviewCards.map(card => (
               <div key={card.title}>
                 <MetricCard
@@ -631,7 +631,7 @@ export default function DashboardTab({ state, setState }: DashboardTabProps) {
 
       {!loading && activeView === 'subscribers' ? (
         <>
-          <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-4">
+          <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-4">
             <MetricCard title={isRTL ? 'عدد المشتركين' : 'Subscriber Count'} value={formatNumber(totalSubscribers)} subtitle={isRTL ? 'العدد الكلي للمشتركين بكافة حالاتهم' : 'Full subscriber count across all states'} icon={Users} accent="bg-gradient-to-r from-blue-500 to-cyan-500" onClick={overviewCards[0].onClick} clickableLabel={isRTL ? 'عرض القائمة' : 'Open list'} />
             <MetricCard title={isRTL ? 'المتصلون حاليًا' : 'Connected Now'} value={formatNumber(connectedCount)} subtitle={isRTL ? 'المشتركون المتصلون الآن عبر الشبكة' : 'Subscribers currently online'} icon={Wifi} accent="bg-gradient-to-r from-emerald-500 to-teal-500" onClick={overviewCards[1].onClick} clickableLabel={isRTL ? 'عرض المتصلين' : 'Open connected'} />
             <MetricCard title={isRTL ? 'فعالون بدون اتصال' : 'Active but Offline'} value={formatNumber(activeOfflineCount)} subtitle={isRTL ? 'اشتراك صالح ولكن ليس هناك اتصال فعلي الآن' : 'Valid subscriptions with no active session'} icon={WifiOff} accent="bg-gradient-to-r from-violet-500 to-indigo-500" onClick={overviewCards[2].onClick} clickableLabel={isRTL ? 'عرض المشتركين' : 'Open subscribers'} />
@@ -683,7 +683,7 @@ export default function DashboardTab({ state, setState }: DashboardTabProps) {
 
       {!loading && activeView === 'investors' ? (
         <>
-          <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-4">
+          <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-4">
             <MetricCard title={isRTL ? 'القيمة السوقية' : 'Market Cap'} value={formatCurrency(marketCap, state.currency, state.lang, 0)} subtitle={isRTL ? 'إجمالي القيمة السوقية للأسهم وفق السعر الحالي' : 'Full market capitalization at current share price'} icon={TrendingUp} accent="bg-gradient-to-r from-teal-500 to-emerald-500" onClick={() => openDrilldown('investors', isRTL ? 'القيمة السوقية' : 'Market Capitalization', isRTL ? 'ملخص مباشر لمكونات القيمة السوقية الحالية.' : 'Direct breakdown of the current market capitalization.', [{ id: 'market-cap', title: isRTL ? 'القيمة السوقية الإجمالية' : 'Total Market Cap', subtitle: isRTL ? 'سعر السهم × إجمالي عدد الأسهم' : 'Share price x total share count', meta: formatCurrency(marketCap, state.currency, state.lang, 0), badge: `${formatCurrency(state.investorSettings.sharePrice, state.currency, state.lang)} × ${formatNumber(state.investorSettings.totalShares)}` }])} clickableLabel={isRTL ? 'عرض المكونات' : 'View breakdown'} />
             <MetricCard title={isRTL ? 'إجمالي المستثمرين' : 'Total Investors'} value={formatNumber(state.shareholders.length)} subtitle={isRTL ? 'عدد المساهمين والمستثمرين الحاليين' : 'Current shareholder and investor count'} icon={Users} accent="bg-gradient-to-r from-blue-500 to-violet-500" onClick={() => openDrilldown('investors', isRTL ? 'المستثمرون' : 'Investors', isRTL ? 'قائمة المساهمين والمستثمرين الحاليين.' : 'Current shareholder and investor list.', state.shareholders.map(holder => ({ id: holder.id, title: holder.name, subtitle: holder.ownership, meta: formatCurrency(holder.investment, state.currency, state.lang), badge: `${formatNumber(holder.shares)} ${isRTL ? 'سهم' : 'shares'}` })))} clickableLabel={isRTL ? 'عرض المستثمرين' : 'Open investors'} />
             <MetricCard title={isRTL ? 'رأس المال المستثمر' : 'Invested Capital'} value={formatCurrency(totalInvestment, state.currency, state.lang)} subtitle={isRTL ? 'إجمالي ما تم ضخه فعليًا في حصص المستثمرين' : 'Capital committed by current shareholders'} icon={Wallet} accent="bg-gradient-to-r from-amber-500 to-orange-500" onClick={() => openDrilldown('investors', isRTL ? 'رأس المال المستثمر' : 'Invested Capital', isRTL ? 'المستثمرون مرتبين حسب قيمة الاستثمار.' : 'Investors ranked by invested capital.', [...state.shareholders].sort((a, b) => b.investment - a.investment).map(holder => ({ id: holder.id, title: holder.name, subtitle: holder.ownership, meta: formatCurrency(holder.investment, state.currency, state.lang), badge: `${formatNumber(holder.shares)} ${isRTL ? 'سهم' : 'shares'}` })))} clickableLabel={isRTL ? 'عرض الاستثمارات' : 'View capital'} />
@@ -731,7 +731,7 @@ export default function DashboardTab({ state, setState }: DashboardTabProps) {
 
       {!loading && activeView === 'operations' ? (
         <>
-          <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-4">
+          <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-4">
             <MetricCard title={isRTL ? 'حالة الشبكة' : 'Network Health'} value={routerEntries.length ? `${healthyRouters}/${routerEntries.length}` : '0/0'} subtitle={networkSummary} icon={Router} accent="bg-gradient-to-r from-cyan-500 to-blue-600" onClick={overviewCards[10].onClick} clickableLabel={isRTL ? 'عرض الراوترات' : 'Open routers'} />
             <MetricCard title={isRTL ? 'مدة تشغيل الخادم' : 'Server Uptime'} value={formatDuration(systemMetrics?.appUptimeSec || 0, isRTL)} subtitle={isRTL ? `النظام ${formatDuration(systemMetrics?.osUptimeSec || 0, isRTL)}` : `OS ${formatDuration(systemMetrics?.osUptimeSec || 0, isRTL)}`} icon={Server} accent="bg-gradient-to-r from-slate-700 to-slate-900" onClick={() => openDrilldown('operations', isRTL ? 'مدة التشغيل' : 'Uptime', isRTL ? 'تفاصيل مدة تشغيل التطبيق والنظام.' : 'Application and operating system uptime details.', [{ id: 'uptime', title: isRTL ? 'تشغيل التطبيق' : 'Application Uptime', subtitle: isRTL ? 'منذ آخر إعادة تشغيل للخادم' : 'Since the last server restart', meta: formatDuration(systemMetrics?.appUptimeSec || 0, isRTL), badge: `${isRTL ? 'النظام' : 'OS'} ${formatDuration(systemMetrics?.osUptimeSec || 0, isRTL)}` }])} clickableLabel={isRTL ? 'عرض التفاصيل' : 'View details'} />
             <MetricCard title={isRTL ? 'التخزين' : 'Storage Usage'} value={`${systemMetrics?.storage.usedPercent ?? 0}%`} subtitle={isRTL ? `${formatBytes(systemMetrics?.storage.freeBytes || 0, state.lang)} متبقي` : `${formatBytes(systemMetrics?.storage.freeBytes || 0, state.lang)} free`} icon={HardDrive} accent="bg-gradient-to-r from-amber-500 to-yellow-500" onClick={() => openDrilldown('operations', isRTL ? 'التخزين' : 'Storage', isRTL ? 'تفاصيل المساحة المستخدمة والمتاحة.' : 'Used and available storage details.', [{ id: 'storage', title: systemMetrics?.storage.path || (isRTL ? 'مسار التخزين' : 'Storage Path'), subtitle: isRTL ? 'المساحة الكلية والمستخدمة والمتبقية' : 'Total, used, and remaining storage', meta: `${systemMetrics?.storage.usedPercent ?? 0}%`, badge: `${formatBytes(systemMetrics?.storage.usedBytes || 0, state.lang)} / ${formatBytes(systemMetrics?.storage.totalBytes || 0, state.lang)}` }])} clickableLabel={isRTL ? 'عرض التخزين' : 'View storage'} />
