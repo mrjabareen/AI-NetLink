@@ -608,6 +608,73 @@ export const redeemSubscriberVoucher = async (id: string, voucherCode: string) =
     return await res.json();
 };
 
+export const getSubscriberInvoices = async (id: string) => {
+    const res = await fetch(`${BASE_URL}/subscribers/${encodeURIComponent(id)}/invoices`);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Failed to fetch subscriber invoices');
+    return Array.isArray(data.data) ? data.data : (Array.isArray(data) ? data : []);
+};
+
+export const getSubscriberUsageSummary = async (id: string) => {
+    const res = await fetch(`${BASE_URL}/subscribers/${encodeURIComponent(id)}/usage`);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Failed to fetch subscriber usage');
+    return data.data ?? data;
+};
+
+export const getSubscriberSessions = async (id: string) => {
+    const res = await fetch(`${BASE_URL}/subscribers/${encodeURIComponent(id)}/sessions`);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Failed to fetch subscriber sessions');
+    return Array.isArray(data.data) ? data.data : (Array.isArray(data) ? data : []);
+};
+
+export const getSubscriberTickets = async (id: string) => {
+    const res = await fetch(`${BASE_URL}/subscribers/${encodeURIComponent(id)}/tickets`);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Failed to fetch support tickets');
+    return Array.isArray(data.data) ? data.data : (Array.isArray(data) ? data : []);
+};
+
+export const createSubscriberTicket = async (id: string, payload: { subject: string; message: string; category?: string }) => {
+    const res = await fetch(`${BASE_URL}/subscribers/${encodeURIComponent(id)}/tickets`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Failed to create support ticket');
+    return data;
+};
+
+export const getSubscriberDocuments = async (id: string) => {
+    const res = await fetch(`${BASE_URL}/subscribers/${encodeURIComponent(id)}/documents`);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Failed to fetch subscriber documents');
+    return Array.isArray(data.data) ? data.data : (Array.isArray(data) ? data : []);
+};
+
+export const uploadSubscriberDocument = async (id: string, file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    const res = await fetch(`${BASE_URL}/subscribers/${encodeURIComponent(id)}/documents`, {
+        method: 'POST',
+        body: formData
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Failed to upload document');
+    return data;
+};
+
+export const deleteSubscriberDocument = async (id: string, documentId: string) => {
+    const res = await fetch(`${BASE_URL}/subscribers/${encodeURIComponent(id)}/documents/${encodeURIComponent(documentId)}`, {
+        method: 'DELETE'
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Failed to delete document');
+    return data;
+};
+
 
 export const fetchRoutersList = async () => {
     try {

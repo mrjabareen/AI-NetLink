@@ -21,7 +21,7 @@ import {
   WifiOff
 } from 'lucide-react';
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import { fetchSubscribers, fetchSuppliers, getMikrotikStatusBatch, getSystemDashboardMetrics, getWhatsappStatus, fetchProfiles, extendSubscriber, updateSubscriber, redeemSubscriberVoucher } from '../api';
+import { fetchSubscribers, fetchSuppliers, getMikrotikStatusBatch, getSystemDashboardMetrics, getWhatsappStatus, fetchProfiles, extendSubscriber, updateSubscriber, redeemSubscriberVoucher, getSubscriberInvoices, getSubscriberUsageSummary, getSubscriberSessions, getSubscriberTickets, createSubscriberTicket, getSubscriberDocuments, uploadSubscriberDocument, deleteSubscriberDocument } from '../api';
 import { AppState, BaseSubscriberRecord, SystemDashboardMetrics, WhatsAppStatus } from '../types';
 import { formatNumber } from '../utils/format';
 import { formatCurrency } from '../utils/currency';
@@ -241,6 +241,22 @@ export default function DashboardTab({ state, setState }: DashboardTabProps) {
   const [isExtending, setIsExtending] = useState(false);
   const [selectedProfileId, setSelectedProfileId] = useState('');
   const [isChangingProfile, setIsChangingProfile] = useState(false);
+  const [invoices, setInvoices] = useState<any[]>([]);
+  const [loadingInvoices, setLoadingInvoices] = useState(false);
+  const [usageSummary, setUsageSummary] = useState<any | null>(null);
+  const [loadingUsage, setLoadingUsage] = useState(false);
+  const [sessions, setSessions] = useState<any[]>([]);
+  const [loadingSessions, setLoadingSessions] = useState(false);
+  const [tickets, setTickets] = useState<any[]>([]);
+  const [loadingTickets, setLoadingTickets] = useState(false);
+  const [ticketSubject, setTicketSubject] = useState('');
+  const [ticketMessage, setTicketMessage] = useState('');
+  const [ticketCategory, setTicketCategory] = useState<'technical' | 'billing' | 'other'>('technical');
+  const [creatingTicket, setCreatingTicket] = useState(false);
+  const [documents, setDocuments] = useState<any[]>([]);
+  const [loadingDocuments, setLoadingDocuments] = useState(false);
+  const [uploadingDocument, setUploadingDocument] = useState(false);
+  const [documentFile, setDocumentFile] = useState<File | null>(null);
 
   const labels = {
     title: isRTL ? 'الداشبورد الرئيسية' : 'Main Dashboard',
@@ -463,6 +479,51 @@ export default function DashboardTab({ state, setState }: DashboardTabProps) {
     [personalSubscriberRaw]
   );
 
+  useEffect(() => {
+    if (!isSubscriberRole || !personalSubscriberId) return;
+    setLoadingInvoices(true);
+    getSubscriberInvoices(personalSubscriberId)
+      .then((list) => setInvoices(Array.isArray(list) ? list : []))
+      .catch(() => setInvoices([]))
+      .finally(() => setLoadingInvoices(false));
+  }, [isSubscriberRole, personalSubscriberId, state.lang]);
+
+  useEffect(() => {
+    if (!isSubscriberRole || !personalSubscriberId) return;
+    setLoadingUsage(true);
+    getSubscriberUsageSummary(personalSubscriberId)
+      .then((data) => setUsageSummary(data || null))
+      .catch(() => setUsageSummary(null))
+      .finally(() => setLoadingUsage(false));
+  }, [isSubscriberRole, personalSubscriberId, state.lang]);
+
+  useEffect(() => {
+    if (!isSubscriberRole || !personalSubscriberId) return;
+    setLoadingSessions(true);
+    getSubscriberSessions(personalSubscriberId)
+      .then((list) => setSessions(Array.isArray(list) ? list : []))
+      .catch(() => setSessions([]))
+      .finally(() => setLoadingSessions(false));
+  }, [isSubscriberRole, personalSubscriberId]);
+
+  useEffect(() => {
+    if (!isSubscriberRole || !personalSubscriberId) return;
+    setLoadingTickets(true);
+    getSubscriberTickets(personalSubscriberId)
+      .then((list) => setTickets(Array.isArray(list) ? list : []))
+      .catch(() => setTickets([]))
+      .finally(() => setLoadingTickets(false));
+  }, [isSubscriberRole, personalSubscriberId]);
+
+  useEffect(() => {
+    if (!isSubscriberRole || !personalSubscriberId) return;
+    setLoadingDocuments(true);
+    getSubscriberDocuments(personalSubscriberId)
+      .then((list) => setDocuments(Array.isArray(list) ? list : []))
+      .catch(() => setDocuments([]))
+      .finally(() => setLoadingDocuments(false));
+  }, [isSubscriberRole, personalSubscriberId]);
+
   const overviewCards = [
     { title: isRTL ? 'إجمالي المشتركين' : 'Total Subscribers', value: formatNumber(totalSubscribers), subtitle: isRTL ? 'العدد الكلي للمشتركين بكافة حالاتهم' : 'Complete count of all subscribers', icon: Users, accent: 'bg-gradient-to-r from-blue-500 to-cyan-500', onClick: () => openDrilldown('subscribers', isRTL ? 'كل المشتركين' : 'All Subscribers', isRTL ? 'جميع المشتركين بكامل حالاتهم الحالية.' : 'All subscribers with their current statuses.', normalizedSubscribers.map(sub => ({ id: sub.id, title: sub.name, subtitle: sub.username || sub.plan, meta: sub.plan, badge: sub.statusText }))) },
     { title: isRTL ? 'المتصلون الآن' : 'Connected Now', value: formatNumber(connectedCount), subtitle: isRTL ? 'المشتركون المتصلون بالإنترنت حاليًا' : 'Subscribers currently online', icon: Wifi, accent: 'bg-gradient-to-r from-emerald-500 to-teal-500', onClick: () => openDrilldown('subscribers', isRTL ? 'المتصلون حاليًا' : 'Currently Connected', isRTL ? 'هذه القائمة تعرض كل المشتركين المتصلين فعليًا الآن.' : 'Subscribers with active sessions right now.', normalizedSubscribers.filter(sub => sub.isOnline).map(sub => ({ id: sub.id, title: sub.name, subtitle: sub.username || sub.plan, meta: sub.plan, badge: isRTL ? 'متصل' : 'Online' }))) },
@@ -682,6 +743,361 @@ export default function DashboardTab({ state, setState }: DashboardTabProps) {
             </div>
           </SectionCard>
         </div>
+
+        <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
+          <SectionCard title={isRTL ? 'الحسابات والفواتير' : 'Accounts & Invoices'} subtitle={isRTL ? 'عرض المطالبات المالية المرتبطة بحسابك.' : 'View financial charges linked to your account.'}>
+            <div className="space-y-3">
+              <div className="rounded-2xl border border-slate-200/80 bg-slate-50/80 px-4 py-3 dark:border-slate-800 dark:bg-slate-900/50 flex items-center justify-between">
+                <div>
+                  <div className="text-xs font-black uppercase tracking-wider text-slate-500">{isRTL ? 'الرصيد المستحق' : 'Outstanding Balance'}</div>
+                  <div className="mt-1 text-lg font-black text-slate-900 dark:text-white">
+                    {formatCurrency(personalSubscriber?.debt || 0, state.currency, state.lang)}
+                  </div>
+                </div>
+                <div className="text-xs font-bold text-slate-500 dark:text-slate-400">
+                  {isRTL ? 'يشمل كل الفواتير غير المسددة.' : 'Includes all unpaid invoices.'}
+                </div>
+              </div>
+              <div className="rounded-2xl border border-slate-200/80 bg-slate-50/80 dark:border-slate-800 dark:bg-slate-900/50 px-4 py-3">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="text-xs font-black uppercase tracking-wider text-slate-500">{isRTL ? 'آخر الفواتير' : 'Recent Invoices'}</div>
+                  {loadingInvoices && (
+                    <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                      {isRTL ? 'جاري التحميل...' : 'Loading...'}
+                    </span>
+                  )}
+                </div>
+                {(!loadingInvoices && invoices.length === 0) && (
+                  <p className="text-xs font-medium text-slate-500 dark:text-slate-400">
+                    {isRTL ? 'لا توجد فواتير ظاهرة على حسابك حالياً.' : 'No invoices are currently visible on your account.'}
+                  </p>
+                )}
+                {invoices.length > 0 && (
+                  <div className="space-y-2 max-h-48 overflow-y-auto custom-scrollbar">
+                    {invoices.slice(0, 6).map((invoice: any) => (
+                      <div key={String(invoice.id || invoice.number)} className="flex items-center justify-between text-xs rounded-xl border border-slate-200/80 dark:border-slate-800 bg-white/70 dark:bg-slate-900/60 px-3 py-2">
+                        <div className="min-w-0">
+                          <div className="font-bold text-slate-900 dark:text-slate-100 truncate">
+                            {String(invoice.title || invoice.description || (isRTL ? 'فاتورة' : 'Invoice'))}
+                          </div>
+                          <div className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
+                            {String(invoice.date || invoice.dueDate || '')}
+                          </div>
+                        </div>
+                        <div className="text-right ml-3">
+                          <div className="font-black text-slate-900 dark:text-slate-50">
+                            {formatCurrency(Number(invoice.amount || invoice.total || 0), state.currency, state.lang)}
+                          </div>
+                          <div className="text-[11px] font-bold">
+                            {String(invoice.status || '').toLowerCase().includes('paid') || String(invoice.status || '').includes('مدفوعة')
+                              ? (isRTL ? 'مدفوعة' : 'Paid')
+                              : (isRTL ? 'غير مدفوعة' : 'Unpaid')}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </SectionCard>
+
+          <SectionCard title={isRTL ? 'استهلاك الإنترنت' : 'Internet Usage'} subtitle={isRTL ? 'متابعة استهلاكك اليومي والشهري.' : 'Track your daily and monthly usage.'}>
+            <div className="space-y-3">
+              {loadingUsage && (
+                <div className="rounded-2xl border border-slate-200/80 bg-slate-50/80 px-4 py-3 dark:border-slate-800 dark:bg-slate-900/50 text-xs font-medium text-slate-500 dark:text-slate-400">
+                  {isRTL ? 'جاري تحميل بيانات الاستهلاك...' : 'Loading usage data...'}
+                </div>
+              )}
+              {!loadingUsage && !usageSummary && (
+                <div className="rounded-2xl border border-slate-200/80 bg-slate-50/80 px-4 py-3 dark:border-slate-800 dark:bg-slate-900/50 text-xs font-medium text-slate-500 dark:text-slate-400">
+                  {isRTL ? 'لا توجد بيانات استهلاك متاحة بعد.' : 'No usage data available yet.'}
+                </div>
+              )}
+              {!loadingUsage && usageSummary && (
+                <>
+                  <div className="grid grid-cols-3 gap-3 text-xs">
+                    {['today', 'month', 'year'].map((key) => {
+                      const bucket = (usageSummary as any)[key] || {};
+                      const label = key === 'today' ? (isRTL ? 'اليوم' : 'Today') : key === 'month' ? (isRTL ? 'هذا الشهر' : 'This Month') : (isRTL ? 'هذه السنة' : 'This Year');
+                      return (
+                        <div key={key} className="rounded-2xl border border-slate-200/80 bg-white/80 px-3 py-2.5 dark:border-slate-800 dark:bg-slate-900/60">
+                          <div className="text-[11px] font-black uppercase tracking-wider text-slate-500">{label}</div>
+                          <div className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+                            {isRTL ? 'تحميل:' : 'Down:'}{' '}
+                            <span className="font-bold text-slate-800 dark:text-slate-100">{formatBytes(Number(bucket.downloadBytes || 0), state.lang)}</span>
+                          </div>
+                          <div className="text-[11px] text-slate-500 dark:text-slate-400">
+                            {isRTL ? 'رفع:' : 'Up:'}{' '}
+                            <span className="font-bold text-slate-800 dark:text-slate-100">{formatBytes(Number(bucket.uploadBytes || 0), state.lang)}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {Array.isArray((usageSummary as any).timeline) && (usageSummary as any).timeline.length > 0 && (
+                    <div className="h-32 rounded-2xl border border-slate-200/80 bg-white/80 px-3 py-2 dark:border-slate-800 dark:bg-slate-900/60">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <AreaChart data={(usageSummary as any).timeline}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                          <XAxis dataKey="label" hide />
+                          <YAxis hide />
+                          <Tooltip
+                            contentStyle={{ fontSize: '11px' }}
+                            formatter={(value: any) => formatBytes(Number(value || 0), state.lang)}
+                          />
+                          <Area type="monotone" dataKey="downloadBytes" stroke="#3b82f6" fill="#bfdbfe" strokeWidth={2} />
+                        </AreaChart>
+                      </ResponsiveContainer>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          </SectionCard>
+        </div>
+
+        <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
+          <SectionCard title={isRTL ? 'سجل الجلسات' : 'Sessions History'} subtitle={isRTL ? 'متى اتصلت وانقطع اتصالك بالشبكة.' : 'When your device connected and disconnected from the network.'}>
+            <div className="space-y-3">
+              {loadingSessions && (
+                <div className="rounded-2xl border border-slate-200/80 bg-slate-50/80 px-4 py-3 dark:border-slate-800 dark:bg-slate-900/50 text-xs font-medium text-slate-500 dark:text-slate-400">
+                  {isRTL ? 'جاري تحميل سجل الجلسات...' : 'Loading sessions history...'}
+                </div>
+              )}
+              {!loadingSessions && sessions.length === 0 && (
+                <div className="rounded-2xl border border-slate-200/80 bg-slate-50/80 px-4 py-3 dark:border-slate-800 dark:bg-slate-900/50 text-xs font-medium text-slate-500 dark:text-slate-400">
+                  {isRTL ? 'لا توجد جلسات مسجلة حالياً.' : 'No sessions recorded yet.'}
+                </div>
+              )}
+              {sessions.length > 0 && (
+                <div className="space-y-2 max-h-48 overflow-y-auto custom-scrollbar text-xs">
+                  {sessions.slice(0, 10).map((session: any) => (
+                    <div key={String(session.id || session.start || Math.random())} className="rounded-xl border border-slate-200/80 bg-white/80 px-3 py-2 dark:border-slate-800 dark:bg-slate-900/60 flex justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="font-bold text-slate-900 dark:text-slate-100 truncate">
+                          {String(session.start || '')}
+                        </div>
+                        <div className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
+                          {String(session.end || (isRTL ? 'لا يزال متصلاً' : 'Still online'))}
+                        </div>
+                      </div>
+                      <div className="text-right text-[11px] text-slate-500 dark:text-slate-400">
+                        {session.ip && <div>{session.ip}</div>}
+                        {session.device && <div>{session.device}</div>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </SectionCard>
+
+          <SectionCard title={isRTL ? 'الدعم الفني' : 'Technical Support'} subtitle={isRTL ? 'فتح تذكرة دعم ومتابعة الطلبات السابقة.' : 'Open a support ticket and track your previous requests.'}>
+            <div className="space-y-4 text-xs">
+              <div className="rounded-2xl border border-slate-200/80 bg-slate-50/80 px-4 py-3 dark:border-slate-800 dark:bg-slate-900/50 space-y-2">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                  <input
+                    value={ticketSubject}
+                    onChange={(e) => setTicketSubject(e.target.value)}
+                    placeholder={isRTL ? 'عنوان مختصر للمشكلة' : 'Short title'}
+                    className="md:col-span-2 rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500 dark:border-slate-700 dark:bg-slate-900"
+                  />
+                  <select
+                    value={ticketCategory}
+                    onChange={(e) => setTicketCategory(e.target.value as any)}
+                    className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500 dark:border-slate-700 dark:bg-slate-900"
+                  >
+                    <option value="technical">{isRTL ? 'مشكلة تقنية' : 'Technical'}</option>
+                    <option value="billing">{isRTL ? 'فوترة ومدفوعات' : 'Billing'}</option>
+                    <option value="other">{isRTL ? 'أخرى' : 'Other'}</option>
+                  </select>
+                </div>
+                <textarea
+                  value={ticketMessage}
+                  onChange={(e) => setTicketMessage(e.target.value)}
+                  rows={3}
+                  placeholder={isRTL ? 'اشرح المشكلة التي تواجهها...' : 'Describe the issue you are facing...'}
+                  className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500 dark:border-slate-700 dark:bg-slate-900"
+                />
+                <button
+                  disabled={!personalSubscriberId || !ticketSubject.trim() || !ticketMessage.trim() || creatingTicket}
+                  onClick={async () => {
+                    if (!personalSubscriberId || !ticketSubject.trim() || !ticketMessage.trim()) return;
+                    try {
+                      setCreatingTicket(true);
+                      await createSubscriberTicket(personalSubscriberId, {
+                        subject: ticketSubject.trim(),
+                        message: ticketMessage.trim(),
+                        category: ticketCategory,
+                      });
+                      setTicketSubject('');
+                      setTicketMessage('');
+                      getSubscriberTickets(personalSubscriberId)
+                        .then((list) => setTickets(Array.isArray(list) ? list : []))
+                        .catch(() => {});
+                      toastSuccess(
+                        isRTL ? 'تم فتح تذكرة دعم فني لحسابك.' : 'A support ticket has been created for your account.',
+                        isRTL ? 'تم الإرسال' : 'Ticket Created'
+                      );
+                    } catch (e: any) {
+                      toastError(
+                        isRTL ? (e?.message || 'تعذر فتح التذكرة حالياً.') : (e?.message || 'Failed to create ticket.'),
+                        isRTL ? 'خطأ في التذكرة' : 'Ticket Error'
+                      );
+                    } finally {
+                      setCreatingTicket(false);
+                    }
+                  }}
+                  className="w-full rounded-xl bg-slate-900 px-4 py-2 text-xs font-bold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white"
+                >
+                  {creatingTicket
+                    ? (isRTL ? 'جاري الإرسال...' : 'Submitting...')
+                    : (isRTL ? 'إرسال طلب دعم فني' : 'Send Support Request')}
+                </button>
+              </div>
+
+              <div className="rounded-2xl border border-slate-200/80 bg-slate-50/80 dark:border-slate-800 dark:bg-slate-900/50 px-4 py-3">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="text-xs font-black uppercase tracking-wider text-slate-500">{isRTL ? 'أحدث التذاكر' : 'Recent Tickets'}</div>
+                  {loadingTickets && (
+                    <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                      {isRTL ? 'جاري التحميل...' : 'Loading...'}
+                    </span>
+                  )}
+                </div>
+                {(!loadingTickets && tickets.length === 0) && (
+                  <p className="text-xs font-medium text-slate-500 dark:text-slate-400">
+                    {isRTL ? 'لا توجد تذاكر مفتوحة أو سابقة لهذا الحساب.' : 'No open or past tickets for this account yet.'}
+                  </p>
+                )}
+                {tickets.length > 0 && (
+                  <div className="space-y-2 max-h-40 overflow-y-auto custom-scrollbar text-xs">
+                    {tickets.slice(0, 6).map((ticket: any) => (
+                      <div key={String(ticket.id || ticket.number)} className="rounded-xl border border-slate-200/80 bg-white/80 px-3 py-2 dark:border-slate-800 dark:bg-slate-900/60 flex justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="font-bold text-slate-900 dark:text-slate-100 truncate">
+                            {String(ticket.subject || (isRTL ? 'تذكرة دعم' : 'Support Ticket'))}
+                          </div>
+                          <div className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
+                            {String(ticket.createdAt || ticket.date || '')}
+                          </div>
+                        </div>
+                        <div className="text-right text-[11px]">
+                          <div className="font-bold">
+                            {String(ticket.status || '').toLowerCase().includes('closed') || String(ticket.status || '').includes('مغلقة')
+                              ? (isRTL ? 'مغلقة' : 'Closed')
+                              : (isRTL ? 'قيد المتابعة' : 'In Progress')}
+                          </div>
+                          {ticket.category && (
+                            <div className="text-slate-500 dark:text-slate-400">
+                              {ticket.category}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </SectionCard>
+        </div>
+
+        <SectionCard title={isRTL ? 'وثائق شخصية' : 'Personal Documents'} subtitle={isRTL ? 'رفع وحفظ الوثائق المطلوبة من مزود الخدمة.' : 'Upload and keep the documents required by your provider.'}>
+          <div className="space-y-3 text-xs">
+            <div className="rounded-2xl border border-slate-200/80 bg-slate-50/80 px-4 py-3 dark:border-slate-800 dark:bg-slate-900/50 flex flex-col md:flex-row items-center gap-3">
+              <input
+                type="file"
+                onChange={(e) => setDocumentFile(e.target.files?.[0] || null)}
+                className="flex-1 text-[11px] text-slate-600 dark:text-slate-300"
+              />
+              <button
+                disabled={!personalSubscriberId || !documentFile || uploadingDocument}
+                onClick={async () => {
+                  if (!personalSubscriberId || !documentFile) return;
+                  try {
+                    setUploadingDocument(true);
+                    await uploadSubscriberDocument(personalSubscriberId, documentFile);
+                    setDocumentFile(null);
+                    const updated = await getSubscriberDocuments(personalSubscriberId);
+                    setDocuments(Array.isArray(updated) ? updated : []);
+                    toastSuccess(
+                      isRTL ? 'تم رفع الوثيقة بنجاح.' : 'Document uploaded successfully.',
+                      isRTL ? 'تم الرفع' : 'Upload Completed'
+                    );
+                  } catch (e: any) {
+                    toastError(
+                      isRTL ? (e?.message || 'تعذر رفع الوثيقة حالياً.') : (e?.message || 'Failed to upload document.'),
+                      isRTL ? 'خطأ في الرفع' : 'Upload Error'
+                    );
+                  } finally {
+                    setUploadingDocument(false);
+                  }
+                }}
+                className="rounded-xl bg-emerald-600 px-4 py-2 text-xs font-bold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {uploadingDocument
+                  ? (isRTL ? 'جاري الرفع...' : 'Uploading...')
+                  : (isRTL ? 'رفع وثيقة' : 'Upload Document')}
+              </button>
+            </div>
+
+            <div className="rounded-2xl border border-slate-200/80 bg-slate-50/80 dark:border-slate-800 dark:bg-slate-900/50 px-4 py-3">
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-xs font-black uppercase tracking-wider text-slate-500">{isRTL ? 'الوثائق المحفوظة' : 'Saved Documents'}</div>
+                {loadingDocuments && (
+                  <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                    {isRTL ? 'جاري التحميل...' : 'Loading...'}
+                  </span>
+                )}
+              </div>
+              {(!loadingDocuments && documents.length === 0) && (
+                <p className="text-xs font-medium text-slate-500 dark:text-slate-400">
+                  {isRTL ? 'لم تقم برفع أي وثائق حتى الآن.' : 'You have not uploaded any documents yet.'}
+                </p>
+              )}
+              {documents.length > 0 && (
+                <div className="space-y-2 max-h-40 overflow-y-auto custom-scrollbar text-xs">
+                  {documents.map((doc: any) => (
+                    <div key={String(doc.id || doc.name)} className="rounded-xl border border-slate-200/80 bg-white/80 px-3 py-2 dark:border-slate-800 dark:bg-slate-900/60 flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="font-bold text-slate-900 dark:text-slate-100 truncate">
+                          {String(doc.name || doc.filename || (isRTL ? 'وثيقة' : 'Document'))}
+                        </div>
+                        <div className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
+                          {String(doc.uploadedAt || doc.date || '')}
+                        </div>
+                      </div>
+                      <button
+                        onClick={async () => {
+                          if (!personalSubscriberId || !doc.id) return;
+                          try {
+                            await deleteSubscriberDocument(personalSubscriberId, String(doc.id));
+                            const updated = await getSubscriberDocuments(personalSubscriberId);
+                            setDocuments(Array.isArray(updated) ? updated : []);
+                            toastSuccess(
+                              isRTL ? 'تم حذف الوثيقة.' : 'Document deleted.',
+                              isRTL ? 'تم الحذف' : 'Deleted'
+                            );
+                          } catch (e: any) {
+                            toastError(
+                              isRTL ? (e?.message || 'تعذر حذف الوثيقة.') : (e?.message || 'Failed to delete document.'),
+                              isRTL ? 'خطأ في الحذف' : 'Delete Error'
+                            );
+                          }
+                        }}
+                        className="rounded-lg bg-rose-600 px-3 py-1.5 text-[11px] font-bold text-white transition hover:bg-rose-700"
+                      >
+                        {isRTL ? 'حذف' : 'Delete'}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </SectionCard>
       </motion.div>
     );
   }
