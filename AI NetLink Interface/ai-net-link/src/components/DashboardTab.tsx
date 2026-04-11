@@ -584,22 +584,8 @@ export default function DashboardTab({ state, setState }: DashboardTabProps) {
           <MetricCard title={isRTL ? 'حالة الاشتراك' : 'Subscription Status'} value={personalSubscriber?.statusText || (isRTL ? 'غير معروفة' : 'Unknown')} subtitle={personalSubscriber?.isOnline ? (isRTL ? 'المشترك متصل الآن' : 'Connected now') : (isRTL ? 'لا توجد جلسة نشطة حالياً' : 'No active session currently')} icon={personalSubscriber?.isOnline ? Wifi : WifiOff} accent="bg-gradient-to-r from-amber-500 to-orange-500" />
         </div>
 
-        <div className="flex flex-wrap gap-2.5 sm:gap-3">
-          {subscriberNavItems.map(item => (
-            <button
-              key={item.id}
-              onClick={() => setSubscriberView(item.id)}
-              className={`inline-flex items-center gap-2 rounded-2xl px-3 py-2.5 sm:px-4 sm:py-3 text-xs sm:text-sm font-black transition-all ${
-                subscriberView === item.id
-                  ? 'bg-slate-900 text-white shadow-xl shadow-slate-950/10 dark:bg-white dark:text-slate-900'
-                  : 'border border-slate-200 bg-white/80 text-slate-600 hover:border-slate-300 hover:text-slate-900 dark:border-slate-800 dark:bg-[#09090B]/80 dark:text-slate-300 dark:hover:text-white'
-              }`}
-            >
-              {item.label}
-            </button>
-          ))}
-        </div>
-
+        <div className="flex flex-col lg:flex-row gap-5 mt-4">
+          <div className="flex-1 space-y-5">
         {subscriberView === 'overview' && (
           <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
             <SectionCard title={isRTL ? 'تفاصيل الاشتراك' : 'Subscription Details'} subtitle={isRTL ? 'ملخص مباشر لبيانات حسابك الحالية.' : 'Direct summary of your current account details.'}>
@@ -1141,6 +1127,26 @@ export default function DashboardTab({ state, setState }: DashboardTabProps) {
           </div>
         </SectionCard>
         )}
+          </div>
+
+          <aside className="w-full lg:w-52 xl:w-60 flex-shrink-0">
+            <div className="rounded-2xl border border-slate-200/80 bg-slate-50/70 p-2 dark:border-slate-800 dark:bg-slate-900/60">
+              {subscriberNavItems.map(item => (
+                <button
+                  key={item.id}
+                  onClick={() => setSubscriberView(item.id)}
+                  className={`w-full text-right rounded-xl px-3 py-2.5 mb-1.5 text-xs sm:text-sm font-bold transition-all ${
+                    subscriberView === item.id
+                      ? 'bg-slate-900 text-white shadow shadow-slate-950/20 dark:bg-white dark:text-slate-900'
+                      : 'bg-transparent text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800/70'
+                  }`}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+          </aside>
+        </div>
       </motion.div>
     );
   }
