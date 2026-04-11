@@ -595,6 +595,19 @@ export const activateSubscriber = async (id: string, startDateOption: 'today' | 
     return await res.json();
 };
 
+export const redeemSubscriberVoucher = async (id: string, voucherCode: string) => {
+    const res = await fetch(`${BASE_URL}/subscribers/${encodeURIComponent(id)}/redeem-voucher`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: voucherCode })
+    });
+    if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || 'Failed to redeem voucher');
+    }
+    return await res.json();
+};
+
 
 export const fetchRoutersList = async () => {
     try {

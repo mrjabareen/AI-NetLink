@@ -21,10 +21,11 @@ import {
   WifiOff
 } from 'lucide-react';
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import { fetchSubscribers, fetchSuppliers, getMikrotikStatusBatch, getSystemDashboardMetrics, getWhatsappStatus } from '../api';
+import { fetchSubscribers, fetchSuppliers, getMikrotikStatusBatch, getSystemDashboardMetrics, getWhatsappStatus, fetchProfiles, extendSubscriber, updateSubscriber, redeemSubscriberVoucher } from '../api';
 import { AppState, BaseSubscriberRecord, SystemDashboardMetrics, WhatsAppStatus } from '../types';
 import { formatNumber } from '../utils/format';
 import { formatCurrency } from '../utils/currency';
+import { toastError, toastSuccess } from '../utils/notify';
 
 interface DashboardTabProps {
   state: AppState;
@@ -232,6 +233,14 @@ export default function DashboardTab({ state, setState }: DashboardTabProps) {
   const [networkStatus, setNetworkStatus] = useState<NetworkBatchStatus | null>(null);
   const [systemMetrics, setSystemMetrics] = useState<SystemDashboardMetrics | null>(null);
   const [waStatus, setWaStatus] = useState<WhatsAppStatus | null>(null);
+  const [panelProfiles, setPanelProfiles] = useState<any[]>([]);
+  const [loadingPanelProfiles, setLoadingPanelProfiles] = useState(false);
+  const [voucherCode, setVoucherCode] = useState('');
+  const [isRedeemingVoucher, setIsRedeemingVoucher] = useState(false);
+  const [extendDays, setExtendDays] = useState(30);
+  const [isExtending, setIsExtending] = useState(false);
+  const [selectedProfileId, setSelectedProfileId] = useState('');
+  const [isChangingProfile, setIsChangingProfile] = useState(false);
 
   const labels = {
     title: isRTL ? 'الداشبورد الرئيسية' : 'Main Dashboard',
@@ -320,6 +329,20 @@ export default function DashboardTab({ state, setState }: DashboardTabProps) {
   ), [subscribers, onlineUserSet, isRTL]);
 
   const isSubscriberRole = state.role === 'user';
+
+  const personalSubscriberRaw = useMemo(() => {
+    const currentUsername = String(state.currentUser?.username || '').trim().toLowerCase();
+    const currentEmail = String(state.currentUser?.email || '').trim().toLowerCase();
+
+    const matchIndex = subscribers.findIndex((subscriber) => {
+      const username = String(subscriber.username || subscriber['اسم الدخول'] || subscriber['اسم المستخدم'] || '').trim().toLowerCase();
+      const email = String(subscriber.email || subscriber['البريد الإلكتروني'] || subscriber['الايميل'] || '').trim().toLowerCase();
+      return Boolean(currentUsername && currentUsername === username) || Boolean(currentEmail && currentEmail === email);
+    });
+
+    return matchIndex >= 0 ? subscribers[matchIndex] : null;
+  }, [subscribers, state.currentUser?.email, state.currentUser?.username]);
+
   const personalSubscriber = useMemo(() => {
     const currentUsername = String(state.currentUser?.username || '').trim().toLowerCase();
     const currentEmail = String(state.currentUser?.email || '').trim().toLowerCase();
@@ -422,6 +445,24 @@ export default function DashboardTab({ state, setState }: DashboardTabProps) {
     setActiveDrilldown({ view, title, subtitle, rows });
   };
 
+  useEffect(() => {
+    if (!isSubscriberRole || !personalSubscriberRaw) return;
+    setLoadingPanelProfiles(true);
+    fetchProfiles()
+      .then((data: any) => {
+        const list = Array.isArray(data?.data) ? data.data : (Array.isArray(data) ? data : []);
+        const available = list.filter((profile: any) => profile && profile.isAvailableInPanel);
+        setPanelProfiles(available);
+      })
+      .catch(() => {})
+      .finally(() => setLoadingPanelProfiles(false));
+  }, [isSubscriberRole, personalSubscriberRaw]);
+
+  const personalSubscriberId = useMemo(
+    () => String((personalSubscriberRaw as any)?.id || '').trim(),
+    [personalSubscriberRaw]
+  );
+
   const overviewCards = [
     { title: isRTL ? 'إجمالي المشتركين' : 'Total Subscribers', value: formatNumber(totalSubscribers), subtitle: isRTL ? 'العدد الكلي للمشتركين بكافة حالاتهم' : 'Complete count of all subscribers', icon: Users, accent: 'bg-gradient-to-r from-blue-500 to-cyan-500', onClick: () => openDrilldown('subscribers', isRTL ? 'كل المشتركين' : 'All Subscribers', isRTL ? 'جميع المشتركين بكامل حالاتهم الحالية.' : 'All subscribers with their current statuses.', normalizedSubscribers.map(sub => ({ id: sub.id, title: sub.name, subtitle: sub.username || sub.plan, meta: sub.plan, badge: sub.statusText }))) },
     { title: isRTL ? 'المتصلون الآن' : 'Connected Now', value: formatNumber(connectedCount), subtitle: isRTL ? 'المشتركون المتصلون بالإنترنت حاليًا' : 'Subscribers currently online', icon: Wifi, accent: 'bg-gradient-to-r from-emerald-500 to-teal-500', onClick: () => openDrilldown('subscribers', isRTL ? 'المتصلون حاليًا' : 'Currently Connected', isRTL ? 'هذه القائمة تعرض كل المشتركين المتصلين فعليًا الآن.' : 'Subscribers with active sessions right now.', normalizedSubscribers.filter(sub => sub.isOnline).map(sub => ({ id: sub.id, title: sub.name, subtitle: sub.username || sub.plan, meta: sub.plan, badge: isRTL ? 'متصل' : 'Online' }))) },
@@ -486,16 +527,157 @@ export default function DashboardTab({ state, setState }: DashboardTabProps) {
                 <div className="text-xs font-black uppercase tracking-wider text-slate-500">{isRTL ? 'الاتصال الحالي' : 'Live Connection'}</div>
                 <div className={`mt-2 text-lg font-black ${personalSubscriber?.isOnline ? 'text-emerald-500' : 'text-slate-900 dark:text-white'}`}>{personalSubscriber?.isOnline ? (isRTL ? 'متصل الآن' : 'Online now') : (isRTL ? 'غير متصل' : 'Offline')}</div>
               </div>
+              <div className="rounded-2xl border border-slate-200/80 bg-slate-50/80 px-4 py-4 dark:border-slate-800 dark:bg-slate-900/50">
+                <div className="text-xs font-black uppercase tracking-wider text-slate-500">{isRTL ? 'الأيام المتبقية' : 'Days Remaining'}</div>
+                <div className="mt-2 text-lg font-black text-slate-900 dark:text-white">
+                  {typeof personalSubscriber?.daysToExpiry === 'number'
+                    ? (personalSubscriber.daysToExpiry >= 0
+                      ? (isRTL ? `${personalSubscriber.daysToExpiry} يوم` : `${personalSubscriber.daysToExpiry}d`)
+                      : (isRTL ? 'منتهي' : 'Expired'))
+                    : (isRTL ? 'غير متاح' : 'N/A')}
+                </div>
+              </div>
+              {personalSubscriberId && (
+                <div className="rounded-2xl border border-slate-200/80 bg-slate-50/80 px-4 py-4 dark:border-slate-800 dark:bg-slate-900/50">
+                  <div className="text-xs font-black uppercase tracking-wider text-slate-500">{isRTL ? 'رقم المشترك' : 'Subscriber Code'}</div>
+                  <div className="mt-2 text-lg font-black text-slate-900 dark:text-white">{personalSubscriberId}</div>
+                </div>
+              )}
             </div>
           </SectionCard>
 
-          <SectionCard title={isRTL ? 'ملاحظات' : 'Notes'} subtitle={isRTL ? 'رسائل وتنبيهات مرتبطة بحسابك.' : 'Account-specific notes and reminders.'}>
-            <div className="space-y-3 text-sm font-bold leading-7 text-slate-600 dark:text-slate-300">
-              <div className="rounded-2xl border border-slate-200/80 bg-slate-50/80 px-4 py-4 dark:border-slate-800 dark:bg-slate-900/50">
-                {isRTL ? 'في حال عدم ظهور بياناتك بشكل صحيح، تأكد أن اسم الدخول المستخدم في تسجيل الدخول يطابق اسم دخول المشترك المحفوظ في النظام.' : 'If your data does not appear correctly, verify that your login username matches the subscriber username stored in the system.'}
-              </div>
-              <div className="rounded-2xl border border-slate-200/80 bg-slate-50/80 px-4 py-4 dark:border-slate-800 dark:bg-slate-900/50">
-                {isRTL ? 'سيتم لاحقاً ربط هذه الصفحة بصفحة التجديد الخاصة بالاشتراك المنتهي ضمن المراحل القادمة.' : 'This page will later connect to the dedicated renewal experience for expired subscriptions in the next phases.'}
+          <SectionCard title={isRTL ? 'إدارة الخدمة' : 'Service Actions'} subtitle={isRTL ? 'التحكم بالخدمة مباشرة من حساب المشترك.' : 'Control your service directly from your account.'}>
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="rounded-2xl border border-slate-200/80 bg-slate-50/80 px-4 py-4 dark:border-slate-800 dark:bg-slate-900/50 space-y-3">
+                  <div className="text-xs font-black uppercase tracking-wider text-slate-500">{isRTL ? 'تعبئة بطاقة تفعيل الحساب' : 'Account Activation Card'}</div>
+                  <input
+                    value={voucherCode}
+                    onChange={(e) => setVoucherCode(e.target.value)}
+                    placeholder={isRTL ? 'أدخل رقم البطاقة' : 'Enter card code'}
+                    className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500 dark:border-slate-700 dark:bg-slate-900"
+                  />
+                  <button
+                    disabled={!voucherCode.trim() || !personalSubscriberId || isRedeemingVoucher}
+                    onClick={async () => {
+                      if (!personalSubscriberId || !voucherCode.trim()) return;
+                      try {
+                        setIsRedeemingVoucher(true);
+                        await redeemSubscriberVoucher(personalSubscriberId, voucherCode.trim());
+                        setVoucherCode('');
+                        toastSuccess(
+                          isRTL ? 'تم تطبيق بطاقة التفعيل على حسابك.' : 'Voucher redeemed and applied to your account.',
+                          isRTL ? 'تمت العملية' : 'Voucher Redeemed'
+                        );
+                      } catch (e: any) {
+                        toastError(
+                          isRTL ? (e?.message || 'تعذر استخدام البطاقة، تحقق من صحتها.') : (e?.message || 'Failed to redeem voucher, please verify the code.'),
+                          isRTL ? 'خطأ في البطاقة' : 'Voucher Error'
+                        );
+                      } finally {
+                        setIsRedeemingVoucher(false);
+                      }
+                    }}
+                    className="w-full rounded-xl bg-emerald-600 px-4 py-2 text-sm font-bold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {isRedeemingVoucher
+                      ? (isRTL ? 'جاري التحقق...' : 'Processing...')
+                      : (isRTL ? 'تعبئة البطاقة' : 'Redeem Card')}
+                  </button>
+                </div>
+
+                <div className="rounded-2xl border border-slate-200/80 bg-slate-50/80 px-4 py-4 dark:border-slate-800 dark:bg-slate-900/50 space-y-3">
+                  <div className="text-xs font-black uppercase tracking-wider text-slate-500">{isRTL ? 'تمديد الخدمة' : 'Extend Service'}</div>
+                  <select
+                    value={extendDays}
+                    onChange={(e) => setExtendDays(Number(e.target.value) || 0)}
+                    className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500 dark:border-slate-700 dark:bg-slate-900"
+                  >
+                    <option value={7}>{isRTL ? '7 أيام' : '7 days'}</option>
+                    <option value={15}>{isRTL ? '15 يوم' : '15 days'}</option>
+                    <option value={30}>{isRTL ? '30 يوم' : '30 days'}</option>
+                    <option value={60}>{isRTL ? '60 يوم' : '60 days'}</option>
+                  </select>
+                  <button
+                    disabled={!personalSubscriberId || isExtending}
+                    onClick={async () => {
+                      if (!personalSubscriberId || !extendDays || extendDays <= 0) return;
+                      try {
+                        setIsExtending(true);
+                        await extendSubscriber(personalSubscriberId, { unit: 'days', value: extendDays }, 'all');
+                        toastSuccess(
+                          isRTL ? 'تم إرسال طلب تمديد الخدمة.' : 'Extend request sent for your subscription.',
+                          isRTL ? 'تم الطلب' : 'Extend Requested'
+                        );
+                      } catch (e: any) {
+                        toastError(
+                          isRTL ? (e?.message || 'تعذر تمديد الخدمة حالياً.') : (e?.message || 'Failed to extend service.'),
+                          isRTL ? 'خطأ في التمديد' : 'Extend Error'
+                        );
+                      } finally {
+                        setIsExtending(false);
+                      }
+                    }}
+                    className="w-full rounded-xl bg-sky-600 px-4 py-2 text-sm font-bold text-white transition hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {isExtending
+                      ? (isRTL ? 'جاري الإرسال...' : 'Submitting...')
+                      : (isRTL ? 'تمديد الخدمة' : 'Extend Service')}
+                  </button>
+                </div>
+
+                <div className="rounded-2xl border border-slate-200/80 bg-slate-50/80 px-4 py-4 dark:border-slate-800 dark:bg-slate-900/50 space-y-3">
+                  <div className="text-xs font-black uppercase tracking-wider text-slate-500">{isRTL ? 'تغيير الباقة' : 'Change Plan'}</div>
+                  <select
+                    value={selectedProfileId}
+                    onChange={(e) => setSelectedProfileId(e.target.value)}
+                    className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500 dark:border-slate-700 dark:bg-slate-900"
+                  >
+                    <option value="">
+                      {loadingPanelProfiles
+                        ? (isRTL ? 'جاري تحميل الباقات...' : 'Loading plans...')
+                        : (isRTL ? 'اختر الباقة الجديدة' : 'Select new plan')}
+                    </option>
+                    {panelProfiles.map((profile: any) => (
+                      <option key={profile.id || profile.mikrotikName || profile.name} value={profile.id}>
+                        {profile.name || profile.mikrotikName}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    disabled={!personalSubscriberId || !selectedProfileId || isChangingProfile}
+                    onClick={async () => {
+                      if (!personalSubscriberId || !selectedProfileId) return;
+                      try {
+                        setIsChangingProfile(true);
+                        await updateSubscriber(personalSubscriberId, { profileId: selectedProfileId });
+                        toastSuccess(
+                          isRTL ? 'تم إرسال طلب تغيير الباقة بنجاح.' : 'Change plan request submitted successfully.',
+                          isRTL ? 'تم الطلب' : 'Change Requested'
+                        );
+                      } catch (e: any) {
+                        toastError(
+                          isRTL ? (e?.message || 'تعذر تغيير الباقة حالياً.') : (e?.message || 'Failed to change plan.'),
+                          isRTL ? 'خطأ في تغيير الباقة' : 'Change Plan Error'
+                        );
+                      } finally {
+                        setIsChangingProfile(false);
+                      }
+                    }}
+                    className="w-full rounded-xl bg-violet-600 px-4 py-2 text-sm font-bold text-white transition hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {isChangingProfile
+                      ? (isRTL ? 'جاري الإرسال...' : 'Submitting...')
+                      : (isRTL ? 'تغيير الخدمة' : 'Change Service')}
+                  </button>
+                  {panelProfiles.length === 0 && !loadingPanelProfiles && (
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                      {isRTL
+                        ? 'لا توجد باقات متاحة حاليًا من قبل المزود. يرجى مراجعة الدعم عند الحاجة.'
+                        : 'No self-service plans are currently published. Contact support if you need a change.'}
+                    </p>
+                  )}
+                </div>
               </div>
             </div>
           </SectionCard>

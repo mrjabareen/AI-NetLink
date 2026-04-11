@@ -3738,12 +3738,12 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
            (activeSubTab === 'suppliers' && hasPermission('manage_suppliers')) ||
            (activeSubTab === 'shareholders' && (hasPermission('manage_shareholders') || state.role === 'super_admin')) ||
            (activeSubTab === 'managers' && (hasPermission('manage_admins') || state.role === 'super_admin')) ? (
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2 md:gap-3">
               {activeSubTab === 'subscribers' && (
                 <>
                   <button
                     onClick={() => setState(prev => ({ ...prev, activeTab: 'boi_expiry' }))}
-                    className="flex items-center gap-2 px-4 py-2 bg-amber-500/10 text-amber-600 hover:bg-amber-600 hover:text-white border border-amber-500/20 rounded-xl transition-all font-bold text-sm"
+                    className="flex items-center gap-2 px-3 md:px-4 py-2 bg-amber-500/10 text-amber-600 hover:bg-amber-600 hover:text-white border border-amber-500/20 rounded-xl transition-all font-bold text-xs md:text-sm"
                     title={isRTL ? 'الانتقال السريع إلى مركز التحكم الذكي في الاشتراكات' : 'Quick access to the smart subscription control center'}
                   >
                     <Activity size={18} />
@@ -3752,7 +3752,7 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
                   <button
                     onClick={handleDisconnectAll}
                     disabled={isStatusLoading || isBulkSyncingSubscribers}
-                    className="flex items-center gap-2 px-4 py-2 bg-rose-500/10 text-rose-600 hover:bg-rose-600 hover:text-white border border-rose-500/20 rounded-xl transition-all font-bold text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="flex items-center gap-2 px-3 md:px-4 py-2 bg-rose-500/10 text-rose-600 hover:bg-rose-600 hover:text-white border border-rose-500/20 rounded-xl transition-all font-bold text-xs md:text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                     title={isRTL ? 'طرد جميع المشتركين المتصلين' : 'Disconnect all active subscribers'}
                   >
                     <Power size={18} />
@@ -3761,7 +3761,7 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
                   <button
                     onClick={handleSyncAllSubscribers}
                     disabled={isBulkSyncingSubscribers || isStatusLoading}
-                    className="flex items-center gap-2 px-4 py-2 bg-indigo-500/10 text-indigo-600 hover:bg-indigo-600 hover:text-white border border-indigo-500/20 rounded-xl transition-all font-bold text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="flex items-center gap-2 px-3 md:px-4 py-2 bg-indigo-500/10 text-indigo-600 hover:bg-indigo-600 hover:text-white border border-indigo-500/20 rounded-xl transition-all font-bold text-xs md:text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                     title={isRTL ? 'مزامنة جميع المشتركين مع المايكروتيك وفق الحالة والانتهاء' : 'Sync all subscribers to MikroTik according to status and expiry rules'}
                   >
                     {isBulkSyncingSubscribers ? <RefreshCw size={18} className="animate-spin" /> : <Zap size={18} />}
@@ -3772,7 +3772,7 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
               {(activeSubTab !== 'subscribers' || hasPermission('sub_add') || hasPermission('manage_subscribers') || state.role === 'super_admin') && (
                 <button 
                   onClick={handleAdd}
-                  className="px-6 py-2.5 bg-teal-500 hover:bg-teal-600 text-white rounded-xl text-sm font-bold flex items-center gap-2 transition-all shadow-lg shadow-teal-500/20"
+                  className="px-4 md:px-6 py-2 md:py-2.5 bg-teal-500 hover:bg-teal-600 text-white rounded-xl text-xs md:text-sm font-bold flex items-center gap-2 transition-all shadow-lg shadow-teal-500/20"
                 >
                   <Plus size={16} />
                   {getAddButtonLabel()}
