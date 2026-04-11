@@ -774,7 +774,7 @@ export default function App() {
   }
 
   return (
-    <div className={`flex h-screen w-full overflow-hidden ${fontClass} bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors duration-300`}>
+    <div className={`flex min-h-screen w-full overflow-x-hidden ${fontClass} bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors duration-300`}>
       
       <Sidebar state={state} setState={setState} />
       <Header state={state} setState={setState} />
@@ -823,7 +823,7 @@ export default function App() {
       </div>
 
       {/* --- Main Content Area --- */}
-      <main className="flex-1 h-full flex flex-col pt-16 md:pt-0 relative bg-slate-50/50 dark:bg-slate-950/50 overflow-hidden">
+      <main className="flex-1 min-h-0 flex flex-col pt-16 md:pt-0 relative bg-slate-50/50 dark:bg-slate-950/50 overflow-x-hidden">
         
         {/* Background Decorative Elements */}
         <div className="absolute top-0 left-0 w-full h-96 bg-gradient-to-b from-blue-500/5 dark:from-blue-500/10 to-transparent pointer-events-none" />

@@ -235,7 +235,7 @@ export default function DashboardTab({ state, setState }: DashboardTabProps) {
 
   const labels = {
     title: isRTL ? 'الداشبورد الرئيسية' : 'Main Dashboard',
-    subtitle: isRTL ? 'واجهة تنفيذية رئيسية شاملة، ومنها لوحات فرعية للمشتركين والمستثمرين والنظام والتشغيل، وكل القراءات فيها مبنية على بيانات حقيقية.' : 'A full executive dashboard with nested views for subscribers, investors, and system operations, all powered by real data.',
+    subtitle: '',
     overview: isRTL ? 'الرئيسية' : 'Overview',
     subscribers: isRTL ? 'المشتركون' : 'Subscribers',
     investors: isRTL ? 'المستثمرون' : 'Investors',
@@ -514,7 +514,11 @@ export default function DashboardTab({ state, setState }: DashboardTabProps) {
               {labels.title}
             </div>
             <h2 className="text-2xl sm:text-3xl font-black">{state.currentUser?.name || (isRTL ? 'لوحة القيادة' : 'Control Center')}</h2>
-            <p className="mt-1.5 sm:mt-2 max-w-4xl text-xs sm:text-sm leading-6 sm:leading-7 text-blue-100/80">{labels.subtitle}</p>
+            {labels.subtitle && (
+              <p className="mt-1.5 sm:mt-2 max-w-4xl text-xs sm:text-sm leading-6 sm:leading-7 text-blue-100/80">
+                {labels.subtitle}
+              </p>
+            )}
           </div>
           <div className="flex flex-wrap items-center gap-2 sm:gap-3">
             <button

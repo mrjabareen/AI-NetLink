@@ -66,8 +66,7 @@
 }
 
 body {
-  @apply bg-slate-50 dark:bg-[#09090B] text-slate-900 dark:text-slate-100 transition-colors duration-300;
-  overflow: hidden; 
+  @apply bg-slate-50 dark:bg-[#09090B] text-slate-900 dark:text-slate-100 transition-colors duration-300 overflow-x-hidden;
   user-select: none;
   font-family: 'EnglishDigits', 'Inter', 'Cairo', sans-serif !important;
   font-variant-numeric: tabular-nums lining-nums !important;

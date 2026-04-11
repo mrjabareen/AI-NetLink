@@ -148,7 +148,7 @@ export default function ChatTab({ state }: ChatTabProps) {
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-3/4 h-32 bg-teal-500/5 dark:bg-teal-500/5 blur-[100px] pointer-events-none"></div>
 
         {/* Chat Header */}
-        <div className="px-6 py-4 border-b border-slate-200/50 dark:border-slate-800/50 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white/60 dark:bg-[#09090B]/80 backdrop-blur-md z-10">
+        <div className="px-4 md:px-6 py-3 md:py-4 border-b border-slate-200/50 dark:border-slate-800/50 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white/60 dark:bg-[#09090B]/80 backdrop-blur-md z-10">
           <div className="flex items-center gap-4">
             <button 
               onClick={() => setIsHistoryOpen(!isHistoryOpen)}
@@ -187,7 +187,7 @@ export default function ChatTab({ state }: ChatTabProps) {
         </div>
 
         {/* Quick Command Chips */}
-        <div className="px-6 py-3 bg-white/40 dark:bg-[#09090B]/40 border-b border-slate-200/50 dark:border-slate-800/50 flex gap-2 overflow-x-auto custom-scrollbar z-10">
+        <div className="px-4 md:px-6 py-2 md:py-3 bg-white/40 dark:bg-[#09090B]/40 border-b border-slate-200/50 dark:border-slate-800/50 flex gap-2 overflow-x-auto custom-scrollbar z-10">
           {t.chat.quickActions.map((action, idx) => (
             <button 
               key={idx} 

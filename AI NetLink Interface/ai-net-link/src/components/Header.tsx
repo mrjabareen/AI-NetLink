@@ -56,7 +56,7 @@ export default function Header({ state, setState }: HeaderProps) {
           </button>
         </div>
       )}
-      <div className={`md:hidden fixed left-0 right-0 h-14 glass-panel z-30 flex items-center justify-between px-3 border-b border-slate-200/50 dark:border-slate-800/50 ${state.impersonationSource ? 'top-8' : 'top-0'}`}>
+      <div className={`md:hidden fixed left-0 right-0 h-14 glass-panel bg-white/95 dark:bg-slate-950/95 z-30 flex items-center justify-between px-3 border-b border-slate-200/50 dark:border-slate-800/50 ${state.impersonationSource ? 'top-8' : 'top-0'}`}>
         <a
           href={getPathForTab('dashboard')}
           onClick={(event) => {
@@ -97,7 +97,7 @@ export default function Header({ state, setState }: HeaderProps) {
         {state.mobileMenuOpen && (
           <motion.div 
             initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}
-            className={`md:hidden fixed inset-0 z-20 glass-panel flex flex-col p-3 ${state.impersonationSource ? 'top-24' : 'top-14'}`}
+            className={`md:hidden fixed inset-0 z-20 glass-panel bg-white/98 dark:bg-slate-950/95 flex flex-col p-3 ${state.impersonationSource ? 'top-24' : 'top-14'}`}
           >
             <nav className="flex-1 space-y-2 overflow-y-auto custom-scrollbar">
               {navItems.map((item) => (

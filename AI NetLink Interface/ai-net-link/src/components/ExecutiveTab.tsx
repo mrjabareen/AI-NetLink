@@ -384,7 +384,7 @@ export default function ExecutiveTab({ state }: ExecutiveTabProps) {
 
   return (
     <motion.div key="executive" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="flex-1 flex flex-col min-h-0">
-      <header className="mb-4 md:mb-6 shrink-0 flex flex-col md:flex-row md:items-start justify-between gap-4">
+      <header className="mb-3 md:mb-6 shrink-0 flex flex-col md:flex-row md:items-start justify-between gap-4">
         <div>
           <h2 className="text-xl md:text-3xl font-bold text-slate-900 dark:text-white flex items-center gap-3">
             <Briefcase className="text-amber-500" size={28} />
@@ -396,7 +396,7 @@ export default function ExecutiveTab({ state }: ExecutiveTabProps) {
         </div>
         
         <div className="self-start md:self-center">
-          <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 rounded-full">
+          <div className="inline-flex items-center gap-2 px-2.5 md:px-3 py-1.5 bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 rounded-full">
             <span className="relative flex h-2.5 w-2.5">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
               <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
@@ -423,8 +423,8 @@ export default function ExecutiveTab({ state }: ExecutiveTabProps) {
           className="hidden"
         />
 
-        <div className="px-4 md:px-6 pt-4 md:pt-5 pb-3 border-b border-slate-200/50 dark:border-slate-800/50 bg-white/70 dark:bg-[#09090B]/80 backdrop-blur-md z-10">
-          <div className="rounded-2xl border border-slate-200/70 dark:border-slate-800 bg-slate-50/80 dark:bg-[#111111]/70 p-3 md:p-4">
+        <div className="px-3 md:px-6 pt-3 md:pt-5 pb-2.5 border-b border-slate-200/50 dark:border-slate-800/50 bg-white/70 dark:bg-[#09090B]/80 backdrop-blur-md z-10">
+          <div className="rounded-2xl border border-slate-200/70 dark:border-slate-800 bg-slate-50/80 dark:bg-[#111111]/70 p-2.5 md:p-4">
             <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
               <div>
                 <p className="text-sm font-bold text-slate-800 dark:text-slate-100">
@@ -477,7 +477,7 @@ export default function ExecutiveTab({ state }: ExecutiveTabProps) {
         </div>
 
         {/* Quick Prompts */}
-        <div className="px-4 md:px-6 py-3 md:py-4 border-b border-slate-200/50 dark:border-slate-800/50 bg-white/60 dark:bg-[#09090B]/80 backdrop-blur-md z-10 flex gap-2 overflow-x-auto custom-scrollbar">
+        <div className="px-3 md:px-6 py-2 md:py-4 border-b border-slate-200/50 dark:border-slate-800/50 bg-white/60 dark:bg-[#09090B]/80 backdrop-blur-md z-10 flex gap-2 overflow-x-auto custom-scrollbar">
           {quickPrompts.map((prompt, idx) => (
             <button 
               key={idx} 

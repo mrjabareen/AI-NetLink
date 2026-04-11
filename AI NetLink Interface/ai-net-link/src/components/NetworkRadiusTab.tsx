@@ -386,7 +386,7 @@ export default function NetworkRadiusTab({ state, setState }: NetworkRadiusTabPr
                         
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-5xl pb-12">
                             {/* General Section */}
-                            <div className="space-y-4 bg-white dark:bg-slate-900/50 p-6 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm">
+                            <div className="space-y-4 bg-white/70 dark:bg-slate-900/40 p-5 rounded-3xl border border-slate-200/70 dark:border-slate-800 shadow-none">
                                 <h4 className="text-sm font-bold text-teal-600 dark:text-teal-400 bg-teal-50 dark:bg-teal-500/10 px-3 py-1.5 rounded-lg inline-block uppercase">{isRTL ? 'بيانات أساسية' : 'General Info'}</h4>
                                 <div className="grid grid-cols-2 gap-4">
                                      <div className="col-span-2">
@@ -434,7 +434,7 @@ export default function NetworkRadiusTab({ state, setState }: NetworkRadiusTabPr
                             </div>
 
                             {/* Speed Section */}
-                            <div className="space-y-4 bg-white dark:bg-slate-900/50 p-6 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm">
+                            <div className="space-y-4 bg-white/70 dark:bg-slate-900/40 p-5 rounded-3xl border border-slate-200/70 dark:border-slate-800 shadow-none">
                                 <h4 className="text-sm font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-500/10 px-3 py-1.5 rounded-lg inline-block uppercase">{isRTL ? 'تحديد السرعة' : 'Traffic Shaping'}</h4>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div>
@@ -482,7 +482,7 @@ export default function NetworkRadiusTab({ state, setState }: NetworkRadiusTabPr
                             </div>
 
                             {/* SAS4 Limiters */}
-                            <div className="md:col-span-2 bg-slate-50 dark:bg-slate-900/40 p-6 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-inner space-y-8">
+                            <div className="md:col-span-2 bg-slate-50/80 dark:bg-slate-900/40 p-5 rounded-3xl border border-slate-200/70 dark:border-slate-800 shadow-none space-y-8">
                                 <h4 className="text-md font-black text-indigo-600 flex items-center gap-2 border-b border-slate-200 dark:border-slate-800/50 pb-4"><Zap size={20}/> {isRTL ? 'محددات الخدمة والكوتا (SAS4)' : 'SAS4 Service Limiters'}</h4>
                                 
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -554,7 +554,7 @@ export default function NetworkRadiusTab({ state, setState }: NetworkRadiusTabPr
                             </div>
                             
                             {/* Advanced Characteristics */}
-                            <div className="space-y-6 md:col-span-2 bg-white dark:bg-slate-900/50 p-6 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm">
+                            <div className="space-y-6 md:col-span-2 bg-white/70 dark:bg-slate-900/40 p-5 rounded-3xl border border-slate-200/70 dark:border-slate-800 shadow-none">
                                 <h4 className="text-sm font-bold text-indigo-600 bg-indigo-50 dark:bg-indigo-500/10 px-3 py-1.5 rounded-lg inline-block uppercase">{isRTL ? 'إعدادات متقدمة' : 'Advanced Characteristics'}</h4>
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                                     <div>
