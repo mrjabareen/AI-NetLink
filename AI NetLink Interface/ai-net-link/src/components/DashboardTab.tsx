@@ -22,7 +22,7 @@ import {
 } from 'lucide-react';
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { fetchSubscribers, fetchSuppliers, getMikrotikStatusBatch, getSystemDashboardMetrics, getWhatsappStatus, fetchProfiles, extendSubscriber, updateSubscriber, redeemSubscriberVoucher, getSubscriberInvoices, getSubscriberUsageSummary, getSubscriberSessions, getSubscriberTickets, createSubscriberTicket, getSubscriberDocuments, uploadSubscriberDocument, deleteSubscriberDocument } from '../api';
-import { AppState, BaseSubscriberRecord, SystemDashboardMetrics, WhatsAppStatus } from '../types';
+import { AppState, BaseSubscriberRecord, SystemDashboardMetrics, WhatsAppStatus, SubscriberView } from '../types';
 import { formatNumber } from '../utils/format';
 import { formatCurrency } from '../utils/currency';
 import { toastError, toastSuccess } from '../utils/notify';
@@ -33,8 +33,6 @@ interface DashboardTabProps {
 }
 
 type DashboardView = 'overview' | 'subscribers' | 'investors' | 'operations';
-type SubscriberView = 'overview' | 'billing' | 'usage' | 'sessions' | 'support' | 'documents';
-
 type SupplierRecord = {
   id: string;
   name?: string;
@@ -258,7 +256,7 @@ export default function DashboardTab({ state, setState }: DashboardTabProps) {
   const [loadingDocuments, setLoadingDocuments] = useState(false);
   const [uploadingDocument, setUploadingDocument] = useState(false);
   const [documentFile, setDocumentFile] = useState<File | null>(null);
-  const [subscriberView, setSubscriberView] = useState<SubscriberView>('overview');
+  const subscriberView: SubscriberView = state.subscriberView || 'overview';
 
   const labels = {
     title: isRTL ? 'الداشبورد الرئيسية' : 'Main Dashboard',
@@ -1129,23 +1127,7 @@ export default function DashboardTab({ state, setState }: DashboardTabProps) {
         )}
           </div>
 
-          <aside className="w-full lg:w-52 xl:w-60 flex-shrink-0">
-            <div className="rounded-2xl border border-slate-200/80 bg-slate-50/70 p-2 dark:border-slate-800 dark:bg-slate-900/60">
-              {subscriberNavItems.map(item => (
-                <button
-                  key={item.id}
-                  onClick={() => setSubscriberView(item.id)}
-                  className={`w-full text-right rounded-xl px-3 py-2.5 mb-1.5 text-xs sm:text-sm font-bold transition-all ${
-                    subscriberView === item.id
-                      ? 'bg-slate-900 text-white shadow shadow-slate-950/20 dark:bg-white dark:text-slate-900'
-                      : 'bg-transparent text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800/70'
-                  }`}
-                >
-                  {item.label}
-                </button>
-              ))}
-            </div>
-          </aside>
+          <aside className="w-full lg:w-52 xl:w-60 flex-shrink-0" />
         </div>
       </motion.div>
     );

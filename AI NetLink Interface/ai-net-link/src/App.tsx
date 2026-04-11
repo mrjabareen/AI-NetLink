@@ -308,7 +308,8 @@ export default function App() {
       hasUpdate: false,
       latestVersion: null,
       checking: false
-    }
+    },
+    subscriberView: 'overview'
   });
 
   const isRTL = state.lang === 'ar';

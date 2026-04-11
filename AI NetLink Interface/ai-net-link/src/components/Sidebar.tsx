@@ -7,7 +7,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
 import { LayoutDashboard, MessageSquare, Search, Settings, FolderClosed, Sun, Moon, Globe, Activity, ChevronRight, ChevronLeft, ChevronDown, Network, ShieldAlert, BarChart3, Briefcase, CreditCard, Package, Users, Map, PieChart, LayoutTemplate, TrendingUp, Truck, Calendar, Coins, ShieldCheck, LogOut, Server, Landmark } from 'lucide-react';
-import { AppState, Currency, Permission, SettingsCategoryId, Tab } from '../types';
+import { AppState, Currency, Permission, SettingsCategoryId, Tab, SubscriberView } from '../types';
 import { dict } from '../dict';
 import { hasPermission as canAccess } from '../permissions';
 import { getPathForTab } from '../navigation';
@@ -272,27 +272,61 @@ export default function Sidebar({ state, setState }: SidebarProps) {
 
       <nav className="flex-1 px-2 py-4 space-y-3 overflow-y-auto custom-scrollbar">
         {state.sidebarOpen ? (
-          navGroups.map((group) => {
-            return (
-              <div key={group.id} className="space-y-2">
-                <button
-                  onClick={() => setExpandedGroups(prev => ({ ...prev, [group.id]: !prev[group.id] }))}
-                  className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl bg-slate-100/80 dark:bg-slate-800/50 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors"
-                >
-                  <span className="text-sm font-bold">{group.label}</span>
-                  <ChevronDown size={16} className={`transition-transform ${expandedGroups[group.id] ? 'rotate-180' : ''}`} />
-                </button>
+          <>
+            {navGroups.map((group) => {
+              return (
+                <div key={group.id} className="space-y-2">
+                  <button
+                    onClick={() => setExpandedGroups(prev => ({ ...prev, [group.id]: !prev[group.id] }))}
+                    className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl bg-slate-100/80 dark:bg-slate-800/50 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors"
+                  >
+                    <span className="text-sm font-bold">{group.label}</span>
+                    <ChevronDown size={16} className={`transition-transform ${expandedGroups[group.id] ? 'rotate-180' : ''}`} />
+                  </button>
 
-                {expandedGroups[group.id] && (
-                  <div className="space-y-1.5">
-                    {group.id === 'settings'
-                      ? settingsCategories.map((item) => renderSettingsCategoryButton(item))
-                      : group.items.map((item) => renderNavButton(item))}
-                  </div>
-                )}
+                  {expandedGroups[group.id] && (
+                    <div className="space-y-1.5">
+                      {group.id === 'settings'
+                        ? settingsCategories.map((item) => renderSettingsCategoryButton(item))
+                        : group.items.map((item) => renderNavButton(item))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+
+            {state.role === 'user' && (
+              <div className="space-y-2">
+                <div className="px-3 pt-4 pb-2">
+                  <span className="text-[11px] font-bold uppercase tracking-[0.2em] text-slate-400">
+                    {isRTL ? 'لوحة المشترك' : 'Subscriber Panel'}
+                  </span>
+                </div>
+                <div className="space-y-1.5 px-1">
+                  {([
+                    { id: 'overview', label: isRTL ? 'معلومات عامة' : 'Overview' },
+                    { id: 'billing', label: isRTL ? 'الحسابات والفواتير' : 'Accounts & Billing' },
+                    { id: 'usage', label: isRTL ? 'استهلاك الإنترنت' : 'Usage' },
+                    { id: 'sessions', label: isRTL ? 'سجل الجلسات' : 'Sessions' },
+                    { id: 'support', label: isRTL ? 'الدعم الفني' : 'Support' },
+                    { id: 'documents', label: isRTL ? 'وثائق شخصية' : 'Documents' },
+                  ] as { id: SubscriberView; label: string }[]).map((item) => (
+                    <button
+                      key={item.id}
+                      onClick={() => setState(prev => ({ ...prev, activeTab: 'dashboard', subscriberView: item.id }))}
+                      className={`w-full flex items-center justify-between rounded-xl px-3 py-2 text-xs font-bold transition-colors ${
+                        (state.activeTab === 'dashboard' && (state.subscriberView || 'overview') === item.id)
+                          ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900'
+                          : 'bg-transparent text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800/70'
+                      }`}
+                    >
+                      <span className="truncate">{item.label}</span>
+                    </button>
+                  ))}
+                </div>
               </div>
-            );
-          })
+            )}
+          </>
         ) : (
           navItems.map((item) => renderNavButton(item))
         )}

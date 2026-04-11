@@ -1,6 +1,7 @@
 export type Lang = 'en' | 'ar';
 export type Theme = 'light' | 'dark';
 export type Tab = 'dashboard' | 'chat' | 'search' | 'settings' | 'files' | 'topology' | 'security' | 'analytics' | 'executive' | 'billing' | 'inventory' | 'crm' | 'field' | 'reports' | 'portal' | 'investors' | 'suppliers' | 'boi_expiry' | 'management' | 'network_radius' | 'financial';
+export type SubscriberView = 'overview' | 'billing' | 'usage' | 'sessions' | 'support' | 'documents';
 export type SettingsCategoryId = 'profile' | 'gateways' | 'ai' | 'billing' | 'investors' | 'backup' | 'team' | 'security' | 'about';
 export type BackupFrequency = 'daily' | 'weekly' | 'monthly';
 export type BackupCompressionLevel = 'fast' | 'balanced' | 'maximum';
@@ -436,4 +437,5 @@ export interface AppState {
   };
   versionInfo: VersionInfo;
   updateStatus: UpdateStatus;
+  subscriberView?: SubscriberView;
 }
