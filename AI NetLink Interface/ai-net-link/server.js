@@ -107,7 +107,7 @@ const sanitizeFileName = (value) => String(value || '').replace(/[\\/:*?"<>|]/g,
 // ==========================================
 // Backup & Recovery Engine
 // ==========================================
-const BACKUP_STORAGE_ROOT = getSafePath(__dirname, 'backup-storage');
+const BACKUP_STORAGE_ROOT = getSafePath(process.env.BACKUP_STORAGE_PATH || path.join(__dirname, 'backup-storage'));
 const BACKUP_LOCAL_DIR = getSafePath(BACKUP_STORAGE_ROOT, 'local');
 const BACKUP_TEMP_DIR = getSafePath(os.tmpdir(), 'nlbk');
 const BACKUP_PREVIEW_DIR = getSafePath(BACKUP_TEMP_DIR, 'previews');
