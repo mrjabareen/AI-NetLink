@@ -72,7 +72,7 @@ export default function PortalDesignerTab({ state }: PortalDesignerTabProps) {
               </h4>
               <div>
                 <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">{isRTL ? 'شعار الشركة' : 'Company Logo'}</label>
-                <div className="border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-xl p-6 flex flex-col items-center justify-center text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer">
+                <div className="border border-slate-300 dark:border-slate-600 rounded-xl p-6 flex flex-col items-center justify-center text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer">
                   <ImageIcon className="w-8 h-8 mb-2 text-slate-400" />
                   <span className="text-sm">{isRTL ? 'انقر لرفع صورة' : 'Click to upload image'}</span>
                 </div>

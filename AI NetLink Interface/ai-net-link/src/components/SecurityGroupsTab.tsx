@@ -537,7 +537,7 @@ export default function SecurityGroupsTab({ state, setState }: SecurityGroupsTab
             </div>
           </section>
         ) : (
-          <div className="flex min-h-[260px] flex-col items-center justify-center border border-dashed border-slate-300 py-16 text-center dark:border-slate-700">
+          <div className="flex min-h-[260px] flex-col items-center justify-center border border-slate-200 rounded-2xl py-16 text-center dark:border-slate-700">
             <AlertCircle size={42} className="text-slate-300 dark:text-slate-600" />
             <p className="mt-4 text-lg font-black text-slate-700 dark:text-slate-200">
               {isRTL ? 'اختر مجموعة من الأعلى لتبدأ توزيع الصلاحيات' : 'Choose a group from above to start assigning permissions'}

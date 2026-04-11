@@ -152,26 +152,26 @@ export default function FinancialDashboard({ state, setState }: FinancialDashboa
       animate={{ opacity: 1, y: 0 }} 
       className="flex-1 flex flex-col min-h-0 bg-slate-50/50 dark:bg-[#09090B]/50 p-4 md:p-8"
     >
-      <header className="mb-8 flex flex-col gap-5">
+      <header className="mb-6 sm:mb-8 flex flex-col gap-4 sm:gap-5">
         <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
           <div>
-          <h2 className="text-3xl font-black text-slate-900 dark:text-white flex items-center gap-3">
-            <Landmark className="text-teal-500" size={32} />
+          <h2 className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white flex items-center gap-2.5">
+            <Landmark className="text-teal-500" size={26} />
             {t.financial.title}
           </h2>
-          <p className="text-slate-500 dark:text-slate-400 mt-1 font-medium italic">
+          <p className="text-slate-500 dark:text-slate-400 mt-1 text-xs sm:text-sm font-medium italic">
             {t.financial.subtitle}
           </p>
         </div>
         </div>
 
-        <div className="w-full overflow-x-auto pb-1">
-          <div className="inline-flex min-w-full sm:min-w-0 flex-wrap gap-2 bg-white dark:bg-[#18181B] p-1.5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
+        <div className="w-full overflow-x-auto pb-0.5">
+          <div className="inline-flex min-w-full sm:min-w-0 flex-wrap gap-1.5 bg-white dark:bg-[#18181B] p-1.5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
           {(['overview', 'transactions', 'commissions'] as const).map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveSubTab(tab)}
-              className={`flex-1 sm:flex-none px-5 py-2.5 rounded-xl text-sm font-bold transition-all whitespace-nowrap ${
+              className={`flex-1 sm:flex-none px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all whitespace-nowrap ${
                 activeSubTab === tab 
                   ? 'bg-teal-500 text-white shadow-lg shadow-teal-500/20' 
                   : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
@@ -187,38 +187,38 @@ export default function FinancialDashboard({ state, setState }: FinancialDashboa
 
       {/* Summary Cards */}
       {activeSubTab === 'overview' && (
-        <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-4 gap-6 mb-8 shrink-0">
-          <motion.div whileHover={{ y: -5 }} className="glass-card p-6 bg-gradient-to-br from-teal-500/10 to-transparent border-teal-500/20">
-            <div className="flex justify-between items-start mb-4">
-              <div className="p-3 bg-teal-500/20 rounded-2xl text-teal-500">
-                <Wallet size={24} />
+        <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-4 gap-4 sm:gap-6 mb-6 sm:mb-8 shrink-0">
+191→          <motion.div whileHover={{ y: -5 }} className="glass-card p-4 sm:p-6 bg-gradient-to-br from-teal-500/10 to-transparent border-teal-500/20">
+            <div className="flex justify-between items-start mb-3 sm:mb-4">
+193→              <div className="p-2.5 sm:p-3 bg-teal-500/20 rounded-2xl text-teal-500">
+194→                <Wallet size={22} />
               </div>
-              <span className="flex items-center gap-1 text-xs font-bold text-emerald-500 bg-emerald-500/10 px-2 py-1 rounded-full">
-                <ShieldCheck size={12} /> SECURE
+              <span className="flex items-center gap-1 text-[10px] sm:text-xs font-bold text-emerald-500 bg-emerald-500/10 px-2 py-0.5 sm:py-1 rounded-full">
+197→                <ShieldCheck size={11} /> SECURE
               </span>
             </div>
-            <h3 className="text-slate-500 dark:text-slate-400 text-sm font-bold uppercase tracking-wider">{t.financial.masterBalance}</h3>
-            <p className="text-3xl font-black text-slate-900 dark:text-white mt-1">
+            <h3 className="text-slate-500 dark:text-slate-400 text-xs sm:text-sm font-bold uppercase tracking-wider">{t.financial.masterBalance}</h3>
+201→            <p className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white mt-1">
               {formatCurrency(state.centralBalance, state.currency, state.lang)}
             </p>
           </motion.div>
 
-          <motion.div whileHover={{ y: -5 }} className="glass-card p-6 bg-gradient-to-br from-blue-500/10 to-transparent border-blue-500/20">
+          <motion.div whileHover={{ y: -5 }} className="glass-card p-4 sm:p-6 bg-gradient-to-br from-blue-500/10 to-transparent border-blue-500/20">
             <div className="flex justify-between items-start mb-4">
-              <div className="p-3 bg-blue-500/20 rounded-2xl text-blue-500">
-                <PieChart size={24} />
+              <div className="p-2.5 sm:p-3 bg-blue-500/20 rounded-2xl text-blue-500">
+209→                <PieChart size={22} />
               </div>
             </div>
-            <h3 className="text-slate-500 dark:text-slate-400 text-sm font-bold uppercase tracking-wider">{t.financial.totalLiquidity}</h3>
-            <p className="text-3xl font-black text-slate-900 dark:text-white mt-1">
+            <h3 className="text-slate-500 dark:text-slate-400 text-xs sm:text-sm font-bold uppercase tracking-wider">{t.financial.totalLiquidity}</h3>
+213→            <p className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white mt-1">
               {formatCurrency(state.centralBalance + totalAgentBalances, state.currency, state.lang)}
             </p>
           </motion.div>
 
-          <motion.div whileHover={{ y: -5 }} className="glass-card p-6 bg-gradient-to-br from-purple-500/10 to-transparent border-purple-500/20">
+          <motion.div whileHover={{ y: -5 }} className="glass-card p-4 sm:p-6 bg-gradient-to-br from-purple-500/10 to-transparent border-purple-500/20">
             <div className="flex justify-between items-start mb-4">
-              <div className="p-3 bg-purple-500/20 rounded-2xl text-purple-500">
-                <Users size={24} />
+              <div className="p-2.5 sm:p-3 bg-purple-500/20 rounded-2xl text-purple-500">
+221→                <Users size={22} />
               </div>
               <button 
                 onClick={() => {
@@ -230,20 +230,20 @@ export default function FinancialDashboard({ state, setState }: FinancialDashboa
                 <Plus size={20} />
               </button>
             </div>
-            <h3 className="text-slate-500 dark:text-slate-400 text-sm font-bold uppercase tracking-wider">{t.financial.agentBalances}</h3>
-            <p className="text-3xl font-black text-slate-900 dark:text-white mt-1">
+            <h3 className="text-slate-500 dark:text-slate-400 text-xs sm:text-sm font-bold uppercase tracking-wider">{t.financial.agentBalances}</h3>
+233→            <p className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white mt-1">
               {formatCurrency(totalAgentBalances, state.currency, state.lang)}
             </p>
           </motion.div>
 
-          <motion.div whileHover={{ y: -5 }} className={`glass-card p-6 border ${reconciliation.isBalanced ? 'bg-gradient-to-br from-emerald-500/10 to-transparent border-emerald-500/20' : 'bg-gradient-to-br from-rose-500/10 to-transparent border-rose-500/20'}`}>
-            <div className="flex justify-between items-start mb-4">
-              <div className={`p-3 rounded-2xl ${reconciliation.isBalanced ? 'bg-emerald-500/20 text-emerald-500' : 'bg-rose-500/20 text-rose-500'}`}>
-                {reconciliation.isBalanced ? <Scale size={24} /> : <AlertTriangle size={24} />}
+          <motion.div whileHover={{ y: -5 }} className={`glass-card p-4 sm:p-6 border ${reconciliation.isBalanced ? 'bg-gradient-to-br from-emerald-500/10 to-transparent border-emerald-500/20' : 'bg-gradient-to-br from-rose-500/10 to-transparent border-rose-500/20'}`}>
+240→            <div className="flex justify-between items-start mb-3 sm:mb-4">
+241→              <div className={`p-2.5 sm:p-3 rounded-2xl ${reconciliation.isBalanced ? 'bg-emerald-500/20 text-emerald-500' : 'bg-rose-500/20 text-rose-500'}`}>
+242→                {reconciliation.isBalanced ? <Scale size={22} /> : <AlertTriangle size={22} />}
               </div>
             </div>
-            <h3 className="text-slate-500 dark:text-slate-400 text-sm font-bold uppercase tracking-wider">{isRTL ? 'حالة المطابقة المحاسبية' : 'Accounting Reconciliation'}</h3>
-            <p className={`text-xl font-black mt-2 ${reconciliation.isBalanced ? 'text-emerald-500' : 'text-rose-500'}`}>
+            <h3 className="text-slate-500 dark:text-slate-400 text-xs sm:text-sm font-bold uppercase tracking-wider">{isRTL ? 'حالة المطابقة المحاسبية' : 'Accounting Reconciliation'}</h3>
+246→            <p className={`text-lg sm:text-xl font-black mt-2 ${reconciliation.isBalanced ? 'text-emerald-500' : 'text-rose-500'}`}>
               {reconciliation.isBalanced ? (isRTL ? 'متوازن 100%' : 'Balanced 100%') : (isRTL ? 'يوجد فرق محاسبي' : 'Accounting Mismatch')}
             </p>
             <p className="mt-3 text-xs font-bold text-slate-500 dark:text-slate-400">

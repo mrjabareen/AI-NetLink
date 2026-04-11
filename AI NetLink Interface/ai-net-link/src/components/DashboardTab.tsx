@@ -170,15 +170,15 @@ function MetricCard({
       whileHover={isInteractive ? { y: -4, scale: 1.01 } : undefined}
       whileTap={isInteractive ? { scale: 0.99 } : undefined}
       onClick={onClick}
-      className={`group relative w-full overflow-hidden rounded-[2rem] border border-slate-200/70 bg-white/85 p-5 text-start shadow-xl shadow-slate-950/5 backdrop-blur-xl transition-all dark:border-slate-800 dark:bg-[#09090B]/85 ${isInteractive ? 'hover:border-slate-300 hover:shadow-2xl hover:shadow-slate-950/10 dark:hover:border-slate-700' : ''}`}
+      className={`group relative w-full overflow-hidden rounded-[1.75rem] border border-slate-200/70 bg-white/85 p-4 sm:p-5 text-start shadow-md shadow-slate-950/5 backdrop-blur-xl transition-all dark:border-slate-800 dark:bg-[#09090B]/85 ${isInteractive ? 'hover:border-slate-300 hover:shadow-xl hover:shadow-slate-950/10 dark:hover:border-slate-700' : ''}`}
     >
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.2),transparent_38%)] opacity-70" />
       <div className={`absolute inset-x-0 top-0 h-1 ${accent}`} />
       <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="text-[11px] font-black uppercase tracking-[0.24em] text-slate-400">{title}</p>
-          <div className="mt-3 text-2xl font-black text-slate-900 dark:text-white">{value}</div>
-          <p className="mt-2 text-sm leading-6 text-slate-500 dark:text-slate-400">{subtitle}</p>
+          <p className="text-[10px] sm:text-[11px] font-black uppercase tracking-[0.24em] text-slate-400">{title}</p>
+          <div className="mt-2 text-xl sm:text-2xl font-black text-slate-900 dark:text-white">{value}</div>
+          <p className="mt-1.5 text-xs sm:text-sm leading-6 text-slate-500 dark:text-slate-400">{subtitle}</p>
           {isInteractive ? (
             <div className="mt-3 inline-flex items-center gap-2 text-xs font-black text-slate-500 transition-all group-hover:text-slate-900 dark:text-slate-400 dark:group-hover:text-white">
               <ArrowRight size={14} className={isRTLText(title) ? 'rotate-180' : ''} />
@@ -186,8 +186,8 @@ function MetricCard({
             </div>
           ) : null}
         </div>
-        <div className={`flex h-12 w-12 items-center justify-center rounded-2xl text-white shadow-lg ${accent}`}>
-          <Icon size={20} />
+        <div className={`flex h-9 w-9 sm:h-12 sm:w-12 items-center justify-center rounded-2xl text-white shadow-lg ${accent}`}>
+          <Icon size={18} className="sm:w-5 sm:h-5" />
         </div>
       </div>
     </motion.button>
@@ -208,11 +208,11 @@ function SectionCard({
   action?: React.ReactNode;
 }) {
   return (
-    <div className="rounded-[2rem] border border-slate-200/70 bg-white/85 p-6 shadow-xl shadow-slate-950/5 backdrop-blur-xl dark:border-slate-800 dark:bg-[#09090B]/85">
+    <div className="rounded-[1.75rem] border border-slate-200/70 bg-white/85 p-4 sm:p-6 shadow-md shadow-slate-950/5 backdrop-blur-xl dark:border-slate-800 dark:bg-[#09090B]/85">
       <div className="mb-5 flex items-start justify-between gap-4">
         <div>
-          <h3 className="text-lg font-black text-slate-900 dark:text-white">{title}</h3>
-          {subtitle ? <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{subtitle}</p> : null}
+          <h3 className="text-base sm:text-lg font-black text-slate-900 dark:text-white">{title}</h3>
+          {subtitle ? <p className="mt-1 text-xs sm:text-sm text-slate-500 dark:text-slate-400">{subtitle}</p> : null}
         </div>
         {action}
       </div>
@@ -506,27 +506,27 @@ export default function DashboardTab({ state, setState }: DashboardTabProps) {
 
   return (
     <motion.div key="dashboard" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="flex-1 min-h-0 overflow-y-auto custom-scrollbar pb-6 pr-2 space-y-6">
-      <header className="rounded-[2rem] border border-slate-200/70 bg-gradient-to-br from-slate-900 via-blue-950 to-violet-950 p-6 text-white shadow-2xl shadow-slate-950/20">
-        <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+      <header className="rounded-[2rem] border border-slate-200/70 bg-gradient-to-br from-slate-900 via-blue-950 to-violet-950 p-4 sm:p-6 text-white shadow-2xl shadow-slate-950/20">
+        <div className="flex flex-col gap-4 sm:gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs font-black uppercase tracking-[0.24em] text-white/80">
               <Sparkles size={14} />
               {labels.title}
             </div>
-            <h2 className="text-3xl font-black">{state.currentUser?.name || (isRTL ? 'لوحة القيادة' : 'Control Center')}</h2>
-            <p className="mt-2 max-w-4xl text-sm leading-7 text-blue-100/80">{labels.subtitle}</p>
+            <h2 className="text-2xl sm:text-3xl font-black">{state.currentUser?.name || (isRTL ? 'لوحة القيادة' : 'Control Center')}</h2>
+            <p className="mt-1.5 sm:mt-2 max-w-4xl text-xs sm:text-sm leading-6 sm:leading-7 text-blue-100/80">{labels.subtitle}</p>
           </div>
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
             <button
               onClick={() => window.location.reload()}
-              className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/10 px-4 py-3 text-sm font-black text-white transition-all hover:bg-white/15"
+              className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/10 px-3 py-2.5 sm:px-4 sm:py-3 text-xs sm:text-sm font-black text-white transition-all hover:bg-white/15"
             >
               <RefreshCw size={16} />
               {labels.refresh}
             </button>
             <button
               onClick={() => setState(prev => ({ ...prev, activeTab: 'management' }))}
-              className="inline-flex items-center gap-2 rounded-2xl bg-white px-4 py-3 text-sm font-black text-slate-900 transition-all hover:bg-slate-100"
+              className="inline-flex items-center gap-2 rounded-2xl bg-white px-3 py-2.5 sm:px-4 sm:py-3 text-xs sm:text-sm font-black text-slate-900 transition-all hover:bg-slate-100"
             >
               {isRTL ? 'الانتقال للإدارة' : 'Open Management'}
               <ArrowRight size={16} className={isRTL ? 'rotate-180' : ''} />
@@ -535,7 +535,7 @@ export default function DashboardTab({ state, setState }: DashboardTabProps) {
         </div>
       </header>
 
-      <div className="flex flex-wrap gap-3">
+      <div className="flex flex-wrap gap-2.5 sm:gap-3">
         {navItems.map(item => {
           const Icon = item.icon;
           const active = activeView === item.id;
@@ -546,7 +546,7 @@ export default function DashboardTab({ state, setState }: DashboardTabProps) {
                 setActiveView(item.id);
                 setActiveDrilldown(prev => (prev?.view === item.id ? prev : null));
               }}
-              className={`inline-flex items-center gap-2 rounded-2xl px-4 py-3 text-sm font-black transition-all ${active ? 'bg-slate-900 text-white shadow-xl shadow-slate-950/10 dark:bg-white dark:text-slate-900' : 'border border-slate-200 bg-white/80 text-slate-600 hover:border-slate-300 hover:text-slate-900 dark:border-slate-800 dark:bg-[#09090B]/80 dark:text-slate-300 dark:hover:text-white'}`}
+              className={`inline-flex items-center gap-2 rounded-2xl px-3 py-2.5 sm:px-4 sm:py-3 text-xs sm:text-sm font-black transition-all ${active ? 'bg-slate-900 text-white shadow-xl shadow-slate-950/10 dark:bg-white dark:text-slate-900' : 'border border-slate-200 bg-white/80 text-slate-600 hover:border-slate-300 hover:text-slate-900 dark:border-slate-800 dark:bg-[#09090B]/80 dark:text-slate-300 dark:hover:text-white'}`}
             >
               <Icon size={16} />
               {item.label}

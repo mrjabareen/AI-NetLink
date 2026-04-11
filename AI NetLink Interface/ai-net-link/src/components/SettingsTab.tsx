@@ -1998,7 +1998,7 @@ export default function SettingsTab({ state, setState }: SettingsTabProps) {
 
               <div className="space-y-3">
                 {backupHistory.length === 0 ? (
-                  <div className="p-6 rounded-2xl border border-dashed border-slate-300 dark:border-slate-700 text-center text-sm text-slate-500">
+                  <div className="p-6 rounded-2xl border border-slate-300 dark:border-slate-700 text-center text-sm text-slate-500">
                     {isRTL ? 'لا توجد عمليات نسخ أو استعادة مسجلة بعد.' : 'No backup or recovery events have been recorded yet.'}
                   </div>
                 ) : (

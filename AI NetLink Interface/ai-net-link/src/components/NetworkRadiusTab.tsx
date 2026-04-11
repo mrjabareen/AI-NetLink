@@ -451,7 +451,7 @@ export default function NetworkRadiusTab({ state, setState }: NetworkRadiusTabPr
                                         </label>
                                         <input type="text" placeholder="10M" value={profileForm.uploadSpeed} onChange={(e) => setProfileForm({...profileForm, uploadSpeed: e.target.value})} className="w-full mt-1 bg-slate-50 dark:bg-[#18181B] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2 font-mono font-bold text-blue-600" />
                                     </div>
-                                    <div className="col-span-1 md:col-span-2 p-3 bg-blue-50/30 dark:bg-blue-900/10 rounded-2xl border border-dashed border-blue-200 dark:border-blue-800">
+                                    <div className="col-span-1 md:col-span-2 p-3 bg-blue-50/30 dark:bg-blue-900/10 rounded-2xl border border-blue-200 dark:border-blue-800">
                                         <div className="flex justify-between items-center mb-3">
                                             <span className="text-xs font-bold text-slate-700 dark:text-slate-200">
                                                 {isRTL ? 'إعدادات Burst' : 'Burst Settings'}
