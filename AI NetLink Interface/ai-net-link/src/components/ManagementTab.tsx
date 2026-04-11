@@ -3974,7 +3974,7 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
                       ) : (
                         <>
                           <div className="md:hidden p-4 space-y-3">
-                            {entityPagedItems.map((item: DynamicItem, index: number, items: DynamicItem[]) => (
+                            {(activeSubTab === 'subscribers' ? subscriberPagedItems : entityPagedItems).map((item: DynamicItem, index: number, items: DynamicItem[]) => (
                               <div key={item.id} className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#101014] p-4 space-y-3">
                                 <div className="flex items-start justify-between gap-3">
                                   <div className="min-w-0">
@@ -3985,7 +3985,13 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
                                           ? getInvestorName(item)
                                           : activeSubTab === 'managers'
                                             ? getManagerName(item)
-                                            : getIptvName(item)}
+                                            : activeSubTab === 'subscribers'
+                                              ? (
+                                                (getSubscriberFirstName(item) || getSubscriberLastName(item))
+                                                  ? `${getSubscriberFirstName(item) || ''} ${getSubscriberLastName(item) || ''}`.trim()
+                                                  : (getSubscriberUsername(item) || getSubscriberCode(item) || '-')
+                                              )
+                                              : getIptvName(item)}
                                     </p>
                                     <p className="text-[11px] text-slate-500 mt-1 truncate">
                                       {activeSubTab === 'suppliers'
@@ -3994,7 +4000,9 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
                                           ? (item.ownership || '-')
                                           : activeSubTab === 'managers'
                                             ? (item['الصلاحية'] || item.role || '-')
-                                            : getIptvServiceTypeLabel(item)}
+                                            : activeSubTab === 'subscribers'
+                                              ? `${getSubscriberUsername(item) || '-'} • ${getSubscriberPhone(item) || '-'}` 
+                                              : getIptvServiceTypeLabel(item)}
                                     </p>
                                   </div>
                                   <SmartActionMenu
@@ -4007,6 +4015,22 @@ export default function ManagementTab({ state, setState }: ManagementTabProps) {
                                   />
                                 </div>
                                 <div className="grid grid-cols-2 gap-3 text-xs">
+                                  {activeSubTab === 'subscribers' && (
+                                    <>
+                                      <div className="rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 p-3">
+                                        <p className="text-slate-500">{isRTL ? 'الانتهاء' : 'Expiry'}</p>
+                                        <p className="mt-1 font-black text-slate-700 dark:text-slate-200">
+                                          {getSubscriberExpiryValue(item) || '-'}
+                                        </p>
+                                      </div>
+                                      <div className="rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 p-3">
+                                        <p className="text-slate-500">{isRTL ? 'الرصيد' : 'Balance'}</p>
+                                        <p className={`mt-1 font-black ${getSubscriberBalanceClass(item)}`}>
+                                          {formatCurrency(getNumberValue(item.balance ?? item['الرصيد المتبقي له']), state.currency, state.lang, 2)}
+                                        </p>
+                                      </div>
+                                    </>
+                                  )}
                                   {activeSubTab === 'suppliers' && (
                                     <>
                                       <div className="rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 p-3"><p className="text-slate-500">{isRTL ? 'مدين' : 'Debt'}</p><p className="mt-1 font-black text-rose-600 dark:text-rose-400">{formatCurrency(parseSupplierAmount(item['مدين']), state.currency, state.lang, 2)}</p></div>

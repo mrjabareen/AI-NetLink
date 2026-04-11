@@ -390,8 +390,8 @@ export default function ExecutiveTab({ state }: ExecutiveTabProps) {
             <Briefcase className="text-amber-500" size={28} />
             {state.lang === 'en' ? 'Executive AI Assistant' : 'المساعد التنفيذي للذكاء الاصطناعي'}
           </h2>
-          <p className="text-sm md:text-base text-slate-500 dark:text-slate-400 mt-1 max-w-2xl leading-relaxed">
-            {state.lang === 'en' ? 'Real AI answers powered by internal database and knowledge files.' : 'إجابات حقيقية مدعومة بقاعدة البيانات والملفات المعرفية الداخلية.'}
+          <p className="hidden md:block text-sm md:text-base text-slate-500 dark:text-slate-400 mt-1 max-w-2xl leading-relaxed">
+            {state.lang === 'en' ? 'Ask about subscribers, network health, billing, and other live operations.' : 'اسأل عن المشتركين وحالة الشبكة والفواتير وبقية العمليات بشكل مباشر.'}
           </p>
         </div>
         
@@ -423,7 +423,7 @@ export default function ExecutiveTab({ state }: ExecutiveTabProps) {
           className="hidden"
         />
 
-        <div className="px-3 md:px-6 pt-3 md:pt-5 pb-2.5 border-b border-slate-200/50 dark:border-slate-800/50 bg-white/70 dark:bg-[#09090B]/80 backdrop-blur-md z-10">
+        <div className="hidden md:block px-3 md:px-6 pt-3 md:pt-5 pb-2.5 border-b border-slate-200/50 dark:border-slate-800/50 bg-white/70 dark:bg-[#09090B]/80 backdrop-blur-md z-10">
           <div className="rounded-2xl border border-slate-200/70 dark:border-slate-800 bg-slate-50/80 dark:bg-[#111111]/70 p-2.5 md:p-4">
             <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
               <div>
