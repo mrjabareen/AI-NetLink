@@ -1,6 +1,6 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { LayoutDashboard, MessageSquare, Search, Settings, FolderClosed, Sun, Moon, Globe, Activity, Menu, X, Network, ShieldAlert, BarChart3, Briefcase, CreditCard, Package, Users, Map, PieChart, LayoutTemplate, TrendingUp, Truck, Calendar, Download, Server, Landmark, ShieldCheck } from 'lucide-react';
+import { LayoutDashboard, MessageSquare, Search, Settings, FolderClosed, Sun, Moon, Globe, Activity, Menu, X, Network, ShieldAlert, BarChart3, Briefcase, CreditCard, Package, Users, Map, PieChart, LayoutTemplate, TrendingUp, Truck, Calendar, Download, Server, Landmark, ShieldCheck, Bell } from 'lucide-react';
 import { AppState, Permission, Tab } from '../types';
 import { dict } from '../dict';
 import { getPathForTab } from '../navigation';
@@ -109,6 +109,57 @@ export default function Header({ state, setState }: HeaderProps) {
   const toggleTheme = () => setState(prev => ({ ...prev, theme: prev.theme === 'light' ? 'dark' : 'light' }));
   const toggleLang = () => setState(prev => ({ ...prev, lang: prev.lang === 'en' ? 'ar' : 'en' }));
 
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [showNotifications, setShowNotifications] = useState(false);
+
+  useEffect(() => {
+    if (state.role === 'user') return;
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const res = await fetch('/api/notifications');
+        const json = await res.json().catch(() => ({}));
+        if (cancelled) return;
+        const list = Array.isArray(json.data) ? json.data : (Array.isArray(json) ? json : []);
+        setNotifications(list);
+        setUnreadCount(list.filter((n: any) => !n.read).length);
+      } catch {
+        if (!cancelled) {
+          setNotifications([]);
+          setUnreadCount(0);
+        }
+      }
+    };
+    load();
+    const id = setInterval(load, 30000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [state.role, state.lang]);
+
+  const openNotifications = async () => {
+    if (state.role === 'user') return;
+    setShowNotifications((prev) => !prev);
+    if (!showNotifications) {
+      const unreadIds = notifications.filter((n: any) => !n.read).map((n: any) => n.id);
+      if (unreadIds.length) {
+        try {
+          await fetch('/api/notifications/mark-read', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ids: unreadIds }),
+          });
+          setNotifications((prev) => prev.map((n: any) => (unreadIds.includes(n.id) ? { ...n, read: true } : n)));
+          setUnreadCount(0);
+        } catch {
+          // ignore
+        }
+      }
+    }
+  };
+
   return (
     <>
       {state.impersonationSource && (
@@ -144,6 +195,19 @@ export default function Header({ state, setState }: HeaderProps) {
             >
               <Download size={20} />
               <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full border-2 border-white dark:border-slate-900" />
+            </button>
+          )}
+          {state.role !== 'user' && (
+            <button
+              onClick={openNotifications}
+              className="relative p-2 text-slate-600 dark:text-slate-300 cursor-pointer"
+            >
+              <Bell size={18} />
+              {unreadCount > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 rounded-full bg-rose-500 text-[10px] font-bold text-white flex items-center justify-center">
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </span>
+              )}
             </button>
           )}
           <button onClick={() => setState(prev => ({ ...prev, mobileMenuOpen: !prev.mobileMenuOpen }))} className="p-2 text-slate-600 dark:text-slate-300 cursor-pointer relative">
@@ -198,6 +262,50 @@ export default function Header({ state, setState }: HeaderProps) {
           </motion.div>
         )}
       </AnimatePresence>
+      {state.role !== 'user' && showNotifications && (
+        <div className="hidden md:block fixed top-4 right-4 z-40 w-80 max-h-[70vh] overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900">
+          <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+            <span className="text-sm font-bold text-slate-800 dark:text-slate-100">
+              {isRTL ? 'الإشعارات' : 'Notifications'}
+            </span>
+            <button
+              onClick={() => setShowNotifications(false)}
+              className="text-xs text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+            >
+              {isRTL ? 'إغلاق' : 'Close'}
+            </button>
+          </div>
+          <div className="p-3 space-y-2 text-xs">
+            {notifications.length === 0 && (
+              <p className="text-slate-500 dark:text-slate-400">
+                {isRTL ? 'لا توجد إشعارات حالياً.' : 'No notifications yet.'}
+              </p>
+            )}
+            {notifications.map((n: any) => (
+              <div
+                key={n.id}
+                className={`rounded-xl border px-3 py-2 ${
+                  n.read
+                    ? 'border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-900/60'
+                    : 'border-blue-200 bg-blue-50/70 dark:border-blue-500/30 dark:bg-blue-500/10'
+                }`}
+              >
+                <div className="flex items-center justify-between mb-1">
+                  <span className="font-bold text-slate-900 dark:text-slate-50 truncate">
+                    {n.title || (isRTL ? 'إشعار' : 'Notification')}
+                  </span>
+                  <span className="text-[10px] text-slate-500 dark:text-slate-400">
+                    {(n.createdAt || '').toString().slice(0, 16)}
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-600 dark:text-slate-300">
+                  {n.message}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </>
   );
 }

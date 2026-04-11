@@ -575,15 +575,14 @@ export default function DashboardTab({ state, setState }: DashboardTabProps) {
           </div>
         </header>
 
-        <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-4">
+        <div className="grid grid-cols-2 gap-4 md:grid-cols-4 xl:grid-cols-4">
           <MetricCard title={isRTL ? 'الاسم الحقيقي' : 'Full Name'} value={personalSubscriber?.name || state.currentUser?.name || '-'} subtitle={isRTL ? 'الاسم المسجل في النظام' : 'Registered name'} icon={Users} accent="bg-gradient-to-r from-blue-500 to-cyan-500" />
           <MetricCard title={isRTL ? 'اسم الدخول' : 'Username'} value={personalSubscriber?.username || state.currentUser?.username || '-'} subtitle={isRTL ? 'المستخدم المرتبط بالخدمة' : 'Service login username'} icon={ShieldCheck} accent="bg-gradient-to-r from-emerald-500 to-teal-500" />
           <MetricCard title={isRTL ? 'الباقة الحالية' : 'Current Plan'} value={personalSubscriber?.plan || (isRTL ? 'غير محددة' : 'Unassigned')} subtitle={isRTL ? 'الباقة أو البروفايل الفعلي' : 'Assigned package or profile'} icon={Sparkles} accent="bg-gradient-to-r from-violet-500 to-indigo-500" />
           <MetricCard title={isRTL ? 'حالة الاشتراك' : 'Subscription Status'} value={personalSubscriber?.statusText || (isRTL ? 'غير معروفة' : 'Unknown')} subtitle={personalSubscriber?.isOnline ? (isRTL ? 'المشترك متصل الآن' : 'Connected now') : (isRTL ? 'لا توجد جلسة نشطة حالياً' : 'No active session currently')} icon={personalSubscriber?.isOnline ? Wifi : WifiOff} accent="bg-gradient-to-r from-amber-500 to-orange-500" />
         </div>
 
-        <div className="flex flex-col lg:flex-row gap-5 mt-4">
-          <div className="flex-1 space-y-5">
+        <div className="mt-5 space-y-5">
         {subscriberView === 'overview' && (
           <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
             <SectionCard title={isRTL ? 'تفاصيل الاشتراك' : 'Subscription Details'} subtitle={isRTL ? 'ملخص مباشر لبيانات حسابك الحالية.' : 'Direct summary of your current account details.'}>
@@ -1125,9 +1124,6 @@ export default function DashboardTab({ state, setState }: DashboardTabProps) {
           </div>
         </SectionCard>
         )}
-          </div>
-
-          <aside className="w-full lg:w-52 xl:w-60 flex-shrink-0" />
         </div>
       </motion.div>
     );

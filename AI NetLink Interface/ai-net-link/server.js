@@ -3265,6 +3265,12 @@ app.get('/api/subscribers', (req, res) => {
     }
     
     const files = fs.readdirSync(dirPath).filter(f => f.endsWith('.json'));
+
+    const invoicesDir = getSafePath(DB_PATH, 'Financial', 'Subscriber_Invoices');
+    if (!fs.existsSync(invoicesDir)) {
+      fs.mkdirSync(invoicesDir, { recursive: true });
+    }
+
     const subscribers = files.map(file => {
       const s = readJsonFile(getSafePath(dirPath, file));
       const rawId = String(s.id || file.split('_')[0] || Math.floor(Math.random() * 1000));
@@ -3283,6 +3289,23 @@ app.get('/api/subscribers', (req, res) => {
       else if (['expired', 'منتهي'].includes(rawStatus)) statusKey = 'expired';
       else if (['active', 'مفعل', 'نشط'].includes(rawStatus)) statusKey = 'active';
       
+      let invoiceDebt = 0;
+      try {
+        const safeId = sanitizeFileName(rawId);
+        const invPath = path.join(invoicesDir, `${safeId}.json`);
+        const invList = readJsonSafeWithFallback(invPath, []);
+        if (Array.isArray(invList)) {
+          invoiceDebt = invList
+            .filter(inv => {
+              const status = String(inv.status || '').toLowerCase();
+              return !(status.includes('paid') || status.includes('مدفوعة'));
+            })
+            .reduce((sum, inv) => sum + (parseFloat(inv.amount || inv.total || 0) || 0), 0);
+        }
+      } catch {
+        invoiceDebt = 0;
+      }
+
       return {
         ...s,
         id: rawId,
@@ -3297,6 +3320,9 @@ app.get('/api/subscribers', (req, res) => {
         expiry: s.expiry || s['تاريخ الانتهاء'] || (s.expiration || s['تاريخ ناهية الاشتراك']) || '2026-12-31',
         expiry_time: s.expiry_time || s['وقت الانتهاء'] || '23:59:59',
         balance: parseFloat(s['الرصيد المتبقي له'] || s.balance) || 0,
+        debt: invoiceDebt || parseFloat(s.debt || s['عليه دين'] || 0) || 0,
+        balanceDue: invoiceDebt || parseFloat(s.balanceDue || 0) || 0,
+        ['عليه دين']: invoiceDebt || parseFloat(s['عليه دين'] || 0) || 0,
         phone,
         city,
         mac: s['ماك الايت بيم'] || 'N/A',
@@ -3630,6 +3656,17 @@ app.post('/api/subscribers/:id/tickets', (req, res) => {
   } catch (error) {
     console.error('Error creating subscriber ticket:', error);
     res.status(500).json({ error: 'Failed to create subscriber ticket' });
+  }
+});
+
+app.get('/api/support/tickets', (req, res) => {
+  try {
+    const globalTicketsPath = getSafePath(DB_PATH, 'Support', 'tickets.json');
+    const tickets = readJsonSafeWithFallback(globalTicketsPath, []);
+    res.json({ data: Array.isArray(tickets) ? tickets : [] });
+  } catch (error) {
+    console.error('Error fetching global tickets:', error);
+    res.status(500).json({ error: 'Failed to fetch support tickets' });
   }
 });
 

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { motion } from 'motion/react';
 import { Map as MapIcon, Navigation, Wrench, AlertTriangle, CheckCircle2, Clock } from 'lucide-react';
 import { AppState } from '../types';
@@ -14,15 +14,28 @@ const mockTechs = [
   { id: 'T-03', name: 'Omar S.', status: 'available', location: 'Riyadh HQ', eta: '-', task: 'Standby' },
 ];
 
-const mockTickets = [
-  { id: 'INC-9921', title: 'Sector Down - Al Olaya', priority: 'high', time: '2 hrs ago', status: 'assigned' },
-  { id: 'INC-9922', title: 'Customer B.O.I Install', priority: 'medium', time: '4 hrs ago', status: 'pending' },
-  { id: 'INC-9923', title: 'Routine Maintenance', priority: 'low', time: '1 day ago', status: 'completed' },
-];
-
 export default function FieldServiceTab({ state }: FieldServiceTabProps) {
   const t = dict[state.lang];
   const isRTL = state.lang === 'ar';
+  const [tickets, setTickets] = useState<any[]>([]);
+  const [loadingTickets, setLoadingTickets] = useState(false);
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        setLoadingTickets(true);
+        const res = await fetch('/api/support/tickets');
+        const json = await res.json().catch(() => ({}));
+        const list = Array.isArray(json.data) ? json.data : (Array.isArray(json) ? json : []);
+        setTickets(list);
+      } catch {
+        setTickets([]);
+      } finally {
+        setLoadingTickets(false);
+      }
+    };
+    load();
+  }, []);
 
   return (
     <motion.div key="field" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="flex-1 flex flex-col p-6 space-y-6 overflow-hidden min-h-0">
@@ -123,23 +136,40 @@ export default function FieldServiceTab({ state }: FieldServiceTabProps) {
               <AlertTriangle className="w-4 h-4 text-rose-500" />
               {isRTL ? 'تذاكر مفتوحة' : 'Open Tickets'}
             </h3>
-            <div className="space-y-3">
-              {mockTickets.map(ticket => (
-                <div key={ticket.id} className="p-3 bg-white dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-700">
-                  <div className="flex items-start justify-between mb-1">
-                    <span className="font-medium text-sm text-slate-900 dark:text-white leading-tight">{ticket.title}</span>
-                    <span className={`w-2 h-2 rounded-full mt-1 shrink-0 ${
-                      ticket.priority === 'high' ? 'bg-rose-500' :
-                      ticket.priority === 'medium' ? 'bg-amber-500' : 'bg-blue-500'
-                    }`} />
+            {loadingTickets && (
+              <div className="text-xs text-slate-500 dark:text-slate-400">
+                {isRTL ? 'جاري تحميل تذاكر الدعم...' : 'Loading support tickets...'}
+              </div>
+            )}
+            {!loadingTickets && tickets.length === 0 && (
+              <div className="text-xs text-slate-500 dark:text-slate-400">
+                {isRTL ? 'لا توجد تذاكر دعم مفتوحة حالياً.' : 'No open support tickets at the moment.'}
+              </div>
+            )}
+            {!loadingTickets && tickets.length > 0 && (
+              <div className="space-y-3">
+                {tickets.slice(0, 20).map(ticket => (
+                  <div key={ticket.id} className="p-3 bg-white dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-700">
+                    <div className="flex items-start justify-between mb-1">
+                      <span className="font-medium text-sm text-slate-900 dark:text-white leading-tight">
+                        {ticket.subject || ticket.title}
+                      </span>
+                      <span className={`w-2 h-2 rounded-full mt-1 shrink-0 ${
+                        String(ticket.category || '').includes('billing')
+                          ? 'bg-amber-500'
+                          : String(ticket.status || '').includes('closed')
+                            ? 'bg-emerald-500'
+                            : 'bg-rose-500'
+                      }`} />
+                    </div>
+                    <div className="flex items-center justify-between mt-2 text-xs text-slate-500 dark:text-slate-400">
+                      <span>{ticket.id}</span>
+                      <span>{ticket.createdAt || ticket.date || ''}</span>
+                    </div>
                   </div>
-                  <div className="flex items-center justify-between mt-2 text-xs text-slate-500 dark:text-slate-400">
-                    <span>{ticket.id}</span>
-                    <span>{ticket.time}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </div>
